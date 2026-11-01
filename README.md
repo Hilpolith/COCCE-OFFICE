@@ -27,4 +27,4 @@ The upstream GenOffice repository is primarily an Electron desktop product; its 
 
 ## Release status
 
-This foundation is **not eligible for production release** under the supplied definition of done. Do not attach or promote `cocce-office.vercel.app` as a live enterprise service until authentication, backend authorization/RLS, storage, the seven productivity modules, real-time collaboration, AI, localization, and their security/end-to-end tests are implemented and verified.
+This foundation is **not eligible for production release** under the supplied definition of done. The `cocce-office.vercel.app` alias is attached to a Vercel project that is currently paused; unauthenticated requests return `503 DEPLOYMENT_PAUSED`. Do not unpause or present the alias as a live enterprise service until authentication, backend authorization/RLS, storage, the seven productivity modules, real-time collaboration, AI, localization, and their security/end-to-end tests are implemented and verified.

@@ -9,8 +9,13 @@
 - Copied the supplied logo into the new project after confirming the source has true transparent alpha at all corners. Only a PNG re-encode was used to normalize its file encoding; artwork, text, and squircle silhouette were preserved.
 - Implemented the responsive app shell, actual browser-local workspaces and plain-text documents, local search, Markdown export, theme/accent persistence, and truthful module connection states.
 
+## Vercel safety follow-up — 2026-11-01
+
+- Created and linked the new Vercel project to `Hilpolith/COCCE-OFFICE`. A deployment call from `main` unexpectedly resolved to the Vercel `production` target and reached `READY`; cancellation was rejected because it had already completed. Deployment `dpl_J8KEqQwVxALwHFXJbjzcCKhNauYQ` was immediately blocked by pausing only the new Office project.
+- Vercel reports the project as `live: false` with SSO protection enabled. Unauthenticated HEAD requests to `cocce-office.vercel.app` and the deployment hostname return HTTP 503 `DEPLOYMENT_PAUSED`. The project remains paused; do not unpause or treat this deployment as a release. No existing COCCE project or shared app configuration was changed.
+
 ## Release blockers
 
-This repository is **not production-ready**. There is no authenticated identity, server/database, RLS, cloud files, editor engine for DOCX/XLSX/PPTX/PDF, real-time collaboration, team/messaging, push notifications, Vault encryption, AI provider/job runner, or 24-language localization. The UI is deliberately labeled local-only; its counts derive from the current browser’s actual saved records. No production domain alias or production deployment should be assigned until the required services and tests exist.
+This repository is **not production-ready**. There is no authenticated identity, server/database, RLS, cloud files, editor engine for DOCX/XLSX/PPTX/PDF, real-time collaboration, team/messaging, push notifications, Vault encryption, AI provider/job runner, or 24-language localization. The UI is deliberately labeled local-only; its counts derive from the current browser’s actual saved records. The production alias is currently attached to a paused Vercel project; keep it blocked until the required services and tests exist.
 
 Before any shared COCCE configuration or database change, obtain explicit authorization for each additive change and inspect its impact. Required external credentials/services include an approved server-side OpenRouter key, scoped Office storage authorization, approved Supabase client/OAuth redirect setup, and the necessary deployment configuration. Do not request or expose service-role or provider keys in source code.
