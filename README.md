@@ -4,7 +4,7 @@ This private, isolated React/TypeScript project is the starting foundation for C
 
 ## What works
 
-The responsive interface uses a frosted Liquid Glass treatment guided by the supplied UI references. The supplied COCCE Office logo artwork is preserved with transparent alpha; the sidebar, favicon, and home-screen icon use the transparent squircle asset. The app supports local workspace labels, six themes plus an accent color, and local document search.
+The responsive interface uses a frosted Liquid Glass treatment guided by the supplied UI references. The supplied COCCE Office logo artwork is preserved with transparent alpha; the sidebar, favicon, and home-screen icon use the transparent squircle asset. The app supports local workspace labels, six themes plus an accent color, and local document search
 
 **Docs** uses Tiptap/ProseMirror for editable rich text with headings, bold/italic/underline, lists, quotes, undo/redo, local autosave, and Markdown export of supported formatting. Legacy plain-text drafts remain readable; pasted content is inserted as plain text and stored markup is sanitized before it is rendered. Failed document saves remain visible and recoverable within the current tab across navigation, with retry and export controls; that temporary buffer is not a backup.
 
