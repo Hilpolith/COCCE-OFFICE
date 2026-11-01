@@ -2,7 +2,7 @@
 
 ## Current foundation
 
-The application is a React 19 + TypeScript single-page web project built with Vite. Presentation, local state, and page navigation are separated into `src/App.tsx`, `src/DocsEditor.tsx`, `src/SheetsWorkspace.tsx`, styles, and `src/lib/localStore.ts`. The local storage module validates persisted shapes and exposes narrow operations for workspace labels, documents, workbooks, worksheets, and cell values. `src/lib/spreadsheetEngine.ts` is an isolated expression parser/evaluator; it does not use JavaScript `eval`. No remote service client is configured.
+The application is a React 19 + TypeScript single-page web project built with Vite. Presentation, local state, and page navigation are separated into `src/App.tsx`, the Docs, Sheets, Slides, Drive and PDF workspaces, their styles, and local storage modules. The local storage module validates persisted shapes and exposes narrow operations for workspace labels, documents, workbooks, worksheets, and cell values. `src/lib/spreadsheetEngine.ts` is an isolated expression parser/evaluator; it does not use JavaScript `eval`. No remote service client is configured.
 
 The brand asset at `public/brand/cocce-office-logo.png` is the user-provided COCCE Office logo. Its transparent alpha is preserved; the squircle silhouette and lettering are not redrawn.
 
@@ -18,9 +18,15 @@ COCCE Sheets stores workbook cells in the current browser and supports CSV impor
 
 `src/SlidesWorkspace.tsx` uses the isolated `src/lib/slidesStore.ts` model and a separate `cocce-office-slides-v1` browser-storage key. Decks carry the current local workspace ID, so the personal space and locally named workspaces show separate decks. The editor supports slide text and speaker notes, three visual themes, slide insertion/duplication/deletion/reordering, keyboard-accessible presenter controls, browser print styling, and a versioned COCCE Office Slides JSON import/export format. Imported decks are shape-checked and limited to 100 slides, 12,000 characters per slide field, and 5 MB per input file. When local storage rejects a write, the UI keeps the current edit, writes a tab-scoped recovery copy where session storage is available, and offers retry; this remains browser-local recovery, not a backup. There is no PPTX reading/writing, Office compatibility, rich objects, PDF editing, cloud persistence, access control, or collaboration. The print action delegates PDF creation to the browser.
 
+## Local Drive and PDF boundary
+
+`src/lib/driveStore.ts` stores browser-local file blobs and metadata in a separate IndexedDB database, `cocce-office-drive-local-v1`, with workspace-scoped reads, a 25 MB per-file limit, previews/downloads, rename, and reversible trash. It is not cloud storage: it has no accounts, folders, sharing links, server authorization, version history, or cross-device sync. Data may be lost when the browser's site data is cleared.
+
+`src/PdfWorkspace.tsx` uses PDF.js to render local file bytes and extract page text for search. `src/lib/pdfTools.ts` uses pdf-lib for actual page extraction, 90-degree rotation, reordering, and merging; each action writes a separate PDF copy back to the local Drive store. PDF preview rotation is view-only. Text selection, annotations, highlights, comments, OCR, secure sharing, and cloud access are not implemented. Files are processed in the current browser; no upload or remote PDF service is used.
+
 ## Editor dependency sources and notices
 
-The installed Tiptap packages are version 3.32.2 and declare MIT licensing. Integration follows the official [React setup](https://tiptap.dev/docs/editor/getting-started/install/react) and [StarterKit configuration](https://tiptap.dev/docs/editor/extensions/functionality/starterkit) documentation. The installed package license files were inspected, and complete provided license texts for the 58 resolved production packages are preserved in `public/third-party-notices.txt`; these notices ship with the web build. No enterprise editor package was installed.
+The installed Tiptap packages are version 3.32.2 and declare MIT licensing. Integration follows the official [React setup](https://tiptap.dev/docs/editor/getting-started/install/react) and [StarterKit configuration](https://tiptap.dev/docs/editor/extensions/functionality/starterkit) documentation. PDF processing uses `pdfjs-dist` 6.4.299 (Apache-2.0) and `pdf-lib` 1.17.1 (MIT); their complete package license texts are preserved in `public/third-party-notices.txt`. The other installed package license texts are preserved there as well. These notices ship with the web build. No enterprise editor package was installed.
 
 ## Reference project assessment
 

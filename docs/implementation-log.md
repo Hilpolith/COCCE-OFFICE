@@ -51,3 +51,16 @@ Before any shared COCCE configuration or database change, obtain explicit author
 - Checked the supplied UI references and preserved the existing Liquid Glass treatment. The current COCCE Office logo artwork matches the supplied logo; its four canvas corners and the 256 px squircle icon corners have zero alpha. The sidebar uses the squircle icon, and the favicon/home-screen links use the transparent 256/512 px squircle assets; no source artwork was redrawn.
 - Final automated checks pass: `pnpm test` (47 tests), `pnpm build`, `pnpm lint` (0 warnings/errors), and `git diff --check`.
 - Scope remains intentionally limited: no PPTX import/export or PowerPoint fidelity, images/shapes/charts/transitions, collaborative editing, cloud sync, identity, server-side authorization, or PDF editing engine. Print-to-PDF delegates to the browser. This is not completion of the full COCCE Office brief; Vercel remains paused, and no COCCE app, shared auth, database, storage, or other shared service was changed.
+
+## 2026-11-01 — local Drive file-management slice
+
+- Added a workspace-scoped IndexedDB repository for actual file blobs and metadata, limited to 25 MB per file. The local Drive screen supports multi-file upload, browser previews/downloads, rename, trash, restore, permanent deletion, and scoped search; it does not contact a server.
+- Added repository and UI tests for persistence metadata, workspace isolation, trash/restore, validation, upload, preview, rename, and recovery. Chromium browser checks confirmed the uploaded bytes remain available after reload, preview/download actions work, rename and reversible trash behave correctly, and a 390 px viewport has no page-width overflow.
+- Drive remains a limited local file area: no folders, sharing, version history, cloud sync, server authorization, or cross-device access.
+
+## 2026-11-01 — local PDF workspace slice
+
+- Added a lazily loaded PDF workspace using PDF.js 6.4.299 for browser-local viewing and page-text search, and pdf-lib 1.17.1 for genuine page rotation, extraction, reorder, and merge operations. Changed outputs are saved as new files in the local Drive store; original PDFs are not overwritten.
+- Added unit tests that create and inspect real PDF bytes for range validation, extraction, ordering, rotation, and merge. A Chromium run verified local PDF import, canvas rendering, multi-page text search, page navigation, extraction, rotation, reordering, merging, and a 390 px responsive layout; no browser runtime errors were recorded.
+- PDF text is not selectable in the current canvas view; annotations, highlights, comments, OCR, secure sharing, and cloud access are not implemented. The PDF.js code/worker are lazy-loaded, but the production bundle reports a large PDF feature chunk (about 865 kB minified / 309 kB gzip) and the worker asset is about 1.26 MB before transfer compression; further bundle-size work remains.
+- Full verification after these slices: `pnpm test` (62 tests), `pnpm lint` (0 warnings/errors), `pnpm build` (succeeds with the documented PDF chunk-size warning), and `git diff --check`. Vercel remains paused; no deployment, authentication, Supabase, Bunny, Firebase, or other shared-service configuration was changed.

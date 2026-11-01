@@ -2,8 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import {
   Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness,
-  Check, ChevronDown, ChevronLeft, CircleHelp, CloudOff, Command, File,
-  FileSpreadsheet, FileText, FolderOpen, Grid2X2, HardDrive, LayoutDashboard,
+  Check, ChevronDown, ChevronLeft, CircleHelp, CloudOff, Command,
+  FileSpreadsheet, FileText, FolderOpen, Grid2X2, LayoutDashboard,
   LockKeyhole, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings2,
   ShieldCheck, Sparkles, Sun, WandSparkles, X,
 } from 'lucide-react';
@@ -13,10 +13,12 @@ import {
 } from './lib/localStore';
 import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
 import SheetsWorkspace from './SheetsWorkspace';
+import DriveWorkspace from './DriveWorkspace';
 import SlidesWorkspace from './SlidesWorkspace';
 import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './lib/documentEditor';
 
 const DocumentEditor = lazy(() => import('./DocsEditor'));
+const PdfWorkspace = lazy(() => import('./PdfWorkspace'));
 
 const moduleNav = [
   { id: 'docs', label: 'Docs', icon: FileText, detail: 'Local rich-text drafts' },
@@ -248,7 +250,7 @@ function App() {
             <div className="breadcrumb"><span>COCCE Office</span><ChevronLeft size={13} className="breadcrumb-sep" /><strong>{pageTitle(page, Boolean(selectedDocument))}</strong></div>
           </div>
           <div className="topbar-actions">
-            <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-label="Search local documents" /><kbd><Command size={11} /> K</kbd></label>
+            <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-label={page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
             <span className="local-status"><span className="status-dot" /> Local only</span>
             <button className="icon-button help-button" title="Preview limitations" aria-label="Preview limitations" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
           </div>
@@ -262,11 +264,12 @@ function App() {
           {page === 'docs' && (selectedDocument
             ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onDelete={deleteDocument} /></Suspense>
             : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} />)}
-          {page === 'drive' && <DrivePage documents={visibleDocuments} query={query} onOpen={openDocument} onCreate={createDocument} />}
+          {page === 'drive' && <DriveWorkspace workspaceId={activeWorkspace?.id ?? null} documents={visibleDocuments} query={query} onOpenDocument={openDocument} onCreateDocument={createDocument} />}
+          {page === 'pdf' && <Suspense fallback={<div className="page" role="status">Opening local PDF tools…</div>}><PdfWorkspace workspaceId={activeWorkspace?.id ?? null} /></Suspense>}
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} />}
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} />}
           {page === 'settings' && <SettingsPage state={state} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
-          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'sheets' && page !== 'slides' && page !== 'settings' && <UnavailablePage page={page} />}
+          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'pdf' && page !== 'sheets' && page !== 'slides' && page !== 'settings' && <UnavailablePage page={page} />}
         </div>
 
         <footer className="app-footer"><span><ShieldCheck size={13} /> No shared services are active in this preview</span><span>COCCE OFFICE · FOUNDATION BUILD</span></footer>
@@ -354,10 +357,6 @@ function DocumentRows({ documents, onOpen }: { documents: OfficeDocument[]; onOp
 
 function DocumentsPage({ documents, query, onCreate, onOpen }: { documents: OfficeDocument[]; query: string; onCreate: () => void; onOpen: (document: OfficeDocument) => void }) {
   return <div className="page subpage"><div className="page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Format local drafts with headings, text styles, lists, and quotes. DOCX, comments, cloud sync, and collaboration are not connected.</p></div><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
-}
-
-function DrivePage({ documents, query, onOpen, onCreate }: { documents: OfficeDocument[]; query: string; onOpen: (document: OfficeDocument) => void; onCreate: () => void }) {
-  return <div className="page subpage"><div className="page-title-row"><div><span className="eyebrow">COCCE DRIVE · LOCAL MODE</span><h1>My files</h1><p className="page-lede">This view lists the text documents created in this browser. Cloud storage and uploads are disabled.</p></div><button className="button-secondary" onClick={onCreate}><Plus size={16} /> Create text file</button></div><div className="drive-toolbar"><span><FolderOpen size={15} /> Personal files</span><span>{documents.length} items</span></div><div className="file-grid">{documents.map((document) => <button className="file-card glass-card" key={document.id} onClick={() => onOpen(document)}><div className="file-preview"><File size={28} /><span>.md</span></div><strong>{document.title || 'Untitled document'}</strong><small>Markdown · {friendlyDate(document.updatedAt)}</small><ArrowUpRight size={15} className="file-open" /></button>)}{documents.length === 0 && <div className="drive-empty glass-card"><HardDrive size={25} /><h3>{query ? 'No matching local files' : 'No files in this space yet'}</h3><p>Create a text document to see it here.</p><button className="button-tertiary" onClick={onCreate}><Plus size={15} /> Create text file</button></div>}</div></div>;
 }
 
 function SettingsPage({ state, onTheme, onAccent }: { state: PreviewState; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
