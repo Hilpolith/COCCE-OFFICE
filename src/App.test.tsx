@@ -73,6 +73,15 @@ describe('local Docs recovery integration', () => {
     expect(screen.queryByText('Unsaved · kept in this tab')).toBeNull();
   });
 
+  it('opens the local Team Planner without implying shared chat or member activity', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Team' }));
+    expect(await screen.findByRole('heading', { name: 'Organize the work' })).toBeTruthy();
+    expect(screen.getByText(/local planning only/i)).toBeTruthy();
+    expect(screen.getByText(/no member directory, shared access, chat, or task assignment connected/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /invite|message|send|assign to/i })).toBeNull();
+  });
+
   it('opens the device-local Vault from application navigation', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Vault' }));

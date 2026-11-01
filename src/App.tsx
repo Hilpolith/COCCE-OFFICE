@@ -20,6 +20,7 @@ import VaultWorkspace from './VaultWorkspace';
 
 const DocumentEditor = lazy(() => import('./DocsEditor'));
 const PdfWorkspace = lazy(() => import('./PdfWorkspace'));
+const TeamWorkspace = lazy(() => import('./TeamWorkspace'));
 
 const moduleNav = [
   { id: 'docs', label: 'Docs', icon: FileText, detail: 'Local rich-text drafts' },
@@ -27,7 +28,7 @@ const moduleNav = [
   { id: 'slides', label: 'Slides', icon: Grid2X2, detail: 'Presentation editor' },
   { id: 'pdf', label: 'PDF', icon: BookOpenText, detail: 'PDF tools' },
   { id: 'drive', label: 'Drive', icon: FolderOpen, detail: 'Files in this browser' },
-  { id: 'team', label: 'Team', icon: MessageCircle, detail: 'Members and chat' },
+  { id: 'team', label: 'Team', icon: MessageCircle, detail: 'Local planner · private' },
   { id: 'vault', label: 'Vault', icon: LockKeyhole, detail: 'Protected files' },
   { id: 'automations', label: 'AI Automations', icon: WandSparkles, detail: 'Agents and workflows' },
 ] as const;
@@ -251,7 +252,7 @@ function App() {
             <div className="breadcrumb"><span>COCCE Office</span><ChevronLeft size={13} className="breadcrumb-sep" /><strong>{pageTitle(page, Boolean(selectedDocument))}</strong></div>
           </div>
           <div className="topbar-actions">
-            <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-label={page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
+            <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-label={page === 'team' ? 'Search local planner items' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
             <span className="local-status"><span className="status-dot" /> Local only</span>
             <button className="icon-button help-button" title="Preview limitations" aria-label="Preview limitations" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
           </div>
@@ -270,8 +271,9 @@ function App() {
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} />}
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} />}
           {page === 'vault' && <VaultWorkspace />}
+          {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} /></Suspense>}
           {page === 'settings' && <SettingsPage state={state} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
-          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'pdf' && page !== 'sheets' && page !== 'slides' && page !== 'vault' && page !== 'settings' && <UnavailablePage page={page} />}
+          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'pdf' && page !== 'sheets' && page !== 'slides' && page !== 'vault' && page !== 'team' && page !== 'settings' && <UnavailablePage page={page} />}
         </div>
 
         <footer className="app-footer"><span><ShieldCheck size={13} /> No shared services are active in this preview</span><span>COCCE OFFICE · FOUNDATION BUILD</span></footer>
@@ -338,7 +340,7 @@ function Dashboard({
         <div className="panel-heading module-heading"><div><span className="eyebrow">THE OFFICE TOOLKIT</span><h2>Explore your workspace</h2></div><span className="module-caption">Open a module to see its current connection status</span></div>
         <div className="module-grid">{moduleNav.map((module) => {
           const Icon = module.icon;
-              return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'docs' || module.id === 'drive' || module.id === 'sheets' || module.id === 'slides' || module.id === 'vault' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
+              return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'team' ? 'Local planner only' : module.id === 'docs' || module.id === 'drive' || module.id === 'sheets' || module.id === 'slides' || module.id === 'vault' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
         })}</div>
       </section>
     </div>
@@ -369,13 +371,12 @@ function ConnectionRow({ label, value }: { label: string; value: string }) {
   return <div className="connection-row"><span>{label}</span><span><span className="connection-dot" />{value}</span></div>;
 }
 
-const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
+const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'team' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
   pdf: { kicker: 'COCCE PDF', title: 'PDF tools are not connected', description: 'There is no PDF viewer, annotation service, or file upload in this preview.', reason: 'No file is uploaded or processed.' },
-  team: { kicker: 'COCCE TEAM', title: 'Team services are not connected', description: 'Member search, invitations, messaging, presence, and notifications require the approved COCCE identity and backend integration.', reason: 'No invitation or message is sent from this screen.' },
   automations: { kicker: 'COCCE AI AUTOMATIONS', title: 'AI and workflow execution are not configured', description: 'No OpenRouter key, free-model routing, approval gates, or server-side job runner is connected.', reason: 'No model calls or workflow runs are fabricated.' },
 };
 
-function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'settings'> }) {
+function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'team' | 'settings'> }) {
   const module = moduleNav.find((item) => item.id === page);
   const content = unavailableCopy[page];
   const Icon = module?.icon ?? CloudOff;
