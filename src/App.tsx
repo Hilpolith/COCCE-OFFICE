@@ -1,0 +1,356 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
+import {
+  Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness,
+  Check, ChevronDown, ChevronLeft, CircleHelp, CloudOff, Command, File,
+  FileSpreadsheet, FileText, FolderOpen, Grid2X2, HardDrive, LayoutDashboard,
+  LockKeyhole, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings2,
+  ShieldCheck, Sparkles, Sun, WandSparkles, X,
+} from 'lucide-react';
+import {
+  addDocument, addWorkspace, readPreviewState, removeDocument, selectWorkspace,
+  updateDocument, writePreviewState,
+} from './lib/localStore';
+import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
+
+const moduleNav = [
+  { id: 'docs', label: 'Docs', icon: FileText, detail: 'Local text documents' },
+  { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, detail: 'Spreadsheet engine' },
+  { id: 'slides', label: 'Slides', icon: Grid2X2, detail: 'Presentation editor' },
+  { id: 'pdf', label: 'PDF', icon: BookOpenText, detail: 'PDF tools' },
+  { id: 'drive', label: 'Drive', icon: FolderOpen, detail: 'Files in this browser' },
+  { id: 'team', label: 'Team', icon: MessageCircle, detail: 'Members and chat' },
+  { id: 'vault', label: 'Vault', icon: LockKeyhole, detail: 'Protected files' },
+  { id: 'automations', label: 'AI Automations', icon: WandSparkles, detail: 'Agents and workflows' },
+] as const;
+
+type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'pdf' | 'drive' | 'team' | 'vault' | 'automations' | 'settings';
+type DialogMode = 'workspace' | 'delete' | null;
+
+const themeOptions: { id: ThemeId; name: string; color: string }[] = [
+  { id: 'dark', name: 'Dark Liquid Glass', color: '#8d8bff' },
+  { id: 'light', name: 'Light Liquid Glass', color: '#6663df' },
+  { id: 'midnight', name: 'Midnight Glass', color: '#62c4ff' },
+  { id: 'amber', name: 'Warm Amber Glass', color: '#ffae66' },
+  { id: 'aurora', name: 'Aurora Glass', color: '#54d9b2' },
+  { id: 'lavender', name: 'Frosted Lavender', color: '#c1a0ff' },
+];
+
+const friendlyDate = (iso: string | undefined) => {
+  if (!iso) return '—';
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(iso));
+};
+
+function App() {
+  const [state, setState] = useState<PreviewState>(() => readPreviewState(window.localStorage));
+  const [page, setPage] = useState<PageId>('home');
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<DialogMode>(null);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [clockLabel] = useState(() => {
+    const hour = new Date().getHours();
+    return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = state.theme;
+    document.documentElement.style.setProperty('--accent', state.accent);
+  }, [state.theme, state.accent]);
+
+  const persist = (next: PreviewState) => {
+    setState(next);
+    writePreviewState(window.localStorage, next);
+  };
+  const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ?? null;
+  const workspaceDocuments = useMemo(
+    () => state.documents.filter((document) => document.workspaceId === state.activeWorkspaceId),
+    [state.documents, state.activeWorkspaceId],
+  );
+  const visibleDocuments = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    const documents = [...workspaceDocuments].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return normalized
+      ? documents.filter((document) => `${document.title} ${document.content}`.toLocaleLowerCase().includes(normalized))
+      : documents;
+  }, [workspaceDocuments, query]);
+  const selectedDocument = workspaceDocuments.find((document) => document.id === selectedDocumentId) ?? null;
+  const lastEdited = [...workspaceDocuments].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.updatedAt;
+
+  const goTo = (nextPage: PageId) => {
+    setPage(nextPage);
+    setSelectedDocumentId(null);
+    setMobileMenuOpen(false);
+    setQuery('');
+  };
+
+  const createDocument = () => {
+    const result = addDocument(state);
+    persist(result.state);
+    setPage('docs');
+    setSelectedDocumentId(result.document.id);
+    setFeedback('New document created on this device.');
+    window.setTimeout(() => setFeedback(''), 2800);
+  };
+
+  const openDocument = (document: OfficeDocument) => {
+    setPage('docs');
+    setSelectedDocumentId(document.id);
+  };
+
+  const patchDocument = (patch: Partial<Pick<OfficeDocument, 'title' | 'content'>>) => {
+    if (!selectedDocument) return;
+    persist(updateDocument(state, selectedDocument.id, patch));
+  };
+
+  const exportDocument = () => {
+    if (!selectedDocument) return;
+    const safeName = (selectedDocument.title.trim() || 'untitled-document').replace(/[^\p{L}\p{N}-]+/gu, '-').toLowerCase();
+    const blob = new Blob([`# ${selectedDocument.title}\n\n${selectedDocument.content}`], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = window.document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${safeName}.md`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setFeedback('Markdown file downloaded.');
+    window.setTimeout(() => setFeedback(''), 2800);
+  };
+
+  const deleteDocument = () => {
+    if (!selectedDocument) return;
+    setDialog('delete');
+  };
+
+  const confirmDeleteDocument = () => {
+    if (!selectedDocument) return;
+    persist(removeDocument(state, selectedDocument.id));
+    setSelectedDocumentId(null);
+    setDialog(null);
+    setFeedback('Document deleted from this device.');
+    window.setTimeout(() => setFeedback(''), 2800);
+  };
+
+  const createWorkspace = (name: string, kind: WorkspaceKind, country: string) => {
+    persist(addWorkspace(state, { name, kind, country }));
+    setDialog(null);
+    setFeedback('Local workspace created on this device.');
+    window.setTimeout(() => setFeedback(''), 2800);
+  };
+
+  const chooseWorkspace = (workspaceId: string | null) => {
+    persist(selectWorkspace(state, workspaceId));
+    setWorkspaceMenuOpen(false);
+    setSelectedDocumentId(null);
+    setPage('home');
+  };
+
+  return (
+    <main className="app-frame">
+      <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`} aria-label="Main navigation">
+        <div className="brand-lockup">
+          <img src="/brand/cocce-office-squircle-256.png" className="brand-mark" alt="COCCE Office" />
+          <div className="brand-copy"><strong>COCCE <span>OFFICE</span></strong><small>Workspace preview</small></div>
+          <button className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}><X size={18} /></button>
+        </div>
+
+        <button className="workspace-switcher" onClick={() => setWorkspaceMenuOpen((open) => !open)} aria-expanded={workspaceMenuOpen}>
+          <span className="workspace-emblem"><BriefcaseBusiness size={16} /></span>
+          <span className="workspace-label"><strong>{activeWorkspace?.name ?? 'Personal space'}</strong><small>{activeWorkspace ? `${activeWorkspace.kind} · ${activeWorkspace.currency}` : 'Local workspace'}</small></span>
+          <ChevronDown size={16} className="muted" />
+        </button>
+        {workspaceMenuOpen && (
+          <div className="workspace-menu glass-popover">
+            <p className="eyebrow">Switch local space</p>
+            <button className={`workspace-option ${state.activeWorkspaceId === null ? 'selected' : ''}`} onClick={() => chooseWorkspace(null)}>
+              <span className="workspace-mini-icon"><BriefcaseBusiness size={15} /></span><span><strong>Personal space</strong><small>This browser only</small></span>{state.activeWorkspaceId === null && <Check size={15} />}
+            </button>
+            {state.workspaces.map((workspace) => (
+              <button key={workspace.id} className={`workspace-option ${state.activeWorkspaceId === workspace.id ? 'selected' : ''}`} onClick={() => chooseWorkspace(workspace.id)}>
+                <span className="workspace-mini-icon"><BriefcaseBusiness size={15} /></span><span><strong>{workspace.name}</strong><small>{workspace.kind} · {workspace.currency}</small></span>{state.activeWorkspaceId === workspace.id && <Check size={15} />}
+              </button>
+            ))}
+            <button className="workspace-create" onClick={() => { setDialog('workspace'); setWorkspaceMenuOpen(false); }}><Plus size={15} /> Create local workspace</button>
+          </div>
+        )}
+
+        <div className="sidebar-section-label">WORKSPACE</div>
+        <nav className="primary-nav">
+          <NavButton active={page === 'home'} icon={<LayoutDashboard size={18} />} label="Overview" onClick={() => goTo('home')} />
+          {moduleNav.map(({ id, label, icon: Icon }) => (
+            <NavButton key={id} active={page === id} icon={<Icon size={18} />} label={label} onClick={() => goTo(id)} />
+          ))}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="sidebar-divider" />
+          <NavButton active={page === 'settings'} icon={<Settings2 size={18} />} label="Preferences" onClick={() => goTo('settings')} />
+          <div className="local-profile">
+            <div className="profile-orb"><span>CO</span></div>
+            <div className="profile-copy"><strong>Local preview</strong><small>Not signed in</small></div>
+            <MoreHorizontal size={17} className="muted" />
+          </div>
+        </div>
+      </aside>
+
+      {mobileMenuOpen && <button className="mobile-scrim" aria-label="Close navigation overlay" onClick={() => setMobileMenuOpen(false)} />}
+
+      <section className="main-column">
+        <header className="topbar">
+          <div className="topbar-left">
+            <button className="icon-button mobile-menu-button" aria-label="Open navigation" onClick={() => setMobileMenuOpen(true)}><Menu size={19} /></button>
+            <div className="breadcrumb"><span>COCCE Office</span><ChevronLeft size={13} className="breadcrumb-sep" /><strong>{pageTitle(page, Boolean(selectedDocument))}</strong></div>
+          </div>
+          <div className="topbar-actions">
+            <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-label="Search local documents" /><kbd><Command size={11} /> K</kbd></label>
+            <span className="local-status"><span className="status-dot" /> Local only</span>
+            <button className="icon-button help-button" title="Preview limitations" aria-label="Preview limitations" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
+          </div>
+        </header>
+
+        <div className="notice-bar"><CloudOff size={15} /><span><strong>Local preview</strong> — your work stays in this browser. Sign-in, cloud sync, sharing, and team services are not connected.</span><button onClick={() => goTo('settings')} aria-label="Open setup notes"><ArrowUpRight size={15} /></button></div>
+
+        <div className="content-scroll">
+          {page === 'home' && <Dashboard greeting={clockLabel} activeWorkspace={activeWorkspace?.name ?? 'Personal space'} workspaceCount={state.workspaces.length} documentCount={workspaceDocuments.length} lastEdited={lastEdited} documents={visibleDocuments.slice(0, 5)} onCreateDocument={createDocument} onOpenDocument={openDocument} onCreateWorkspace={() => setDialog('workspace')} onNavigate={goTo} />}
+          {page === 'docs' && (selectedDocument
+            ? <DocumentEditor document={selectedDocument} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onDelete={deleteDocument} />
+            : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} />)}
+          {page === 'drive' && <DrivePage documents={visibleDocuments} query={query} onOpen={openDocument} onCreate={createDocument} />}
+          {page === 'settings' && <SettingsPage state={state} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
+          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'settings' && <UnavailablePage page={page} />}
+        </div>
+
+        <footer className="app-footer"><span><ShieldCheck size={13} /> No shared services are active in this preview</span><span>COCCE OFFICE · FOUNDATION BUILD</span></footer>
+      </section>
+
+      {feedback && <div className="toast" role="status"><Check size={16} />{feedback}</div>}
+      {dialog === 'workspace' && <WorkspaceDialog onClose={() => setDialog(null)} onCreate={createWorkspace} />}
+      {dialog === 'delete' && selectedDocument && <DeleteDocumentDialog title={selectedDocument.title} onClose={() => setDialog(null)} onDelete={confirmDeleteDocument} />}
+    </main>
+  );
+}
+
+function pageTitle(page: PageId, editing: boolean) {
+  if (page === 'docs' && editing) return 'Document editor';
+  if (page === 'home') return 'Overview';
+  if (page === 'settings') return 'Preferences';
+  return moduleNav.find((item) => item.id === page)?.label ?? 'Overview';
+}
+
+function NavButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+  return <button className={`nav-button ${active ? 'active' : ''}`} onClick={onClick} aria-current={active ? 'page' : undefined}>{icon}<span>{label}</span>{active && <span className="nav-active-marker" />}</button>;
+}
+
+function Dashboard({
+  greeting, activeWorkspace, workspaceCount, documentCount, lastEdited, documents,
+  onCreateDocument, onOpenDocument, onCreateWorkspace, onNavigate,
+}: {
+  greeting: string; activeWorkspace: string; workspaceCount: number; documentCount: number; lastEdited?: string;
+  documents: OfficeDocument[]; onCreateDocument: () => void; onOpenDocument: (document: OfficeDocument) => void;
+  onCreateWorkspace: () => void; onNavigate: (page: PageId) => void;
+}) {
+  return (
+    <div className="page dashboard-page">
+      <section className="welcome-row">
+        <div>
+          <div className="eyebrow accent-eyebrow"><span className="sparkle-dot"><Sparkles size={13} /></span> YOUR PRIVATE WORKSPACE</div>
+          <h1>{greeting}, <span className="gradient-text">let’s make room</span><br className="desktop-break" /> for focused work.</h1>
+          <p className="welcome-subtitle">A calm place for your ideas, documents, and next steps.</p>
+          <div className="welcome-actions"><button className="button-primary" onClick={onCreateDocument}><Plus size={17} /> New document</button><button className="button-secondary" onClick={onCreateWorkspace}><BriefcaseBusiness size={16} /> Create Office space</button></div>
+        </div>
+        <div className="hero-brand-card glass-card"><div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" /><img src="/brand/cocce-office-logo.png" alt="COCCE Office app icon" /><div className="hero-brand-caption"><span className="live-pip" />{activeWorkspace}<small>Saved privately on this device</small></div></div>
+      </section>
+
+      <section className="metric-grid" aria-label="Local workspace summary">
+        <MetricCard icon={<FileText size={17} />} label="My documents" value={String(documentCount)} note={documentCount === 1 ? '1 local draft' : 'Local drafts'} tone="violet" />
+        <MetricCard icon={<BriefcaseBusiness size={17} />} label="Office spaces" value={String(workspaceCount)} note="Created in this browser" tone="cyan" />
+        <MetricCard icon={<Activity size={17} />} label="Last edit" value={friendlyDate(lastEdited)} note={lastEdited ? 'From a local document' : 'No edits yet'} tone="amber" />
+      </section>
+
+      <section className="dashboard-lower-grid">
+        <div className="panel recent-panel glass-card">
+          <div className="panel-heading"><div><span className="eyebrow">YOUR WORK</span><h2>Recent documents</h2></div><button className="text-button" onClick={() => onNavigate('docs')}>View all <ArrowUpRight size={14} /></button></div>
+          {documents.length === 0 ? <EmptyDocuments onCreate={onCreateDocument} /> : <DocumentRows documents={documents} onOpen={onOpenDocument} />}
+        </div>
+        <div className="panel quick-panel glass-card">
+          <div className="panel-heading"><div><span className="eyebrow">QUICK START</span><h2>Make a little progress</h2></div><span className="small-star"><Sparkles size={15} /></span></div>
+          <button className="quick-action" onClick={onCreateDocument}><span className="quick-icon quick-doc"><FileText size={17} /></span><span><strong>Start a document</strong><small>Write and save locally</small></span><ArrowUpRight size={15} /></button>
+          <button className="quick-action" onClick={onCreateWorkspace}><span className="quick-icon quick-space"><BriefcaseBusiness size={17} /></span><span><strong>Create an Office space</strong><small>Separate work by organization</small></span><ArrowUpRight size={15} /></button>
+          <div className="quick-note"><LockKeyhole size={15} /><p><strong>Private by design.</strong> This preview stores data in your current browser only; it is not synced or backed up.</p></div>
+        </div>
+      </section>
+
+      <section className="module-section">
+        <div className="panel-heading module-heading"><div><span className="eyebrow">THE OFFICE TOOLKIT</span><h2>Explore your workspace</h2></div><span className="module-caption">Open a module to see its current connection status</span></div>
+        <div className="module-grid">{moduleNav.map((module) => {
+          const Icon = module.icon;
+          return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'docs' || module.id === 'drive' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
+        })}</div>
+      </section>
+    </div>
+  );
+}
+
+function MetricCard({ icon, label, value, note, tone }: { icon: ReactNode; label: string; value: string; note: string; tone: string }) {
+  return <div className={`metric-card glass-card metric-${tone}`}><div className="metric-top"><span className="metric-icon">{icon}</span><span className="metric-label">{label}</span><span className="metric-indicator"><ArrowDownRight size={13} /></span></div><div className="metric-value">{value}</div><div className="metric-note">{note}</div></div>;
+}
+
+function EmptyDocuments({ onCreate }: { onCreate: () => void }) {
+  return <div className="empty-documents"><div className="empty-visual"><div className="empty-sheet"><FileText size={24} /></div><div className="empty-spark spark-a" /><div className="empty-spark spark-b" /></div><h3>Your first page is waiting</h3><p>Create a local text document and it will appear here. Nothing is uploaded.</p><button className="button-tertiary" onClick={onCreate}><Plus size={15} /> Create document</button></div>;
+}
+
+function DocumentRows({ documents, onOpen }: { documents: OfficeDocument[]; onOpen: (document: OfficeDocument) => void }) {
+  return <div className="document-list">{documents.map((document) => <button className="document-row" key={document.id} onClick={() => onOpen(document)}><span className="document-type-icon"><FileText size={17} /></span><span className="document-row-main"><strong>{document.title || 'Untitled document'}</strong><small>{document.content.trim().slice(0, 84) || 'No text yet · stored in this browser'}</small></span><span className="document-date">{friendlyDate(document.updatedAt)}</span><ArrowUpRight size={15} className="row-arrow" /></button>)}</div>;
+}
+
+function DocumentsPage({ documents, query, onCreate, onOpen }: { documents: OfficeDocument[]; query: string; onCreate: () => void; onOpen: (document: OfficeDocument) => void }) {
+  return <div className="page subpage"><div className="page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Simple text drafts saved only in this browser. DOCX, comments, and collaborative editing are not connected.</p></div><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
+}
+
+function DrivePage({ documents, query, onOpen, onCreate }: { documents: OfficeDocument[]; query: string; onOpen: (document: OfficeDocument) => void; onCreate: () => void }) {
+  return <div className="page subpage"><div className="page-title-row"><div><span className="eyebrow">COCCE DRIVE · LOCAL MODE</span><h1>My files</h1><p className="page-lede">This view lists the text documents created in this browser. Cloud storage and uploads are disabled.</p></div><button className="button-secondary" onClick={onCreate}><Plus size={16} /> Create text file</button></div><div className="drive-toolbar"><span><FolderOpen size={15} /> Personal files</span><span>{documents.length} items</span></div><div className="file-grid">{documents.map((document) => <button className="file-card glass-card" key={document.id} onClick={() => onOpen(document)}><div className="file-preview"><File size={28} /><span>.md</span></div><strong>{document.title || 'Untitled document'}</strong><small>Markdown · {friendlyDate(document.updatedAt)}</small><ArrowUpRight size={15} className="file-open" /></button>)}{documents.length === 0 && <div className="drive-empty glass-card"><HardDrive size={25} /><h3>{query ? 'No matching local files' : 'No files in this space yet'}</h3><p>Create a text document to see it here.</p><button className="button-tertiary" onClick={onCreate}><Plus size={15} /> Create text file</button></div>}</div></div>;
+}
+
+function DocumentEditor({ document, onPatch, onBack, onExport, onDelete }: { document: OfficeDocument; onPatch: (patch: Partial<Pick<OfficeDocument, 'title' | 'content'>>) => void; onBack: () => void; onExport: () => void; onDelete: () => void }) {
+  return <div className="page editor-page"><div className="editor-toolbar"><button className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button><div className="editor-actions"><span className="autosave-label"><span className="status-dot" /> Saved on this device</span><button className="button-secondary small-button" onClick={onExport}><ArrowUpRight size={14} /> Export .md</button><button className="icon-button danger-button" onClick={onDelete} aria-label="Delete document" title="Delete local document"><X size={16} /></button></div></div><article className="document-canvas glass-card"><input className="document-title-input" value={document.title} onChange={(event) => onPatch({ title: event.target.value })} aria-label="Document title" placeholder="Untitled document" /><div className="document-meta"><span><FileText size={13} /> Local text document</span><span>Edited {friendlyDate(document.updatedAt)}</span></div><textarea className="document-body" value={document.content} onChange={(event) => onPatch({ content: event.target.value })} placeholder={'Start writing…\n\nYour draft is stored in this browser only.'} aria-label="Document content" spellCheck /></article><p className="editor-footnote"><LockKeyhole size={13} /> Autosave writes to this browser’s local storage. Do not use this preview for sensitive or shared work.</p></div>;
+}
+
+function SettingsPage({ state, onTheme, onAccent }: { state: PreviewState; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
+  return <div className="page subpage settings-page"><div className="page-title-row"><div><span className="eyebrow">PREFERENCES</span><h1>Make it yours</h1><p className="page-lede">Theme and accent choices are saved in this browser.</p></div><span className="local-only-chip"><LockKeyhole size={13} /> Local settings</span></div><section className="settings-panel glass-card"><div className="settings-heading"><div className="settings-icon"><Sun size={19} /></div><div><h2>Liquid Glass themes</h2><p>Choose a surface style for this preview.</p></div></div><div className="theme-grid">{themeOptions.map((theme) => <button key={theme.id} className={`theme-option theme-preview-${theme.id} ${state.theme === theme.id ? 'theme-selected' : ''}`} onClick={() => onTheme(theme.id)} aria-pressed={state.theme === theme.id}><span className="theme-swatch"><i style={{ background: theme.color }} /><i /><i /></span><span className="theme-name">{theme.name}</span>{state.theme === theme.id && <Check size={15} className="theme-check" />}</button>)}</div><div className="accent-picker"><div><strong>Accent color</strong><small>Applied to highlights and focus states.</small></div><label className="color-control"><input aria-label="Custom accent color" type="color" value={state.accent} onChange={(event) => onAccent(event.target.value)} /><span>{state.accent.toUpperCase()}</span></label></div></section><section className="settings-panel glass-card connection-panel"><div className="settings-heading"><div className="settings-icon connection-icon"><CloudOff size={18} /></div><div><h2>Connection status</h2><p>No shared COCCE services are connected in this build.</p></div></div><div className="connection-list"><ConnectionRow label="COCCE sign-in" value="Not connected" /><ConnectionRow label="Cloud database" value="Not connected" /><ConnectionRow label="File storage" value="Not connected" /><ConnectionRow label="AI provider" value="Not configured" /></div><p className="connection-note">The app intentionally does not create identities, send invitations, upload files, call paid AI models, or modify shared COCCE infrastructure.</p></section></div>;
+}
+
+function ConnectionRow({ label, value }: { label: string; value: string }) {
+  return <div className="connection-row"><span>{label}</span><span><span className="connection-dot" />{value}</span></div>;
+}
+
+const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
+  sheets: { kicker: 'COCCE SHEETS', title: 'Spreadsheet tools are not connected', description: 'This preview does not include a spreadsheet formula engine, XLSX import/export, or shared sheet storage.', reason: 'No spreadsheet data is being simulated.' },
+  slides: { kicker: 'COCCE SLIDES', title: 'Presentation tools are not connected', description: 'PPTX editing, slide rendering, and export have not been wired into this isolated web foundation.', reason: 'No sample presentations or invented activity are shown.' },
+  pdf: { kicker: 'COCCE PDF', title: 'PDF tools are not connected', description: 'There is no PDF viewer, annotation service, or file upload in this preview.', reason: 'No file is uploaded or processed.' },
+  team: { kicker: 'COCCE TEAM', title: 'Team services are not connected', description: 'Member search, invitations, messaging, presence, and notifications require the approved COCCE identity and backend integration.', reason: 'No invitation or message is sent from this screen.' },
+  vault: { kicker: 'COCCE VAULT', title: 'Vault protection is not enabled', description: 'Secure cloud storage, key management, access logs, and recovery are not implemented in this foundation build.', reason: 'Do not store sensitive files here.' },
+  automations: { kicker: 'COCCE AI AUTOMATIONS', title: 'AI and workflow execution are not configured', description: 'No OpenRouter key, free-model routing, approval gates, or server-side job runner is connected.', reason: 'No model calls or workflow runs are fabricated.' },
+};
+
+function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'drive' | 'settings'> }) {
+  const module = moduleNav.find((item) => item.id === page);
+  const content = unavailableCopy[page];
+  const Icon = module?.icon ?? CloudOff;
+  return <div className="page module-status-page"><div className="module-status-card glass-card"><div className={`status-illustration status-${page}`}><div className="status-glow" /><span><Icon size={27} /></span><div className="status-orbit status-orbit-one" /><div className="status-orbit status-orbit-two" /></div><span className="eyebrow">{content.kicker} · CONNECTION REQUIRED</span><h1>{content.title}</h1><p className="status-description">{content.description}</p><div className="status-reason"><CloudOff size={16} /><span>{content.reason}</span></div><div className="status-boundary"><ShieldCheck size={15} /><span>This isolated preview makes no network calls for this module. Its navigation is informational, not a claim that the service is live.</span></div></div></div>;
+}
+
+function WorkspaceDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string, kind: WorkspaceKind, country: string) => void }) {
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<WorkspaceKind>('Business');
+  const [country, setCountry] = useState('Tanzania');
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); onCreate(name, kind, country); };
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal glass-card" role="dialog" aria-modal="true" aria-labelledby="workspace-dialog-title"><button className="icon-button modal-close" onClick={onClose} aria-label="Close dialog"><X size={18} /></button><div className="modal-symbol"><BriefcaseBusiness size={20} /></div><span className="eyebrow">A SPACE OF YOUR OWN</span><h2 id="workspace-dialog-title">Create an Office space</h2><p className="modal-copy">Organize local drafts by business, school, institute, or team.</p><form onSubmit={submit}><label className="form-label">Office name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Kijiji Studio" required maxLength={64} autoFocus /></label><div className="form-row"><label className="form-label">Type<select value={kind} onChange={(event) => setKind(event.target.value as WorkspaceKind)}><option>Business</option><option>School</option><option>Institute</option><option>Team</option><option>Personal</option></select></label><label className="form-label">Country<input value={country} onChange={(event) => setCountry(event.target.value)} maxLength={48} /></label></div><div className="modal-warning"><CloudOff size={15} /><span>This creates a local label only. It does not create a shared Office, invite members, or connect to COCCE services.</span></div><div className="modal-actions"><button type="button" className="button-secondary" onClick={onClose}>Cancel</button><button type="submit" className="button-primary"><Plus size={16} /> Create locally</button></div></form></section></div>;
+}
+
+function DeleteDocumentDialog({ title, onClose, onDelete }: { title: string; onClose: () => void; onDelete: () => void }) {
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal glass-card" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title"><button className="icon-button modal-close" onClick={onClose} aria-label="Close dialog"><X size={18} /></button><div className="modal-symbol delete-symbol"><X size={20} /></div><span className="eyebrow">LOCAL DOCUMENT</span><h2 id="delete-dialog-title">Delete this document?</h2><p className="modal-copy">“{title || 'Untitled document'}” will be removed from this browser. This cannot be undone.</p><div className="modal-warning"><LockKeyhole size={15} /><span>Only this local copy is affected. No server or shared COCCE data is changed.</span></div><div className="modal-actions"><button type="button" className="button-secondary" onClick={onClose}>Keep document</button><button type="button" className="button-secondary danger-text" onClick={onDelete}><X size={15} /> Delete locally</button></div></section></div>;
+}
+
+export default App;
