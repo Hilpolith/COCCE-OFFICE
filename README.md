@@ -4,13 +4,17 @@ This private, isolated React/TypeScript project is the starting foundation for C
 
 ## What works
 
-The responsive interface uses a frosted liquid-glass treatment guided by the supplied references. The supplied COCCE Office squircle logo is reused with transparent alpha and its original artwork intact, including standard square app-icon canvases. In this browser, users can create and switch local workspace labels, draft and search documents, and persist six themes plus an accent color. Docs now uses Tiptap/ProseMirror for editable rich text with headings, bold/italic/underline, lists, quotes, undo/redo, local autosave, and Markdown export of supported formatting. Legacy plain-text drafts remain readable; pasted content is inserted as plain text and stored markup is sanitized before it is rendered. Failed document saves remain visible and recoverable within the current tab across navigation, with retry and export controls; that temporary buffer is not a backup.
+The responsive interface uses a frosted Liquid Glass treatment guided by the supplied UI references. The supplied COCCE Office logo artwork is preserved with transparent alpha; the sidebar, favicon, and home-screen icon use the transparent squircle asset. The app supports local workspace labels, six themes plus an accent color, and local document search.
 
-COCCE Sheets supports local workbooks and worksheets, cell editing, a tested formula evaluator (arithmetic, references, ranges, and common functions), and CSV import/export. CSV export writes formula results as values and prefixes formula-like text to reduce spreadsheet-formula injection risk. Formula, parser, upload-size, and export-area limits have unit coverage.
+**Docs** uses Tiptap/ProseMirror for editable rich text with headings, bold/italic/underline, lists, quotes, undo/redo, local autosave, and Markdown export of supported formatting. Legacy plain-text drafts remain readable; pasted content is inserted as plain text and stored markup is sanitized before it is rendered. Failed document saves remain visible and recoverable within the current tab across navigation, with retry and export controls; that temporary buffer is not a backup.
+
+**Sheets** supports local workbooks and worksheets, cell editing, a tested formula evaluator (arithmetic, references, ranges, and common functions), and CSV import/export. CSV export writes formula results as values and prefixes formula-like text to reduce spreadsheet-formula injection risk. Formula, parser, upload-size, and export-area limits have unit coverage.
+
+**Slides** supports browser-local text decks scoped to the current local workspace: create and rename decks, edit slide titles, line-based body text and speaker notes, choose among three visual themes, add/duplicate/delete/reorder slides, and present with keyboard navigation. Decks can be imported and exported in the COCCE Office Slides JSON format and printed or saved as PDF through the browser's own print dialog. Failed local-storage writes get a tab-scoped recovery copy when session storage is available.
 
 ## Important limits
 
-There is no sign-in, Google OAuth, shared database, membership, invitations, roles, cloud storage, upload authorization, messaging, notifications, DOCX/PPTX/PDF engine, XLSX support, Vault encryption, AI provider, workflow runner, or multilingual catalog connected. Docs is a limited local rich-text draft editor, not a word-processing format engine; tables, images, page layout, tracked changes, comments, and collaboration are not implemented. Sheets is a limited local grid and CSV tool, not an Excel-compatible or collaborative service. Other module pages identify their connection status; they do not fabricate records or make pretend service calls. Do not use this preview for confidential, sensitive, or shared work. Data is stored in this browser only and can be cleared by the browser.
+There is no sign-in, Google OAuth, shared database, membership, invitations, roles, cloud storage, upload authorization, messaging, notifications, DOCX/XLSX/PPTX compatibility, PDF editing engine, Vault encryption, AI provider, workflow runner, or multilingual catalog connected. Slides is not a PowerPoint editor: its portable format is COCCE Office Slides JSON, not PPTX; it has no images, charts, shapes, transitions, or collaboration. Browser print-to-PDF is not a PDF authoring or editing engine. Docs is a limited local rich-text draft editor, not a word-processing format engine; tables, images, page layout, tracked changes, comments, and collaboration are not implemented. Sheets is a limited local grid and CSV tool, not an Excel-compatible or collaborative service. Do not use this preview for confidential, sensitive, or shared work. Data is stored in this browser only and can be cleared by the browser.
 
 ## Run and test
 
@@ -24,7 +28,7 @@ pnpm lint
 
 ## Isolation and integration
 
-The project does not import COCCE Super App code, read its secrets, call its APIs, or change its configuration. The current local store uses `window.localStorage`; no remote service client is active. Review [the architecture notes](docs/architecture.md), [integration boundaries](docs/integration-boundaries.md), and [implementation log](docs/implementation-log.md) before adding any shared services.
+The project does not import COCCE Super App code, read its secrets, call its APIs, or change its configuration. Local workbooks and Slides use browser storage; no remote service client is active. Review [the architecture notes](docs/architecture.md), [integration boundaries](docs/integration-boundaries.md), and [implementation log](docs/implementation-log.md) before adding any shared services.
 
 The upstream GenOffice repository is primarily an Electron desktop product; its Electron IPC/native-engine assumptions are not directly portable to a browser. The separately licensed `ee/` directory was not copied.
 
