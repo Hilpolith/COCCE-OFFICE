@@ -17,6 +17,7 @@ export interface OfficeDocument {
   workspaceId: string | null;
   title: string;
   content: string;
+  richText?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -132,7 +133,10 @@ export function readPreviewState(storage: StorageReader): PreviewState {
   storageWriteCompatible.set(storage as object, true);
   const value = parsed as Partial<PreviewState>;
   const workspaces = Array.isArray(value.workspaces) ? value.workspaces.filter(isWorkspace) : [];
-  const documents = Array.isArray(value.documents) ? value.documents.filter(isDocument) : [];
+  const documents = Array.isArray(value.documents) ? value.documents.filter(isDocument).map((document) => {
+    const { richText, ...plainDocument } = document;
+    return typeof richText === 'string' ? { ...plainDocument, richText } : plainDocument;
+  }) : [];
   // Older v1 browser data predates Sheets; treating its missing collection as empty preserves local drafts.
   const workbooks = Array.isArray(value.workbooks) ? value.workbooks.filter(isWorkbook) : [];
   const activeWorkspaceId = typeof value.activeWorkspaceId === 'string'
@@ -210,7 +214,7 @@ export function addDocument(state: PreviewState, now = new Date()): { state: Pre
 export function updateDocument(
   state: PreviewState,
   documentId: string,
-  patch: Partial<Pick<OfficeDocument, 'title' | 'content'>>,
+  patch: Partial<Pick<OfficeDocument, 'title' | 'content' | 'richText'>>,
   now = new Date(),
 ): PreviewState {
   return {

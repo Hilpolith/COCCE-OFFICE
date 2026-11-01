@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import {
   Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness,
@@ -13,9 +13,12 @@ import {
 } from './lib/localStore';
 import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
 import SheetsWorkspace from './SheetsWorkspace';
+import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './lib/documentEditor';
+
+const DocumentEditor = lazy(() => import('./DocsEditor'));
 
 const moduleNav = [
-  { id: 'docs', label: 'Docs', icon: FileText, detail: 'Local text documents' },
+  { id: 'docs', label: 'Docs', icon: FileText, detail: 'Local rich-text drafts' },
   { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, detail: 'Local formula engine' },
   { id: 'slides', label: 'Slides', icon: Grid2X2, detail: 'Presentation editor' },
   { id: 'pdf', label: 'PDF', icon: BookOpenText, detail: 'PDF tools' },
@@ -44,6 +47,7 @@ const friendlyDate = (iso: string | undefined) => {
 
 function App() {
   const [state, setState] = useState<PreviewState>(() => readPreviewState(window.localStorage));
+  const [unsavedDocuments, setUnsavedDocuments] = useState<Record<string, OfficeDocument>>({});
   const [page, setPage] = useState<PageId>('home');
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogMode>(null);
@@ -61,6 +65,16 @@ function App() {
     document.documentElement.style.setProperty('--accent', state.accent);
   }, [state.theme, state.accent]);
 
+  useEffect(() => {
+    if (Object.keys(unsavedDocuments).length === 0) return;
+    const warnBeforeClosing = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeClosing);
+    return () => window.removeEventListener('beforeunload', warnBeforeClosing);
+  }, [unsavedDocuments]);
+
   const persist = (next: PreviewState): boolean => {
     try {
       writePreviewState(window.localStorage, next);
@@ -76,14 +90,15 @@ function App() {
   };
   const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ?? null;
   const workspaceDocuments = useMemo(
-    () => state.documents.filter((document) => document.workspaceId === state.activeWorkspaceId),
-    [state.documents, state.activeWorkspaceId],
+    () => state.documents.filter((document) => document.workspaceId === state.activeWorkspaceId)
+      .map((document) => unsavedDocuments[document.id] ?? document),
+    [state.documents, state.activeWorkspaceId, unsavedDocuments],
   );
   const visibleDocuments = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     const documents = [...workspaceDocuments].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     return normalized
-      ? documents.filter((document) => `${document.title} ${document.content}`.toLocaleLowerCase().includes(normalized))
+      ? documents.filter((document) => `${document.title} ${document.content} ${document.richText ? richTextToPlainText(document.richText) : ''}`.toLocaleLowerCase().includes(normalized))
       : documents;
   }, [workspaceDocuments, query]);
   const selectedDocument = workspaceDocuments.find((document) => document.id === selectedDocumentId) ?? null;
@@ -110,15 +125,28 @@ function App() {
     setSelectedDocumentId(document.id);
   };
 
-  const patchDocument = (patch: Partial<Pick<OfficeDocument, 'title' | 'content'>>) => {
-    if (!selectedDocument) return;
-    persist(updateDocument(state, selectedDocument.id, patch));
+  const patchDocument = (patch: Partial<Pick<OfficeDocument, 'title' | 'content' | 'richText'>>): boolean => {
+    if (!selectedDocument) return false;
+    const next = updateDocument(state, selectedDocument.id, {
+      title: selectedDocument.title, content: selectedDocument.content, richText: selectedDocument.richText, ...patch,
+    });
+    const saved = persist(next);
+    const draft = next.documents.find((document) => document.id === selectedDocument.id);
+    if (draft) setUnsavedDocuments((current) => {
+      const buffer = { ...current };
+      if (saved) delete buffer[draft.id];
+      else buffer[draft.id] = draft;
+      return buffer;
+    });
+    return saved;
   };
 
-  const exportDocument = () => {
+  const exportDocument = (richText?: string) => {
     if (!selectedDocument) return;
     const safeName = (selectedDocument.title.trim() || 'untitled-document').replace(/[^\p{L}\p{N}-]+/gu, '-').toLowerCase();
-    const blob = new Blob([`# ${selectedDocument.title}\n\n${selectedDocument.content}`], { type: 'text/markdown;charset=utf-8' });
+    const body = richTextToMarkdown(richText ?? selectedDocument.richText ?? '', selectedDocument.content);
+    const title = escapeMarkdownText((selectedDocument.title.trim() || 'Untitled document').replace(/[\r\n]+/g, ' '));
+    const blob = new Blob([`# ${title}\n\n${body}`], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = window.document.createElement('a');
     anchor.href = url;
@@ -137,6 +165,11 @@ function App() {
   const confirmDeleteDocument = () => {
     if (!selectedDocument) return;
     if (!persist(removeDocument(state, selectedDocument.id))) return;
+    setUnsavedDocuments((current) => {
+      const buffer = { ...current };
+      delete buffer[selectedDocument.id];
+      return buffer;
+    });
     setSelectedDocumentId(null);
     setDialog(null);
     setFeedback('Document deleted from this device.');
@@ -161,7 +194,7 @@ function App() {
     <main className="app-frame">
       <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`} aria-label="Main navigation">
         <div className="brand-lockup">
-          <img src="/brand/cocce-office-squircle-256.png" className="brand-mark" alt="COCCE Office" />
+          <img src="/brand/cocce-office-squircle-icon-256.png" className="brand-mark" alt="COCCE Office" />
           <div className="brand-copy"><strong>COCCE <span>OFFICE</span></strong><small>Workspace preview</small></div>
           <button className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}><X size={18} /></button>
         </div>
@@ -222,10 +255,11 @@ function App() {
 
         <div className="notice-bar"><CloudOff size={15} /><span><strong>Local preview</strong> — your work stays in this browser. Sign-in, cloud sync, sharing, and team services are not connected.</span><button onClick={() => goTo('settings')} aria-label="Open setup notes"><ArrowUpRight size={15} /></button></div>
 
+        {Object.keys(unsavedDocuments).length > 0 && <div className="unsaved-drafts-banner" role="alert"><ShieldCheck size={15} /><span>{Object.keys(unsavedDocuments).length} unsaved {Object.keys(unsavedDocuments).length === 1 ? 'draft is' : 'drafts are'} kept in this tab only. Reopen the draft and retry save or export Markdown before closing this tab.</span></div>}
         <div className="content-scroll">
           {page === 'home' && <Dashboard greeting={clockLabel} activeWorkspace={activeWorkspace?.name ?? 'Personal space'} workspaceCount={state.workspaces.length} documentCount={workspaceDocuments.length} lastEdited={lastEdited} documents={visibleDocuments.slice(0, 5)} onCreateDocument={createDocument} onOpenDocument={openDocument} onCreateWorkspace={() => setDialog('workspace')} onNavigate={goTo} />}
           {page === 'docs' && (selectedDocument
-            ? <DocumentEditor document={selectedDocument} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onDelete={deleteDocument} />
+            ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onDelete={deleteDocument} /></Suspense>
             : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} />)}
           {page === 'drive' && <DrivePage documents={visibleDocuments} query={query} onOpen={openDocument} onCreate={createDocument} />}
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} />}
@@ -317,15 +351,11 @@ function DocumentRows({ documents, onOpen }: { documents: OfficeDocument[]; onOp
 }
 
 function DocumentsPage({ documents, query, onCreate, onOpen }: { documents: OfficeDocument[]; query: string; onCreate: () => void; onOpen: (document: OfficeDocument) => void }) {
-  return <div className="page subpage"><div className="page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Simple text drafts saved only in this browser. DOCX, comments, and collaborative editing are not connected.</p></div><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
+  return <div className="page subpage"><div className="page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Format local drafts with headings, text styles, lists, and quotes. DOCX, comments, cloud sync, and collaboration are not connected.</p></div><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
 }
 
 function DrivePage({ documents, query, onOpen, onCreate }: { documents: OfficeDocument[]; query: string; onOpen: (document: OfficeDocument) => void; onCreate: () => void }) {
   return <div className="page subpage"><div className="page-title-row"><div><span className="eyebrow">COCCE DRIVE · LOCAL MODE</span><h1>My files</h1><p className="page-lede">This view lists the text documents created in this browser. Cloud storage and uploads are disabled.</p></div><button className="button-secondary" onClick={onCreate}><Plus size={16} /> Create text file</button></div><div className="drive-toolbar"><span><FolderOpen size={15} /> Personal files</span><span>{documents.length} items</span></div><div className="file-grid">{documents.map((document) => <button className="file-card glass-card" key={document.id} onClick={() => onOpen(document)}><div className="file-preview"><File size={28} /><span>.md</span></div><strong>{document.title || 'Untitled document'}</strong><small>Markdown · {friendlyDate(document.updatedAt)}</small><ArrowUpRight size={15} className="file-open" /></button>)}{documents.length === 0 && <div className="drive-empty glass-card"><HardDrive size={25} /><h3>{query ? 'No matching local files' : 'No files in this space yet'}</h3><p>Create a text document to see it here.</p><button className="button-tertiary" onClick={onCreate}><Plus size={15} /> Create text file</button></div>}</div></div>;
-}
-
-function DocumentEditor({ document, onPatch, onBack, onExport, onDelete }: { document: OfficeDocument; onPatch: (patch: Partial<Pick<OfficeDocument, 'title' | 'content'>>) => void; onBack: () => void; onExport: () => void; onDelete: () => void }) {
-  return <div className="page editor-page"><div className="editor-toolbar"><button className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button><div className="editor-actions"><span className="autosave-label"><span className="status-dot" /> Saved on this device</span><button className="button-secondary small-button" onClick={onExport}><ArrowUpRight size={14} /> Export .md</button><button className="icon-button danger-button" onClick={onDelete} aria-label="Delete document" title="Delete local document"><X size={16} /></button></div></div><article className="document-canvas glass-card"><input className="document-title-input" value={document.title} onChange={(event) => onPatch({ title: event.target.value })} aria-label="Document title" placeholder="Untitled document" /><div className="document-meta"><span><FileText size={13} /> Local text document</span><span>Edited {friendlyDate(document.updatedAt)}</span></div><textarea className="document-body" value={document.content} onChange={(event) => onPatch({ content: event.target.value })} placeholder={'Start writing…\n\nYour draft is stored in this browser only.'} aria-label="Document content" spellCheck /></article><p className="editor-footnote"><LockKeyhole size={13} /> Autosave writes to this browser’s local storage. Do not use this preview for sensitive or shared work.</p></div>;
 }
 
 function SettingsPage({ state, onTheme, onAccent }: { state: PreviewState; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {

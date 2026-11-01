@@ -77,6 +77,24 @@ describe('local preview storage', () => {
     expect(removeDocument(edited, first.document.id).documents.map((document) => document.id)).toEqual([second.document.id]);
   });
 
+  it('round-trips rich-text markup with a plain-text search copy', () => {
+    const created = addDocument(DEFAULT_STATE, new Date('2026-11-01T10:00:00.000Z'));
+    const richText = '<h1>Project notes</h1><p><strong>Ready</strong> for review</p>';
+    const edited = updateDocument(created.state, created.document.id, { content: 'Project notes\nReady for review', richText });
+    const { storage } = memoryStorage();
+    writePreviewState(storage, edited);
+    expect(readPreviewState(storage).documents[0]).toMatchObject({ content: 'Project notes\nReady for review', richText });
+  });
+
+  it('keeps legacy document text when optional rich-text data is not a string', () => {
+    const created = addDocument(DEFAULT_STATE, new Date('2026-11-01T10:00:00.000Z'));
+    const legacy = { ...created.document, content: 'Keep this draft', richText: { invalid: true } };
+    const { storage } = memoryStorage(JSON.stringify({ ...created.state, documents: [legacy] }));
+    const restored = readPreviewState(storage).documents[0];
+    expect(restored.content).toBe('Keep this draft');
+    expect(restored.richText).toBeUndefined();
+  });
+
   it('creates a workbook and worksheets scoped to the active local workspace', () => {
     const at = new Date('2026-11-01T10:00:00.000Z');
     const workspaceState = addWorkspace(DEFAULT_STATE, { name: 'Test Office', kind: 'Business' }, at);
