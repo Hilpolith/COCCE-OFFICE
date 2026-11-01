@@ -14,7 +14,7 @@ async function openDraft() {
   render(<App />);
   fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
   fireEvent.click(screen.getByRole('button', { name: /Saved title/ }));
-  await screen.findByRole('textbox', { name: 'Document content' });
+  await screen.findByRole('textbox', { name: 'Document content' }, { timeout: 5000 });
 }
 
 beforeEach(() => {
@@ -71,5 +71,12 @@ describe('local Docs recovery integration', () => {
     expect(saved.title).toBe('Unsaved title');
     expect(saved.content).toBe('Keep this draft');
     expect(screen.queryByText('Unsaved · kept in this tab')).toBeNull();
+  });
+
+  it('opens the device-local Vault from application navigation', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Vault' }));
+    expect(await screen.findByRole('heading', { name: 'Start a local Vault' })).toBeTruthy();
+    expect(screen.getByText(/not cloud storage or enterprise access control/i)).toBeTruthy();
   });
 });

@@ -21,3 +21,7 @@ ALTER TABLE "public"."ads_schema_versions" ENABLE ROW LEVEL SECURITY;
 ```
 
 Do not run these statements blindly. First review the existing access patterns, define least-privilege policies, then test them against all COCCE clients and backend service roles in a controlled environment. The user must decide whether to authorize any remediation.
+
+## COCCE Office local Vault boundary
+
+The Office Vault is a separate browser-local slice using Web Crypto and encrypted IndexedDB. It does not connect to Supabase, create tables, or enforce multi-user/server-side access policies. AES-GCM authenticates the encrypted payload and version/algorithm/salt/nonce/revision/timestamp metadata; atomic revision checks reject stale saves from another tab instead of silently overwriting new data. These controls do not provide device integrity, protection from a compromised browser, secure sharing, remote audit logs, automatic idle lock, forensic deletion, or recovery if the passphrase is lost. JavaScript does not guarantee immediate memory erasure on lock. Do not describe this slice as an enterprise-secure Vault or use it as a substitute for server-side authorization and tested database policies.

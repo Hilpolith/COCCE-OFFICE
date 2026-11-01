@@ -16,6 +16,7 @@ import SheetsWorkspace from './SheetsWorkspace';
 import DriveWorkspace from './DriveWorkspace';
 import SlidesWorkspace from './SlidesWorkspace';
 import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './lib/documentEditor';
+import VaultWorkspace from './VaultWorkspace';
 
 const DocumentEditor = lazy(() => import('./DocsEditor'));
 const PdfWorkspace = lazy(() => import('./PdfWorkspace'));
@@ -268,8 +269,9 @@ function App() {
           {page === 'pdf' && <Suspense fallback={<div className="page" role="status">Opening local PDF tools…</div>}><PdfWorkspace workspaceId={activeWorkspace?.id ?? null} /></Suspense>}
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} />}
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} />}
+          {page === 'vault' && <VaultWorkspace />}
           {page === 'settings' && <SettingsPage state={state} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
-          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'pdf' && page !== 'sheets' && page !== 'slides' && page !== 'settings' && <UnavailablePage page={page} />}
+          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'pdf' && page !== 'sheets' && page !== 'slides' && page !== 'vault' && page !== 'settings' && <UnavailablePage page={page} />}
         </div>
 
         <footer className="app-footer"><span><ShieldCheck size={13} /> No shared services are active in this preview</span><span>COCCE OFFICE · FOUNDATION BUILD</span></footer>
@@ -336,7 +338,7 @@ function Dashboard({
         <div className="panel-heading module-heading"><div><span className="eyebrow">THE OFFICE TOOLKIT</span><h2>Explore your workspace</h2></div><span className="module-caption">Open a module to see its current connection status</span></div>
         <div className="module-grid">{moduleNav.map((module) => {
           const Icon = module.icon;
-              return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'docs' || module.id === 'drive' || module.id === 'sheets' || module.id === 'slides' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
+              return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'docs' || module.id === 'drive' || module.id === 'sheets' || module.id === 'slides' || module.id === 'vault' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
         })}</div>
       </section>
     </div>
@@ -367,14 +369,13 @@ function ConnectionRow({ label, value }: { label: string; value: string }) {
   return <div className="connection-row"><span>{label}</span><span><span className="connection-dot" />{value}</span></div>;
 }
 
-const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
+const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
   pdf: { kicker: 'COCCE PDF', title: 'PDF tools are not connected', description: 'There is no PDF viewer, annotation service, or file upload in this preview.', reason: 'No file is uploaded or processed.' },
   team: { kicker: 'COCCE TEAM', title: 'Team services are not connected', description: 'Member search, invitations, messaging, presence, and notifications require the approved COCCE identity and backend integration.', reason: 'No invitation or message is sent from this screen.' },
-  vault: { kicker: 'COCCE VAULT', title: 'Vault protection is not enabled', description: 'Secure cloud storage, key management, access logs, and recovery are not implemented in this foundation build.', reason: 'Do not store sensitive files here.' },
   automations: { kicker: 'COCCE AI AUTOMATIONS', title: 'AI and workflow execution are not configured', description: 'No OpenRouter key, free-model routing, approval gates, or server-side job runner is connected.', reason: 'No model calls or workflow runs are fabricated.' },
 };
 
-function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'settings'> }) {
+function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'settings'> }) {
   const module = moduleNav.find((item) => item.id === page);
   const content = unavailableCopy[page];
   const Icon = module?.icon ?? CloudOff;
