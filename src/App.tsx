@@ -12,10 +12,11 @@ import {
   updateDocument, writePreviewState,
 } from './lib/localStore';
 import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
+import SheetsWorkspace from './SheetsWorkspace';
 
 const moduleNav = [
   { id: 'docs', label: 'Docs', icon: FileText, detail: 'Local text documents' },
-  { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, detail: 'Spreadsheet engine' },
+  { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, detail: 'Local formula engine' },
   { id: 'slides', label: 'Slides', icon: Grid2X2, detail: 'Presentation editor' },
   { id: 'pdf', label: 'PDF', icon: BookOpenText, detail: 'PDF tools' },
   { id: 'drive', label: 'Drive', icon: FolderOpen, detail: 'Files in this browser' },
@@ -60,9 +61,18 @@ function App() {
     document.documentElement.style.setProperty('--accent', state.accent);
   }, [state.theme, state.accent]);
 
-  const persist = (next: PreviewState) => {
-    setState(next);
-    writePreviewState(window.localStorage, next);
+  const persist = (next: PreviewState): boolean => {
+    try {
+      writePreviewState(window.localStorage, next);
+      setState(next);
+      setFeedback('');
+      return true;
+    } catch (error) {
+      setFeedback(error instanceof Error && error.message.includes('preserved')
+        ? error.message
+        : 'Could not save changes in this browser. Check available storage; your last saved data was kept.');
+      return false;
+    }
   };
   const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ?? null;
   const workspaceDocuments = useMemo(
@@ -88,7 +98,7 @@ function App() {
 
   const createDocument = () => {
     const result = addDocument(state);
-    persist(result.state);
+    if (!persist(result.state)) return;
     setPage('docs');
     setSelectedDocumentId(result.document.id);
     setFeedback('New document created on this device.');
@@ -126,7 +136,7 @@ function App() {
 
   const confirmDeleteDocument = () => {
     if (!selectedDocument) return;
-    persist(removeDocument(state, selectedDocument.id));
+    if (!persist(removeDocument(state, selectedDocument.id))) return;
     setSelectedDocumentId(null);
     setDialog(null);
     setFeedback('Document deleted from this device.');
@@ -134,14 +144,14 @@ function App() {
   };
 
   const createWorkspace = (name: string, kind: WorkspaceKind, country: string) => {
-    persist(addWorkspace(state, { name, kind, country }));
+    if (!persist(addWorkspace(state, { name, kind, country }))) return;
     setDialog(null);
     setFeedback('Local workspace created on this device.');
     window.setTimeout(() => setFeedback(''), 2800);
   };
 
   const chooseWorkspace = (workspaceId: string | null) => {
-    persist(selectWorkspace(state, workspaceId));
+    if (!persist(selectWorkspace(state, workspaceId))) return;
     setWorkspaceMenuOpen(false);
     setSelectedDocumentId(null);
     setPage('home');
@@ -218,14 +228,15 @@ function App() {
             ? <DocumentEditor document={selectedDocument} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onDelete={deleteDocument} />
             : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} />)}
           {page === 'drive' && <DrivePage documents={visibleDocuments} query={query} onOpen={openDocument} onCreate={createDocument} />}
+          {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} />}
           {page === 'settings' && <SettingsPage state={state} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
-          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'settings' && <UnavailablePage page={page} />}
+          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'sheets' && page !== 'settings' && <UnavailablePage page={page} />}
         </div>
 
         <footer className="app-footer"><span><ShieldCheck size={13} /> No shared services are active in this preview</span><span>COCCE OFFICE · FOUNDATION BUILD</span></footer>
       </section>
 
-      {feedback && <div className="toast" role="status"><Check size={16} />{feedback}</div>}
+      {feedback && <div className="toast" role={/could not save|not saved|preserved/i.test(feedback) ? 'alert' : 'status'}><Check size={16} />{feedback}</div>}
       {dialog === 'workspace' && <WorkspaceDialog onClose={() => setDialog(null)} onCreate={createWorkspace} />}
       {dialog === 'delete' && selectedDocument && <DeleteDocumentDialog title={selectedDocument.title} onClose={() => setDialog(null)} onDelete={confirmDeleteDocument} />}
     </main>
@@ -286,7 +297,7 @@ function Dashboard({
         <div className="panel-heading module-heading"><div><span className="eyebrow">THE OFFICE TOOLKIT</span><h2>Explore your workspace</h2></div><span className="module-caption">Open a module to see its current connection status</span></div>
         <div className="module-grid">{moduleNav.map((module) => {
           const Icon = module.icon;
-          return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'docs' || module.id === 'drive' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
+              return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'docs' || module.id === 'drive' || module.id === 'sheets' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
         })}</div>
       </section>
     </div>
@@ -325,8 +336,7 @@ function ConnectionRow({ label, value }: { label: string; value: string }) {
   return <div className="connection-row"><span>{label}</span><span><span className="connection-dot" />{value}</span></div>;
 }
 
-const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
-  sheets: { kicker: 'COCCE SHEETS', title: 'Spreadsheet tools are not connected', description: 'This preview does not include a spreadsheet formula engine, XLSX import/export, or shared sheet storage.', reason: 'No spreadsheet data is being simulated.' },
+const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
   slides: { kicker: 'COCCE SLIDES', title: 'Presentation tools are not connected', description: 'PPTX editing, slide rendering, and export have not been wired into this isolated web foundation.', reason: 'No sample presentations or invented activity are shown.' },
   pdf: { kicker: 'COCCE PDF', title: 'PDF tools are not connected', description: 'There is no PDF viewer, annotation service, or file upload in this preview.', reason: 'No file is uploaded or processed.' },
   team: { kicker: 'COCCE TEAM', title: 'Team services are not connected', description: 'Member search, invitations, messaging, presence, and notifications require the approved COCCE identity and backend integration.', reason: 'No invitation or message is sent from this screen.' },
@@ -334,7 +344,7 @@ const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'setti
   automations: { kicker: 'COCCE AI AUTOMATIONS', title: 'AI and workflow execution are not configured', description: 'No OpenRouter key, free-model routing, approval gates, or server-side job runner is connected.', reason: 'No model calls or workflow runs are fabricated.' },
 };
 
-function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'drive' | 'settings'> }) {
+function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'settings'> }) {
   const module = moduleNav.find((item) => item.id === page);
   const content = unavailableCopy[page];
   const Icon = module?.icon ?? CloudOff;

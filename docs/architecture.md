@@ -2,9 +2,13 @@
 
 ## Current foundation
 
-The application is a React 19 + TypeScript single-page web project built with Vite. Presentation, local state, and page navigation are separated into `src/App.tsx`, `src/index.css`, and `src/lib/localStore.ts`. The local storage module validates persisted shapes and exposes narrow operations for workspace labels and text documents. No remote service client is configured.
+The application is a React 19 + TypeScript single-page web project built with Vite. Presentation, local state, and page navigation are separated into `src/App.tsx`, `src/SheetsWorkspace.tsx`, `src/index.css`, and `src/lib/localStore.ts`. The local storage module validates persisted shapes and exposes narrow operations for workspace labels, text documents, workbooks, worksheets, and cell values. `src/lib/spreadsheetEngine.ts` is an isolated expression parser/evaluator; it does not use JavaScript `eval`. No remote service client is configured.
 
 The brand asset at `public/brand/cocce-office-logo.png` is the user-provided COCCE Office logo. Its transparent alpha is preserved; the squircle silhouette and lettering are not redrawn.
+
+## Local Sheets boundary
+
+COCCE Sheets stores workbook cells in the current browser and supports CSV import/export plus arithmetic, cell references, ranges, comparisons, and the implemented `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `ABS`, `ROUND`, `IF`, `AND`, `OR`, `NOT`, and `CONCAT` functions. Circular references and unsupported formulas return visible spreadsheet errors. CSV exports calculated formula values and prefixes formula-like text to reduce spreadsheet-formula injection risk. Version-1 data predating Sheets migrates by adding an empty workbook collection; unsupported or unreadable stored versions cannot be overwritten by this build. The grid is a limited local foundation: it does not claim XLSX compatibility, server-side authorization, collaboration, charts, cloud sync, or backup.
 
 ## Reference project assessment
 

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_STATE, STORAGE_KEY, addDocument, addWorkspace, readPreviewState,
-  removeDocument, selectWorkspace, updateDocument, writePreviewState,
+  DEFAULT_STATE, STORAGE_KEY, addDocument, addWorkbook, addWorksheet, addWorkspace,
+  readPreviewState, removeDocument, selectWorksheet, selectWorkspace, updateDocument,
+  updateWorksheetCell, writePreviewState,
 } from './localStore';
 import type { StorageReader, StorageWriter } from './localStore';
 
@@ -34,6 +35,27 @@ describe('local preview storage', () => {
     expect(STORAGE_KEY).toBe('cocce-office-local-preview-v1');
   });
 
+  it('migrates earlier local v1 data by adding an empty workbook collection', () => {
+    const oldState = JSON.stringify({ ...DEFAULT_STATE, workbooks: undefined });
+    expect(readPreviewState(memoryStorage(oldState).storage).workbooks).toEqual([]);
+  });
+
+  it('preserves unsupported future-version data and refuses to overwrite it', () => {
+    const futureData = JSON.stringify({ version: 2, futureField: 'keep me' });
+    const { storage, read } = memoryStorage(futureData);
+    expect(readPreviewState(storage)).toEqual(DEFAULT_STATE);
+    expect(() => writePreviewState(storage, DEFAULT_STATE)).toThrow('unsupported or unreadable format');
+    expect(read()).toBe(futureData);
+  });
+
+  it('surfaces storage quota failures instead of silently succeeding', () => {
+    const quotaStorage = {
+      getItem: () => null,
+      setItem: () => { throw new Error('QuotaExceededError'); },
+    } as StorageReader & StorageWriter;
+    expect(() => writePreviewState(quotaStorage, DEFAULT_STATE)).toThrow('QuotaExceededError');
+  });
+
   it('creates a local workspace with TZS and scopes new documents to it', () => {
     const at = new Date('2026-11-01T10:00:00.000Z');
     const workspaceState = addWorkspace(DEFAULT_STATE, { name: '  Test Office  ', kind: 'Business' }, at);
@@ -53,6 +75,29 @@ describe('local preview storage', () => {
     expect(edited.documents.find((document) => document.id === first.document.id)).toMatchObject({ title: 'Notes', content: 'Hello', updatedAt: '2026-11-02T10:00:00.000Z' });
     expect(edited.documents.find((document) => document.id === second.document.id)?.title).toBe('Untitled document');
     expect(removeDocument(edited, first.document.id).documents.map((document) => document.id)).toEqual([second.document.id]);
+  });
+
+  it('creates a workbook and worksheets scoped to the active local workspace', () => {
+    const at = new Date('2026-11-01T10:00:00.000Z');
+    const workspaceState = addWorkspace(DEFAULT_STATE, { name: 'Test Office', kind: 'Business' }, at);
+    const created = addWorkbook(workspaceState, 'Budget', at);
+    expect(created.workbook).toMatchObject({ title: 'Budget', workspaceId: workspaceState.activeWorkspaceId });
+    expect(created.workbook.worksheets[0]).toMatchObject({ name: 'Sheet 1', cells: {} });
+    const added = addWorksheet(created.state, created.workbook.id, at);
+    expect(added.worksheet?.name).toBe('Sheet 2');
+    expect(added.state.workbooks[0].activeWorksheetId).toBe(added.worksheet?.id);
+  });
+
+  it('persists cell edits independently and selects only known worksheets', () => {
+    const at = new Date('2026-11-01T10:00:00.000Z');
+    const created = addWorkbook(DEFAULT_STATE, 'Numbers', at);
+    const worksheetId = created.workbook.activeWorksheetId;
+    const edited = updateWorksheetCell(created.state, created.workbook.id, worksheetId, 'A1', '12', new Date('2026-11-02T10:00:00.000Z'));
+    expect(edited.workbooks[0].worksheets[0].cells).toEqual({ A1: '12' });
+    expect(edited.workbooks[0].updatedAt).toBe('2026-11-02T10:00:00.000Z');
+    expect(selectWorksheet(edited, created.workbook.id, 'unknown')).toBe(edited);
+    const other = addWorkbook(edited, 'Other', at);
+    expect(other.state.workbooks.find((workbook) => workbook.id === other.workbook.id)?.worksheets[0].cells).toEqual({});
   });
 
   it('does not switch to an unknown workspace id', () => {

@@ -4,11 +4,11 @@ This private, isolated React/TypeScript project is the starting foundation for C
 
 ## What works
 
-The responsive interface uses a frosted liquid-glass treatment guided by the supplied references. The supplied COCCE Office squircle logo is reused with its existing transparent alpha and original artwork intact. Users can create and switch local workspace labels, draft plain-text documents, search their local drafts, export a document as Markdown, and persist six themes plus an accent color in the current browser.
+The responsive interface uses a frosted liquid-glass treatment guided by the supplied references. The supplied COCCE Office squircle logo is reused with its transparent alpha and original artwork intact. In this browser, users can create and switch local workspace labels, draft and search plain-text documents, export Markdown, and persist six themes plus an accent color. COCCE Sheets now supports local workbooks and worksheets, cell editing, a tested formula evaluator (arithmetic, references, ranges, and common functions), and CSV import/export. CSV export writes formula results as values and prefixes formula-like text to reduce spreadsheet-formula injection risk. Formula, parser, upload-size, and export-area limits have unit coverage.
 
 ## Important limits
 
-There is no sign-in, Google OAuth, shared database, membership, invitations, roles, cloud storage, upload authorization, messaging, notifications, DOCX/XLSX/PPTX/PDF engine, Vault encryption, AI provider, workflow runner, or multilingual catalog connected. Those module pages clearly identify their status; they do not fabricate records or make pretend service calls. Do not use this preview for confidential, sensitive, or shared work. Data is stored in this browser only and can be cleared by the browser.
+There is no sign-in, Google OAuth, shared database, membership, invitations, roles, cloud storage, upload authorization, messaging, notifications, DOCX/PPTX/PDF engine, XLSX support, Vault encryption, AI provider, workflow runner, or multilingual catalog connected. Sheets is a limited local grid and CSV tool, not an Excel-compatible or collaborative service. Other module pages identify their connection status; they do not fabricate records or make pretend service calls. Do not use this preview for confidential, sensitive, or shared work. Data is stored in this browser only and can be cleared by the browser.
 
 ## Run and test
 
