@@ -16,7 +16,7 @@ function addItem(type: string, name: string) {
 }
 
 beforeEach(() => window.localStorage.clear());
-afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); window.localStorage.clear(); });
 
 describe('local Team Planner UI', () => {
   it('creates real local structure and personal tasks and persists across remounts', async () => {
@@ -102,10 +102,15 @@ describe('local Team Planner UI', () => {
     expect(window.localStorage.getItem(LOCAL_TEAM_KEY)).toBeNull();
   });
 
-  it('keeps collaboration claims and controls out of the local planning UI', () => {
+  it('keeps collaboration fail-closed and separate from the local planner when COCCE Auth is unconfigured', () => {
+    vi.stubEnv('VITE_COCCE_SUPABASE_URL', '');
+    vi.stubEnv('VITE_COCCE_SUPABASE_ANON_KEY', '');
+    vi.stubEnv('VITE_OFFICE_TEAM_SCHEMA_READY', 'false');
     renderPlanner();
+    expect(screen.getByText(/COCCE Auth is not configured/i)).toBeTruthy();
     expect(screen.getByText(/local planning only/i)).toBeTruthy();
-    expect(screen.getByText(/there is no member directory, shared access, chat, or task assignment connected/i)).toBeTruthy();
+    expect(screen.getByText(/they are not linked to Office memberships or conversations in the separate collaboration panel/i)).toBeTruthy();
+    expect(screen.getByText(/no Office RPCs run until the separate Office schema gate is approved/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /invite|message|send|assign to/i })).toBeNull();
   });
 });

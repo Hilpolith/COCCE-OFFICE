@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "vitest run",
-    "preview": "vite preview"
+    "test": "vitest run && node --test scripts/office-profile-privacy-check.mjs",
+    "preview": "vite preview",
+    "test:office-schema": "node --test scripts/office-profile-privacy-check.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "@tiptap/extension-underline": "^3.32.2",
     "@tiptap/pm": "^3.32.2",
     "@tiptap/react": "^3.32.2",

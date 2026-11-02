@@ -14,6 +14,7 @@ import type {
   LocalTeamItem, LocalTeamItemType, LocalTeamTask, LocalTeamTaskPriority, LocalTeamTaskStatus,
 } from './lib/teamStore';
 import './team.css';
+import OfficeTeamCollaboration from './OfficeTeamCollaboration';
 
 const itemTypes: { id: LocalTeamItemType; label: string; icon: typeof Building2 }[] = [
   { id: 'department', label: 'Department', icon: Building2 },
@@ -221,7 +222,8 @@ export default function TeamWorkspace({ workspaceId, workspaceName, query }: { w
         </div>
       </div>
 
-      <div className="team-local-notice" role="note"><LockKeyhole size={16} /><span><strong>Local planning only.</strong> Items and tasks stay in this browser and can be transferred with JSON backups. There is no member directory, shared access, chat, or task assignment connected.</span></div>
+      <div className="team-local-notice" role="note"><LockKeyhole size={16} /><span><strong>Local planning only.</strong> The structure and tasks below stay in this browser; they are not linked to Office memberships or conversations in the separate collaboration panel.</span></div>
+      <OfficeTeamCollaboration />
       {feedback && <div className="team-feedback" role={/could not|not saved|invalid|limit|larger|malformed|conflict|move or|resolve active|storage|quota|write failed/i.test(feedback) ? 'alert' : 'status'}><CircleAlert size={15} />{feedback}<button className="team-feedback-close" onClick={() => setFeedback('')} aria-label="Dismiss message"><X size={14} /></button></div>}
 
       <div className="team-planner-grid">

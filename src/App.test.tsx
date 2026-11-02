@@ -24,6 +24,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   window.localStorage.clear();
 });
 
@@ -74,11 +75,16 @@ describe('local Docs recovery integration', () => {
   });
 
   it('opens the local Team Planner without implying shared chat or member activity', async () => {
+    vi.stubEnv('VITE_COCCE_SUPABASE_URL', '');
+    vi.stubEnv('VITE_COCCE_SUPABASE_ANON_KEY', '');
+    vi.stubEnv('VITE_OFFICE_TEAM_SCHEMA_READY', 'false');
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Team' }));
     expect(await screen.findByRole('heading', { name: 'Organize the work' })).toBeTruthy();
+    expect(screen.getByText(/COCCE Auth is not configured/i)).toBeTruthy();
     expect(screen.getByText(/local planning only/i)).toBeTruthy();
-    expect(screen.getByText(/no member directory, shared access, chat, or task assignment connected/i)).toBeTruthy();
+    expect(screen.getByText(/not linked to Office memberships or conversations in the separate collaboration panel/i)).toBeTruthy();
+    expect(screen.getByText(/no Office RPCs run until the separate Office schema gate is approved/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /invite|message|send|assign to/i })).toBeNull();
   });
 
