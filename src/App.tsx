@@ -258,8 +258,6 @@ function App() {
           </div>
         </header>
 
-        <div className="notice-bar"><Activity size={15} /><span><strong>Workspace status</strong> — Most productivity tools store data in this browser. Office Team collaboration is server-backed for existing COCCE accounts.</span><button onClick={() => goTo('settings')} aria-label="Open setup notes"><ArrowUpRight size={15} /></button></div>
-
         {Object.keys(unsavedDocuments).length > 0 && <div className="unsaved-drafts-banner" role="alert"><ShieldCheck size={15} /><span>{Object.keys(unsavedDocuments).length} unsaved {Object.keys(unsavedDocuments).length === 1 ? 'draft is' : 'drafts are'} kept in this tab only. Reopen the draft and retry save or export Markdown before closing this tab.</span></div>}
         <div className="content-scroll">
           {page === 'home' && <Dashboard greeting={clockLabel} activeWorkspace={activeWorkspace?.name ?? 'Personal space'} workspaceCount={state.workspaces.length} documentCount={workspaceDocuments.length} lastEdited={lastEdited} documents={visibleDocuments.slice(0, 5)} onCreateDocument={createDocument} onOpenDocument={openDocument} onCreateWorkspace={() => setDialog('workspace')} onNavigate={goTo} />}
