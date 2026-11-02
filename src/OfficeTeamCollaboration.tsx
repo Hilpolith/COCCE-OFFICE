@@ -29,8 +29,8 @@ function OfficeConnectionGate({ status }: { status: OfficeConfigFailure }) {
           ? 'Office is restricted to the existing COCCE Super App Supabase project and will not connect to another project.'
           : 'The configured COCCE Supabase URL must be the expected HTTPS project URL without query parameters.';
   return <section className="office-collab-panel glass-card" aria-labelledby="office-collab-title">
-    <div className="office-collab-heading"><span className="office-collab-icon"><Shield size={18} /></span><div><span className="eyebrow">OFFICE COLLABORATION · OWNER REVIEW</span><h2 id="office-collab-title">Membership, invitations, and chat</h2></div></div>
-    <div className="office-collab-blocker" role="status"><CircleAlert size={17} /><div><strong>COCCE Auth is not configured.</strong><p>{message} No Office RPCs run until the separate Office schema gate is approved. Auth settings, existing tables/RLS, and shared services are not modified.</p></div></div>
+    <div className="office-collab-heading"><span className="office-collab-icon"><Shield size={18} /></span><div><span className="eyebrow">OFFICE COLLABORATION · CONFIGURATION REQUIRED</span><h2 id="office-collab-title">Membership, invitations, and chat</h2></div></div>
+    <div className="office-collab-blocker" role="status"><CircleAlert size={17} /><div><strong>COCCE Auth is not configured.</strong><p>{message} Office RPCs remain inactive until the connection is valid and the Office schema gate is enabled. Auth settings, existing tables/RLS, and shared services are not modified.</p></div></div>
     <p className="office-collab-footnote">Office uses its own browser session against existing COCCE Auth, supports existing accounts only, and never creates accounts.</p>
   </section>;
 }
@@ -342,7 +342,7 @@ export default function OfficeTeamCollaboration() {
     {error && <div className="office-collab-alert" role="alert"><CircleAlert size={15} />{error}</div>}
     {notice && <div className="office-collab-status" role="status"><Check size={15} />{notice}</div>}
     {user ? <div className="office-collab-account"><span>Signed in to existing COCCE Auth · <strong>{user.email ?? user.id}</strong></span><small>Office keeps an independent session in this browser; signing out here does not sign out other COCCE apps.</small><button className="button-tertiary office-signout" disabled={busy} onClick={() => { void signOutOfficeSession(); }}><LogOut size={14} /> Sign out of Office</button></div> : signInForm}
-    <div className="office-collab-blocker" role="status"><CircleAlert size={17} /><div><strong>Office collaboration is not enabled.</strong><p>The Office-only migration is still awaiting approval/application. Authentication uses existing COCCE Auth, but no Office tables or RPCs are accessed while this schema gate is off.</p></div></div>
+    <div className="office-collab-blocker" role="status"><CircleAlert size={17} /><div><strong>Office collaboration is not enabled.</strong><p>The Office feature gate is off in this build. Existing COCCE Auth remains available, but no Office collaboration RPCs are called until the gate is enabled.</p></div></div>
   </section>;
 
   const run = async (action: (isCurrent: () => boolean) => Promise<unknown>, success?: string, scopeIsCurrent: () => boolean = () => true) => {
@@ -555,7 +555,7 @@ export default function OfficeTeamCollaboration() {
   };
 
   return <section className="office-collab-panel glass-card" aria-labelledby="office-collab-title">
-    <div className="office-collab-heading"><span className="office-collab-icon"><Users size={18} /></span><div><span className="eyebrow">OWNER REVIEW · NOT LIVE</span><h2 id="office-collab-title">Membership, invitations, and chat</h2></div></div>
+    <div className="office-collab-heading"><span className="office-collab-icon"><Users size={18} /></span><div><span className="eyebrow">OFFICE COLLABORATION · SERVER-BACKED</span><h2 id="office-collab-title">Membership, invitations, and chat</h2></div></div>
     {error && <div className="office-collab-alert" role="alert"><CircleAlert size={15} />{error}</div>}
     {notice && <div className="office-collab-status" role="status"><Check size={15} />{notice}</div>}
     {!user ? signInForm : <>

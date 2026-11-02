@@ -67,7 +67,7 @@ describe('Office collaboration Auth-only mode', () => {
     await screen.findByRole('button', { name: 'Sign in' });
 
     expect(screen.getByText(/office collaboration is not enabled/i)).toBeTruthy();
-    expect(screen.getByText(/no Office tables or RPCs are accessed while this schema gate is off/i)).toBeTruthy();
+    expect(screen.getByText(/no Office collaboration RPCs are called until the gate is enabled/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /sign up|create account/i })).toBeNull();
     expect('signUp' in mocks.auth).toBe(false);
     expect(mocks.officeApiCall).not.toHaveBeenCalled();

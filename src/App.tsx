@@ -200,7 +200,7 @@ function App() {
       <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`} aria-label="Main navigation">
         <div className="brand-lockup">
           <img src="/brand/cocce-office-squircle-icon-256.png" className="brand-mark" alt="COCCE Office" />
-          <div className="brand-copy"><strong>COCCE <span>OFFICE</span></strong><small>Workspace preview</small></div>
+          <div className="brand-copy"><strong>COCCE <span>OFFICE</span></strong><small>Office workspace</small></div>
           <button className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}><X size={18} /></button>
         </div>
 
@@ -237,7 +237,7 @@ function App() {
           <NavButton active={page === 'settings'} icon={<Settings2 size={18} />} label="Preferences" onClick={() => goTo('settings')} />
           <div className="local-profile">
             <div className="profile-orb"><span>CO</span></div>
-            <div className="profile-copy"><strong>Local preview</strong><small>Not signed in</small></div>
+            <div className="profile-copy"><strong>Workspace profile</strong><small>Team sign-in is separate</small></div>
             <MoreHorizontal size={17} className="muted" />
           </div>
         </div>
@@ -253,12 +253,12 @@ function App() {
           </div>
           <div className="topbar-actions">
             <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-label={page === 'team' ? 'Search local planner items' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
-            <span className="local-status"><span className="status-dot" /> Local only</span>
-            <button className="icon-button help-button" title="Preview limitations" aria-label="Preview limitations" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
+            <span className="local-status"><span className="status-dot" /> Office workspace</span>
+            <button className="icon-button help-button" title="Workspace information" aria-label="Workspace information" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
           </div>
         </header>
 
-        <div className="notice-bar"><CloudOff size={15} /><span><strong>Local preview</strong> — your work stays in this browser. Sign-in, cloud sync, sharing, and team services are not connected.</span><button onClick={() => goTo('settings')} aria-label="Open setup notes"><ArrowUpRight size={15} /></button></div>
+        <div className="notice-bar"><Activity size={15} /><span><strong>Workspace status</strong> — Most productivity tools store data in this browser. Office Team collaboration is server-backed for existing COCCE accounts.</span><button onClick={() => goTo('settings')} aria-label="Open setup notes"><ArrowUpRight size={15} /></button></div>
 
         {Object.keys(unsavedDocuments).length > 0 && <div className="unsaved-drafts-banner" role="alert"><ShieldCheck size={15} /><span>{Object.keys(unsavedDocuments).length} unsaved {Object.keys(unsavedDocuments).length === 1 ? 'draft is' : 'drafts are'} kept in this tab only. Reopen the draft and retry save or export Markdown before closing this tab.</span></div>}
         <div className="content-scroll">
@@ -276,7 +276,7 @@ function App() {
           {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'pdf' && page !== 'sheets' && page !== 'slides' && page !== 'vault' && page !== 'team' && page !== 'settings' && <UnavailablePage page={page} />}
         </div>
 
-        <footer className="app-footer"><span><ShieldCheck size={13} /> No shared services are active in this preview</span><span>COCCE OFFICE · FOUNDATION BUILD</span></footer>
+        <footer className="app-footer"><span><ShieldCheck size={13} /> Office Team collaboration uses the Office backend; most other modules remain browser-local.</span><span>COCCE OFFICE · COLLABORATION RELEASE</span></footer>
       </section>
 
       {feedback && <div className="toast" role={/could not save|not saved|preserved/i.test(feedback) ? 'alert' : 'status'}><Check size={16} />{feedback}</div>}
@@ -332,7 +332,7 @@ function Dashboard({
           <div className="panel-heading"><div><span className="eyebrow">QUICK START</span><h2>Make a little progress</h2></div><span className="small-star"><Sparkles size={15} /></span></div>
           <button className="quick-action" onClick={onCreateDocument}><span className="quick-icon quick-doc"><FileText size={17} /></span><span><strong>Start a document</strong><small>Write and save locally</small></span><ArrowUpRight size={15} /></button>
           <button className="quick-action" onClick={onCreateWorkspace}><span className="quick-icon quick-space"><BriefcaseBusiness size={17} /></span><span><strong>Create an Office space</strong><small>Separate work by organization</small></span><ArrowUpRight size={15} /></button>
-          <div className="quick-note"><LockKeyhole size={15} /><p><strong>Private by design.</strong> This preview stores data in your current browser only; it is not synced or backed up.</p></div>
+          <div className="quick-note"><LockKeyhole size={15} /><p><strong>Private by design.</strong> Personal drafts and local workspace labels stay in this browser and are not synced or backed up. Office Team collaboration uses a separate service.</p></div>
         </div>
       </section>
 
@@ -340,7 +340,7 @@ function Dashboard({
         <div className="panel-heading module-heading"><div><span className="eyebrow">THE OFFICE TOOLKIT</span><h2>Explore your workspace</h2></div><span className="module-caption">Open a module to see its current connection status</span></div>
         <div className="module-grid">{moduleNav.map((module) => {
           const Icon = module.icon;
-              return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'team' ? 'Local planner only' : module.id === 'docs' || module.id === 'drive' || module.id === 'sheets' || module.id === 'slides' || module.id === 'vault' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
+              return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'team' ? 'Local planner · collaboration separate' : module.id === 'docs' || module.id === 'drive' || module.id === 'sheets' || module.id === 'slides' || module.id === 'vault' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
         })}</div>
       </section>
     </div>
@@ -364,7 +364,7 @@ function DocumentsPage({ documents, query, onCreate, onOpen }: { documents: Offi
 }
 
 function SettingsPage({ state, onTheme, onAccent }: { state: PreviewState; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
-  return <div className="page subpage settings-page"><div className="page-title-row"><div><span className="eyebrow">PREFERENCES</span><h1>Make it yours</h1><p className="page-lede">Theme and accent choices are saved in this browser.</p></div><span className="local-only-chip"><LockKeyhole size={13} /> Local settings</span></div><section className="settings-panel glass-card"><div className="settings-heading"><div className="settings-icon"><Sun size={19} /></div><div><h2>Liquid Glass themes</h2><p>Choose a surface style for this preview.</p></div></div><div className="theme-grid">{themeOptions.map((theme) => <button key={theme.id} className={`theme-option theme-preview-${theme.id} ${state.theme === theme.id ? 'theme-selected' : ''}`} onClick={() => onTheme(theme.id)} aria-pressed={state.theme === theme.id}><span className="theme-swatch"><i style={{ background: theme.color }} /><i /><i /></span><span className="theme-name">{theme.name}</span>{state.theme === theme.id && <Check size={15} className="theme-check" />}</button>)}</div><div className="accent-picker"><div><strong>Accent color</strong><small>Applied to highlights and focus states.</small></div><label className="color-control"><input aria-label="Custom accent color" type="color" value={state.accent} onChange={(event) => onAccent(event.target.value)} /><span>{state.accent.toUpperCase()}</span></label></div></section><section className="settings-panel glass-card connection-panel"><div className="settings-heading"><div className="settings-icon connection-icon"><CloudOff size={18} /></div><div><h2>Connection status</h2><p>No shared COCCE services are connected in this build.</p></div></div><div className="connection-list"><ConnectionRow label="COCCE sign-in" value="Not connected" /><ConnectionRow label="Cloud database" value="Not connected" /><ConnectionRow label="File storage" value="Not connected" /><ConnectionRow label="AI provider" value="Not configured" /></div><p className="connection-note">The app intentionally does not create identities, send invitations, upload files, call paid AI models, or modify shared COCCE infrastructure.</p></section></div>;
+  return <div className="page subpage settings-page"><div className="page-title-row"><div><span className="eyebrow">PREFERENCES</span><h1>Make it yours</h1><p className="page-lede">Theme and accent choices are saved in this browser.</p></div><span className="local-only-chip"><LockKeyhole size={13} /> Local settings</span></div><section className="settings-panel glass-card"><div className="settings-heading"><div className="settings-icon"><Sun size={19} /></div><div><h2>Liquid Glass themes</h2><p>Choose a surface style for this workspace.</p></div></div><div className="theme-grid">{themeOptions.map((theme) => <button key={theme.id} className={`theme-option theme-preview-${theme.id} ${state.theme === theme.id ? 'theme-selected' : ''}`} onClick={() => onTheme(theme.id)} aria-pressed={state.theme === theme.id}><span className="theme-swatch"><i style={{ background: theme.color }} /><i /><i /></span><span className="theme-name">{theme.name}</span>{state.theme === theme.id && <Check size={15} className="theme-check" />}</button>)}</div><div className="accent-picker"><div><strong>Accent color</strong><small>Applied to highlights and focus states.</small></div><label className="color-control"><input aria-label="Custom accent color" type="color" value={state.accent} onChange={(event) => onAccent(event.target.value)} /><span>{state.accent.toUpperCase()}</span></label></div></section><section className="settings-panel glass-card connection-panel"><div className="settings-heading"><div className="settings-icon connection-icon"><Activity size={18} /></div><div><h2>Connection status</h2><p>Office Team collaboration is server-backed; most productivity tools remain browser-local.</p></div></div><div className="connection-list"><ConnectionRow label="COCCE Auth" value="Existing accounts · Team only" /><ConnectionRow label="Office collaboration data" value="Office-specific backend" /><ConnectionRow label="Cloud file storage" value="Not connected" /><ConnectionRow label="AI provider" value="Not configured" /></div><p className="connection-note">Office collaboration uses existing COCCE Auth and only Office-specific database objects. It does not create accounts, alter existing COCCE tables/RLS or Auth settings, send email invitations, upload files, or call AI services.</p></section></div>;
 }
 
 function ConnectionRow({ label, value }: { label: string; value: string }) {
@@ -372,7 +372,7 @@ function ConnectionRow({ label, value }: { label: string; value: string }) {
 }
 
 const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'team' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
-  pdf: { kicker: 'COCCE PDF', title: 'PDF tools are not connected', description: 'There is no PDF viewer, annotation service, or file upload in this preview.', reason: 'No file is uploaded or processed.' },
+  pdf: { kicker: 'COCCE PDF', title: 'PDF tools run locally', description: 'View PDFs, search text, and save browser-local annotations. Cloud processing and file uploads are not connected.', reason: 'PDF files stay in this browser.' },
   automations: { kicker: 'COCCE AI AUTOMATIONS', title: 'AI and workflow execution are not configured', description: 'No OpenRouter key, free-model routing, approval gates, or server-side job runner is connected.', reason: 'No model calls or workflow runs are fabricated.' },
 };
 
@@ -380,7 +380,7 @@ function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'dr
   const module = moduleNav.find((item) => item.id === page);
   const content = unavailableCopy[page];
   const Icon = module?.icon ?? CloudOff;
-  return <div className="page module-status-page"><div className="module-status-card glass-card"><div className={`status-illustration status-${page}`}><div className="status-glow" /><span><Icon size={27} /></span><div className="status-orbit status-orbit-one" /><div className="status-orbit status-orbit-two" /></div><span className="eyebrow">{content.kicker} · CONNECTION REQUIRED</span><h1>{content.title}</h1><p className="status-description">{content.description}</p><div className="status-reason"><CloudOff size={16} /><span>{content.reason}</span></div><div className="status-boundary"><ShieldCheck size={15} /><span>This isolated preview makes no network calls for this module. Its navigation is informational, not a claim that the service is live.</span></div></div></div>;
+  return <div className="page module-status-page"><div className="module-status-card glass-card"><div className={`status-illustration status-${page}`}><div className="status-glow" /><span><Icon size={27} /></span><div className="status-orbit status-orbit-one" /><div className="status-orbit status-orbit-two" /></div><span className="eyebrow">{content.kicker} · CONNECTION REQUIRED</span><h1>{content.title}</h1><p className="status-description">{content.description}</p><div className="status-reason"><CloudOff size={16} /><span>{content.reason}</span></div><div className="status-boundary"><ShieldCheck size={15} /><span>This build makes no network calls for this module. Its navigation is informational, not a claim that a service is connected.</span></div></div></div>;
 }
 
 function WorkspaceDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string, kind: WorkspaceKind, country: string) => void }) {

@@ -84,7 +84,7 @@ describe('local Docs recovery integration', () => {
     expect(screen.getByText(/COCCE Auth is not configured/i)).toBeTruthy();
     expect(screen.getByText(/local planning only/i)).toBeTruthy();
     expect(screen.getByText(/not linked to Office memberships or conversations in the separate collaboration panel/i)).toBeTruthy();
-    expect(screen.getByText(/no Office RPCs run until the separate Office schema gate is approved/i)).toBeTruthy();
+    expect(screen.getByText(/Office RPCs remain inactive until the connection is valid and the Office schema gate is enabled/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /invite|message|send|assign to/i })).toBeNull();
   });
 
