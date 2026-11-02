@@ -38,6 +38,16 @@ function response(res, status, body) {
   return res.status(status).json(body);
 }
 
+function logProviderDiagnostic(logger, outcome, status = 0) {
+  try {
+    if (typeof logger?.warn === 'function') {
+      logger.warn('[office-ai] provider failure', { outcome, status: Number.isInteger(status) ? status : 0 });
+    }
+  } catch {
+    // Logging must never affect request handling.
+  }
+}
+
 function publicSupabaseKey(value) {
   if (typeof value !== 'string' || !value || /^sb_secret_/i.test(value)) return false;
   if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(value)) return true;
@@ -154,7 +164,7 @@ function consumeRateLimit(requests, userId, now, maxRequests, windowMs) {
   return true;
 }
 
-async function generateText({ action, prompt, selectedText, apiKey, fetchImpl }) {
+async function generateText({ action, prompt, selectedText, apiKey, fetchImpl, logger }) {
   const userInput = action === 'draft'
     ? { action, draftingBrief: prompt }
     : action === 'custom'
@@ -181,17 +191,25 @@ async function generateText({ action, prompt, selectedText, apiKey, fetchImpl })
       }),
       signal: controller.signal,
     });
-    if (!upstream.ok) return { kind: 'provider-error' };
+    if (!upstream.ok) {
+      logProviderDiagnostic(logger, 'http_error', upstream.status);
+      return { kind: 'provider-error' };
+    }
     let data;
     try {
       data = await upstream.json();
     } catch {
+      logProviderDiagnostic(logger, 'invalid_json', upstream.status);
       return { kind: 'provider-error' };
     }
     const text = data?.choices?.[0]?.message?.content;
-    if (typeof text !== 'string' || !text.trim() || text.length > MAX_OUTPUT_CHARS) return { kind: 'provider-error' };
+    if (typeof text !== 'string' || !text.trim() || text.length > MAX_OUTPUT_CHARS) {
+      logProviderDiagnostic(logger, 'missing_or_invalid_text', upstream.status);
+      return { kind: 'provider-error' };
+    }
     return { kind: 'text', text: text.trim() };
   } catch {
+    logProviderDiagnostic(logger, 'network_or_timeout');
     return { kind: 'provider-error' };
   } finally {
     clearTimeout(timer);
@@ -201,6 +219,7 @@ async function generateText({ action, prompt, selectedText, apiKey, fetchImpl })
 export function createOfficeAiHandler({
   envProvider = () => process.env,
   fetchImpl = globalThis.fetch,
+  logger = console,
   now = () => Date.now(),
   maxRequests = DEFAULT_REQUESTS_PER_WINDOW,
   windowMs = DEFAULT_WINDOW_MS,
@@ -235,7 +254,7 @@ export function createOfficeAiHandler({
       return response(res, 503, { error: 'AI_NOT_CONFIGURED', message: 'Cloud AI is not configured on this deployment yet.' });
     }
 
-    const result = await generateText({ ...validated, apiKey: env.OPENAI_API_KEY.trim(), fetchImpl });
+    const result = await generateText({ ...validated, apiKey: env.OPENAI_API_KEY.trim(), fetchImpl, logger });
     if (result.kind !== 'text') return response(res, 502, { error: 'AI_UPSTREAM_UNAVAILABLE', message: 'The writing assistant could not complete that request. Try again later.' });
     return response(res, 200, { text: result.text });
   };

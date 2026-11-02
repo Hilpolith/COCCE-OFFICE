@@ -25,6 +25,7 @@ function makeHarness({
   maxRequests = 12,
   windowMs = 600_000,
   now = () => 1_000,
+  logger = { warn() {} },
 } = {}) {
   const calls = [];
   const effectiveEnv = {
@@ -47,7 +48,7 @@ function makeHarness({
     }
     throw new Error(`Unexpected URL: ${String(input)}`);
   };
-  const handler = createOfficeAiHandler({ envProvider: () => effectiveEnv, fetchImpl, now, maxRequests, windowMs });
+  const handler = createOfficeAiHandler({ envProvider: () => effectiveEnv, fetchImpl, now, maxRequests, windowMs, logger });
   return { handler, calls, effectiveEnv };
 }
 
@@ -196,12 +197,19 @@ test('applies a short-window per-user request cap', async () => {
 });
 
 test('does not reveal upstream failures or provider error details', async () => {
-  const { handler } = makeHarness({ openaiStatus: 401 });
+  const logs = [];
+  const { handler } = makeHarness({
+    openaiStatus: 401,
+    logger: { warn(event, details) { logs.push({ event, details }); } },
+  });
   const res = await invoke(handler, { body: { action: 'proofread', selectedText: 'Excerpt.' } });
   assert.equal(res.statusCode, 502);
   assert.equal(res.body.error, 'AI_UPSTREAM_UNAVAILABLE');
   assert.equal(JSON.stringify(res.body).includes(OPENAI_TEST_KEY), false);
   assert.equal(JSON.stringify(res.body).includes('invalid_api_key'), false);
+  assert.deepEqual(logs, [{ event: '[office-ai] provider failure', details: { outcome: 'http_error', status: 401 } }]);
+  assert.equal(JSON.stringify(logs).includes(OPENAI_TEST_KEY), false);
+  assert.equal(JSON.stringify(logs).includes('Excerpt.'), false);
 });
 
 test('unsupported HTTP methods are rejected without network access', async () => {
