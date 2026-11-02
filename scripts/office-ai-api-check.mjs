@@ -20,6 +20,7 @@ function makeHarness({
   env = {},
   authStatus = 200,
   openaiStatus = 200,
+  openaiError = null,
   user = { id: 'existing-cocce-test-user' },
   output = 'A polished, shorter passage.',
   maxRequests = 12,
@@ -43,7 +44,7 @@ function makeHarness({
       return {
         ok: openaiStatus >= 200 && openaiStatus < 300,
         status: openaiStatus,
-        json: async () => ({ choices: [{ message: { content: output } }] }),
+        json: async () => openaiError ?? { choices: [{ message: { content: output } }] },
       };
     }
     throw new Error(`Unexpected URL: ${String(input)}`);
@@ -200,6 +201,7 @@ test('does not reveal upstream failures or provider error details', async () => 
   const logs = [];
   const { handler } = makeHarness({
     openaiStatus: 401,
+    openaiError: { error: { type: 'invalid_request_error', code: 'invalid_api_key', message: 'Sensitive provider text with sk-proj-marker and the selected excerpt.' } },
     logger: { warn(event, details) { logs.push({ event, details }); } },
   });
   const res = await invoke(handler, { body: { action: 'proofread', selectedText: 'Excerpt.' } });
@@ -207,9 +209,11 @@ test('does not reveal upstream failures or provider error details', async () => 
   assert.equal(res.body.error, 'AI_UPSTREAM_UNAVAILABLE');
   assert.equal(JSON.stringify(res.body).includes(OPENAI_TEST_KEY), false);
   assert.equal(JSON.stringify(res.body).includes('invalid_api_key'), false);
-  assert.deepEqual(logs, [{ event: '[office-ai] provider failure', details: { outcome: 'http_error', status: 401 } }]);
+  assert.deepEqual(logs, [{ event: '[office-ai] provider failure', details: { status: 401, type: 'invalid_request_error', code: 'invalid_api_key' } }]);
   assert.equal(JSON.stringify(logs).includes(OPENAI_TEST_KEY), false);
   assert.equal(JSON.stringify(logs).includes('Excerpt.'), false);
+  assert.equal(JSON.stringify(logs).includes('sk-proj-marker'), false);
+  assert.equal(JSON.stringify(logs).includes('Sensitive provider text'), false);
 });
 
 test('unsupported HTTP methods are rejected without network access', async () => {

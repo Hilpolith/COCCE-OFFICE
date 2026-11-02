@@ -8,6 +8,8 @@ const MAX_OUTPUT_CHARS = 12_000;
 const DEFAULT_WINDOW_MS = 10 * 60 * 1_000;
 const DEFAULT_REQUESTS_PER_WINDOW = 12;
 const MAX_RATE_LIMIT_ENTRIES = 10_000;
+const SAFE_PROVIDER_ERROR_TYPES = new Set(['invalid_request_error', 'authentication_error', 'permission_error', 'rate_limit_error', 'server_error', 'api_error']);
+const SAFE_PROVIDER_ERROR_CODES = new Set(['invalid_api_key', 'model_not_found', 'insufficient_quota', 'rate_limit_exceeded', 'unsupported_value', 'unsupported_parameter', 'context_length_exceeded', 'billing_not_active', 'billing_hard_limit_reached', 'account_deactivated', 'organization_deactivated', 'project_deactivated']);
 
 const ACTION_INSTRUCTIONS = Object.freeze({
   summarize: 'Summarize the selected passage accurately and concisely. Preserve important names, dates, and qualifications.',
@@ -38,13 +40,30 @@ function response(res, status, body) {
   return res.status(status).json(body);
 }
 
-function logProviderDiagnostic(logger, outcome, status = 0) {
+function logProviderDiagnostic(logger, status = 0, providerError = {}) {
   try {
     if (typeof logger?.warn === 'function') {
-      logger.warn('[office-ai] provider failure', { outcome, status: Number.isInteger(status) ? status : 0 });
+      const details = { status: Number.isInteger(status) ? status : 0 };
+      if (SAFE_PROVIDER_ERROR_TYPES.has(providerError.type)) details.type = providerError.type;
+      if (SAFE_PROVIDER_ERROR_CODES.has(providerError.code)) details.code = providerError.code;
+      logger.warn('[office-ai] provider failure', details);
     }
   } catch {
     // Logging must never affect request handling.
+  }
+}
+
+async function readSanitizedProviderError(upstream) {
+  try {
+    const body = await upstream.json();
+    const error = body?.error;
+    if (!error || typeof error !== 'object') return {};
+    return {
+      type: SAFE_PROVIDER_ERROR_TYPES.has(error.type) ? error.type : undefined,
+      code: SAFE_PROVIDER_ERROR_CODES.has(error.code) ? error.code : undefined,
+    };
+  } catch {
+    return {};
   }
 }
 
@@ -192,24 +211,23 @@ async function generateText({ action, prompt, selectedText, apiKey, fetchImpl, l
       signal: controller.signal,
     });
     if (!upstream.ok) {
-      logProviderDiagnostic(logger, 'http_error', upstream.status);
+      logProviderDiagnostic(logger, upstream.status, await readSanitizedProviderError(upstream));
       return { kind: 'provider-error' };
     }
     let data;
     try {
       data = await upstream.json();
     } catch {
-      logProviderDiagnostic(logger, 'invalid_json', upstream.status);
+      logProviderDiagnostic(logger, upstream.status);
       return { kind: 'provider-error' };
     }
     const text = data?.choices?.[0]?.message?.content;
     if (typeof text !== 'string' || !text.trim() || text.length > MAX_OUTPUT_CHARS) {
-      logProviderDiagnostic(logger, 'missing_or_invalid_text', upstream.status);
+      logProviderDiagnostic(logger, upstream.status);
       return { kind: 'provider-error' };
     }
     return { kind: 'text', text: text.trim() };
   } catch {
-    logProviderDiagnostic(logger, 'network_or_timeout');
     return { kind: 'provider-error' };
   } finally {
     clearTimeout(timer);
