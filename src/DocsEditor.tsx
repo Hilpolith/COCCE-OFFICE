@@ -7,6 +7,7 @@ import Underline from '@tiptap/extension-underline';
 import { DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model';
 import type { OfficeDocument } from './lib/localStore';
 import { initialDocumentHtml, plainTextToRichHtml, richTextToPlainText, sanitizeRichTextHtml } from './lib/documentEditor';
+import OfficeAiWriter from './OfficeAiWriter';
 import './docs.css';
 import {
   ArrowUpRight, Bold, Check, ChevronLeft, FileText, Heading1, Heading2,
@@ -26,13 +27,14 @@ function FormattingButton({ label, icon, active, disabled, onClick }: {
     aria-pressed={active} disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={onClick}>{icon}</button>;
 }
 
-export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBack, onExport, onDelete }: {
+export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBack, onExport, onDelete, onGoToTeam }: {
   document: OfficeDocument;
   hasUnsavedChanges: boolean;
   onPatch: (patch: DocumentPatch) => boolean;
   onBack: () => void;
   onExport: (richText: string) => void;
   onDelete: () => void;
+  onGoToTeam: () => void;
 }) {
   const patchRef = useRef(onPatch);
   useEffect(() => { patchRef.current = onPatch; }, [onPatch]);
@@ -130,6 +132,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </span>
       <span className="docs-format-hint">Local rich text</span>
     </div>
+
+    <OfficeAiWriter editor={editor} onGoToTeam={onGoToTeam} />
 
     <article className="document-canvas glass-card">
       <input className="document-title-input" value={document.title} onChange={(event) => {

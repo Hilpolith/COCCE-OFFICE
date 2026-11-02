@@ -7,9 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "vitest run && node --test scripts/office-profile-privacy-check.mjs",
+    "test": "vitest run && node --test scripts/office-profile-privacy-check.mjs scripts/office-ai-api-check.mjs",
     "preview": "vite preview",
-    "test:office-schema": "node --test scripts/office-profile-privacy-check.mjs"
+    "test:office-schema": "node --test scripts/office-profile-privacy-check.mjs",
+    "test:office-ai-api": "node --test scripts/office-ai-api-check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

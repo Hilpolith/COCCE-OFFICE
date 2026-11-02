@@ -1,0 +1,198 @@
+export const OFFICE_AI_MAX_SELECTION_CHARS = 8_000;
+export const OFFICE_AI_MAX_PROMPT_CHARS = 1_200;
+export const OFFICE_AI_MAX_SAVED_WORKFLOWS = 12;
+export const OFFICE_AI_WORKFLOWS_STORAGE_KEY = 'cocce-office-ai-workflows-v1';
+
+export const OFFICE_AI_ACTIONS = [
+  { id: 'summarize', label: 'Summarize', hint: 'Create a concise summary.' },
+  { id: 'proofread', label: 'Proofread', hint: 'Correct spelling, grammar, and punctuation.' },
+  { id: 'quality_check', label: 'Quality check', hint: 'Review structure, clarity, consistency, and missing details.' },
+  { id: 'clarify', label: 'Improve clarity', hint: 'Make the writing clearer and easier to follow.' },
+  { id: 'concise', label: 'Make concise', hint: 'Shorten while preserving important meaning.' },
+  { id: 'expand', label: 'Expand', hint: 'Add useful detail without inventing facts.' },
+  { id: 'key_points', label: 'Key points', hint: 'Extract the main points.' },
+  { id: 'action_items', label: 'Action list', hint: 'Turn the passage into actionable tasks.' },
+  { id: 'outline', label: 'Make an outline', hint: 'Organize the passage as a clear outline.' },
+  { id: 'email', label: 'Turn into an email', hint: 'Rewrite the passage as a professional email.' },
+] as const;
+
+export type OfficeAiAction = typeof OFFICE_AI_ACTIONS[number]['id'] | 'custom' | 'draft';
+export type OfficeAiRequest = {
+  action: OfficeAiAction;
+  selectedText?: string;
+  prompt?: string;
+};
+export type OfficeAiWorkflow = {
+  id: string;
+  name: string;
+  instruction: string;
+};
+
+export const OFFICE_AI_DRAFT_TEMPLATES = [
+  {
+    id: 'email',
+    label: 'Email',
+    prompt: 'Draft a clear, professional email using only the facts I provide. Use bracketed placeholders for missing names, dates, or details.\n\nDetails:\n',
+  },
+  {
+    id: 'meeting-notes',
+    label: 'Meeting notes',
+    prompt: 'Draft structured meeting notes with sections for Purpose, Discussion, Decisions, and Action items. Use only the details I provide and use bracketed placeholders for missing information.\n\nNotes and context:\n',
+  },
+  {
+    id: 'project-brief',
+    label: 'Project brief',
+    prompt: 'Draft a practical project brief with sections for Overview, Goals, Scope, Milestones, Risks, and Success measures. Do not invent facts; use bracketed placeholders for unknowns.\n\nProject details:\n',
+  },
+  {
+    id: 'proposal',
+    label: 'Proposal',
+    prompt: 'Create a persuasive but factual proposal draft with sections for the problem, recommended approach, benefits, requirements, risks, and next steps. Use bracketed placeholders rather than inventing details.\n\nProposal context:\n',
+  },
+  {
+    id: 'report-outline',
+    label: 'Report outline',
+    prompt: 'Create a clear report outline with informative headings and a short note on what belongs in each section. Use only the information I provide and mark unknowns as placeholders.\n\nReport topic and context:\n',
+  },
+] as const;
+
+export class OfficeAiError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'OfficeAiError';
+    this.code = code;
+  }
+}
+
+export function extractOfficeAiSelection(
+  doc: { textBetween: (from: number, to: number, blockSeparator?: string) => string },
+  from: number,
+  to: number,
+): string {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) return '';
+  return doc.textBetween(from, to, '\n');
+}
+
+export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: string, prompt: string): OfficeAiRequest {
+  const cleanPrompt = prompt.trim();
+  if (cleanPrompt.length > OFFICE_AI_MAX_PROMPT_CHARS) {
+    throw new OfficeAiError('PROMPT_TOO_LONG', `Instructions must be ${OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters or fewer.`);
+  }
+
+  if (action === 'draft') {
+    if (selectedText.trim()) throw new OfficeAiError('DRAFT_MUST_NOT_INCLUDE_SELECTION', 'Draft from a brief never includes selected document text.');
+    if (!cleanPrompt) throw new OfficeAiError('PROMPT_REQUIRED', 'Describe what you want drafted first.');
+    if (cleanPrompt.length > OFFICE_AI_MAX_PROMPT_CHARS) {
+      throw new OfficeAiError('PROMPT_TOO_LONG', `Instructions must be ${OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters or fewer.`);
+    }
+    return { action, prompt: cleanPrompt };
+  }
+
+  if (!selectedText.trim()) throw new OfficeAiError('SELECTION_REQUIRED', 'Select some text in the document first.');
+  if (selectedText.length > OFFICE_AI_MAX_SELECTION_CHARS) {
+    throw new OfficeAiError('SELECTION_TOO_LONG', `Select no more than ${OFFICE_AI_MAX_SELECTION_CHARS.toLocaleString()} characters at a time.`);
+  }
+  if (action === 'custom' && !cleanPrompt) {
+    throw new OfficeAiError('PROMPT_REQUIRED', 'Add instructions for this workflow first.');
+  }
+  if (action === 'custom' && cleanPrompt.length > OFFICE_AI_MAX_PROMPT_CHARS) {
+    throw new OfficeAiError('PROMPT_TOO_LONG', `Instructions must be ${OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters or fewer.`);
+  }
+
+  return action === 'custom' ? { action, selectedText, prompt: cleanPrompt } : { action, selectedText };
+}
+
+function readJson(response: Response): Promise<unknown> {
+  return response.json().catch(() => null);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+export async function checkOfficeAiStatus(accessToken: string, fetcher: typeof fetch = fetch): Promise<boolean> {
+  const response = await fetcher('/api/office-ai', {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  const data = asRecord(await readJson(response));
+  if (!response.ok) {
+    const code = typeof data?.error === 'string' ? data.error : 'AI_STATUS_UNAVAILABLE';
+    throw new OfficeAiError(code, typeof data?.message === 'string' ? data.message : 'Could not check cloud AI availability.');
+  }
+  if (typeof data?.configured !== 'boolean') throw new OfficeAiError('AI_STATUS_INVALID', 'The cloud AI service returned an invalid status.');
+  return data.configured;
+}
+
+export async function requestOfficeAi(accessToken: string, payload: OfficeAiRequest, fetcher: typeof fetch = fetch): Promise<string> {
+  const response = await fetcher('/api/office-ai', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+  const data = asRecord(await readJson(response));
+  if (!response.ok) {
+    const code = typeof data?.error === 'string' ? data.error : 'AI_REQUEST_FAILED';
+    const message = typeof data?.message === 'string' ? data.message : 'The writing assistant could not complete that request.';
+    throw new OfficeAiError(code, message);
+  }
+  if (typeof data?.text !== 'string' || !data.text.trim()) {
+    throw new OfficeAiError('AI_RESPONSE_INVALID', 'The writing assistant returned no usable text.');
+  }
+  return data.text;
+}
+
+function normalizeWorkflow(value: unknown): OfficeAiWorkflow | null {
+  const item = asRecord(value);
+  if (!item || typeof item.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(item.id)) return null;
+  if (typeof item.name !== 'string' || typeof item.instruction !== 'string') return null;
+  const name = item.name.trim();
+  const instruction = item.instruction.trim();
+  if (!name || name.length > 60 || !instruction || instruction.length > OFFICE_AI_MAX_PROMPT_CHARS) return null;
+  return { id: item.id, name, instruction };
+}
+
+export function parseOfficeAiWorkflows(raw: string | null): OfficeAiWorkflow[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const workflows: OfficeAiWorkflow[] = [];
+    const seenIds = new Set<string>();
+    for (const item of parsed) {
+      const workflow = normalizeWorkflow(item);
+      if (!workflow || seenIds.has(workflow.id)) continue;
+      seenIds.add(workflow.id);
+      workflows.push(workflow);
+      if (workflows.length >= OFFICE_AI_MAX_SAVED_WORKFLOWS) break;
+    }
+    return workflows;
+  } catch {
+    return [];
+  }
+}
+
+export function loadOfficeAiWorkflows(storage: Pick<Storage, 'getItem'>): OfficeAiWorkflow[] {
+  try {
+    return parseOfficeAiWorkflows(storage.getItem(OFFICE_AI_WORKFLOWS_STORAGE_KEY));
+  } catch {
+    return [];
+  }
+}
+
+export function saveOfficeAiWorkflows(storage: Pick<Storage, 'setItem'>, workflows: OfficeAiWorkflow[]): boolean {
+  try {
+    const valid = parseOfficeAiWorkflows(JSON.stringify(workflows)).slice(0, OFFICE_AI_MAX_SAVED_WORKFLOWS);
+    storage.setItem(OFFICE_AI_WORKFLOWS_STORAGE_KEY, JSON.stringify(valid));
+    return true;
+  } catch {
+    return false;
+  }
+}

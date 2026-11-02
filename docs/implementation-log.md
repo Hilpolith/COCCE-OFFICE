@@ -28,3 +28,11 @@
 - The exact approved Office-only migration is applied and recorded. Thirty-six controlled backend checks passed using existing COCCE test accounts, and the disposable Office test workspace was cleaned. Existing COCCE objects, policies, Auth settings, shared Realtime, and other services remained untouched.
 - Reviewed commit `801a0494077afa7e11ca18a6447a724a69298dbb` is deployed READY at [cocce-office.vercel.app](https://cocce-office.vercel.app); Vercel confirmed the production alias resolves to that commit and the Office schema gate is enabled. SSO and domain aliases are unchanged.
 - Production smoke verified the app and Team existing-account sign-in panel load. Post-login browser flows were not rerun during this smoke check.
+
+
+## 2026-11-02 — Selection-aware Office Docs AI writing studio
+
+- Added a server-side Vercel route that verifies a bearer session against the existing COCCE Auth project, enforces a strict allowlist and request-size/output limits, uses a short-window per-user in-memory cap, and keeps `OPENAI_API_KEY` on the server. Provider calls use `store: false`; no request or response content is logged or persisted by the route.
+- Added explicit Docs actions for summaries, proofreading, quality checks, clarity/concision, expansion, key points, action lists, outlines, email rewrites, prompt-only draft templates, custom instructions, and up to 12 browser-local reusable workflows. Drafts send only the typed brief; editing/review actions send only the current selection.
+- AI results are previews and are never inserted automatically. The user must choose to replace the selected text or insert a new draft; the editor checks that the document has not changed while the preview was open and keeps normal Undo/redo history.
+- Added client and server contract tests with mocked Auth and OpenAI responses, plus docs on privacy and scope. No provider key or document content is written into source or local workflow storage. GenOffice source remains unused; `ee/` is not copied.
