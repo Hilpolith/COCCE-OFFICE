@@ -3,6 +3,7 @@ export const DEFAULT_PDF_SEARCH_MAX_MATCHES = 2_000;
 export interface PdfSearchMatch {
   page: number;
   offset: number;
+  length: number;
 }
 
 export interface PdfSearchResult {
@@ -13,21 +14,26 @@ export interface PdfSearchResult {
 interface FoldedText {
   value: string;
   originalOffsets: number[];
+  originalEnds: number[];
 }
 
 function foldText(value: string): FoldedText {
   let folded = '';
   const originalOffsets: number[] = [];
+  const originalEnds: number[] = [];
   let offset = 0;
   for (const character of value) {
     // Lowercase each source code point so offsets remain reversible; canonicalize
     // Greek final sigma because it is context-sensitive in whole-string casing.
     const normalized = character.normalize('NFC').toLowerCase().replace(/ς/g, 'σ');
     folded += normalized;
-    for (let index = 0; index < normalized.length; index += 1) originalOffsets.push(offset);
+    for (let index = 0; index < normalized.length; index += 1) {
+      originalOffsets.push(offset);
+      originalEnds.push(offset + character.length);
+    }
     offset += character.length;
   }
-  return { value: folded, originalOffsets };
+  return { value: folded, originalOffsets, originalEnds };
 }
 
 /** Find every case-insensitive occurrence in page order, bounded to avoid runaway work. */
@@ -47,7 +53,10 @@ export function findPdfTextMatches(
     let offset = foldedPage.value.indexOf(foldedQuery);
     while (offset >= 0) {
       if (matches.length >= limit) return { matches, truncated: true };
-      matches.push({ page: pageIndex + 1, offset: foldedPage.originalOffsets[offset] ?? 0 });
+      const matchStart = foldedPage.originalOffsets[offset] ?? 0;
+      const foldedEnd = offset + foldedQuery.length - 1;
+      const matchEnd = foldedPage.originalEnds[foldedEnd] ?? matchStart;
+      matches.push({ page: pageIndex + 1, offset: matchStart, length: Math.max(0, matchEnd - matchStart) });
       offset = foldedPage.value.indexOf(foldedQuery, offset + 1);
     }
   }

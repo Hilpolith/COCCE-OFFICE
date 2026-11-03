@@ -18,6 +18,8 @@ import { capturePdfTextSelection } from './lib/pdfSelection';
 import { pdfRectToViewportRect } from './lib/pdfSelection';
 import type { PdfCapturedSelection, PdfViewportLike } from './lib/pdfSelection';
 import { findPdfTextMatches } from './lib/pdfSearch';
+import { mapPdfSearchTextRangeToItems, measurePdfSearchHitRects } from './lib/pdfSearchHighlights';
+import type { PdfSearchOverlayRect } from './lib/pdfSearchHighlights';
 import { extractPdfPages, mergePdfFiles, parsePageRange, reorderPdfPages, rotatePdfPage } from './lib/pdfTools';
 import './pdf.css';
 
@@ -29,7 +31,7 @@ const PdfTextLayer = (pdfjsLib as unknown as {
 }).TextLayer;
 
 interface Props { workspaceId: string | null; repository?: DriveRepository }
-interface SearchHit { page: number; offset: number; excerpt: string }
+interface SearchHit { page: number; offset: number; length: number; excerpt: string; segments: ReturnType<typeof mapPdfSearchTextRangeToItems> }
 interface PageDimensions {
   width: number;
   height: number;
@@ -59,6 +61,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const [searchTerm, setSearchTerm] = useState('');
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
+  const [searchRects, setSearchRects] = useState<PdfSearchOverlayRect[]>([]);
   const [searchTruncated, setSearchTruncated] = useState(false);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -76,6 +79,8 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pageStageRef = useRef<HTMLDivElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
+  const pageTextItemsRef = useRef<{ page: number; items: string[] } | null>(null);
+  const searchRequestIdRef = useRef(0);
   const selectedFile = useMemo(() => files.find((file) => file.id === selectedId) ?? files[0] ?? null, [files, selectedId]);
   const selectedFileId = selectedFile?.id;
   const annotationScope = JSON.stringify([workspaceId, selectedFileId]);
@@ -114,9 +119,15 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
         setCommentDraft('');
         setActiveAnnotationId('');
         setPreviewError('');
+        setSearchTerm('');
         setSearchHits([]);
         setCurrentSearchIndex(-1);
+        setSearchRects([]);
         setSearchTruncated(false);
+        setSearching(false);
+        setNotice('');
+        searchRequestIdRef.current += 1;
+        pageTextItemsRef.current = null;
         setError('');
         if (nextSelectedId) {
           try { setAnnotations(listPdfAnnotations(window.localStorage, workspaceId, nextSelectedId)); }
@@ -159,6 +170,8 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     const canvas = canvasRef.current;
     const layer = textLayerRef.current;
     layer.replaceChildren();
+    pageTextItemsRef.current = null;
+    setSearchRects([]);
 
     void pdfDocument.getPage(currentPage).then(async (page) => {
       if (!active || !canvasRef.current || !textLayerRef.current) return;
@@ -168,7 +181,11 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
       layer.style.setProperty('--total-scale-factor', String(viewport.scale));
-      textLayerTask = new PdfTextLayer({ textContentSource: await page.getTextContent(), container: layer, viewport });
+      const textContent = await page.getTextContent();
+      if (!active || !canvasRef.current || !textLayerRef.current) return;
+      const itemTexts = textContent.items.map((item) => 'str' in item ? item.str : '');
+      pageTextItemsRef.current = { page: currentPage, items: itemTexts };
+      textLayerTask = new PdfTextLayer({ textContentSource: textContent, container: layer, viewport });
       renderTask = page.render({ canvas, canvasContext: context, viewport });
       const renderedTextLayer = textLayerTask;
       await Promise.all([renderTask.promise, renderedTextLayer.render()]);
@@ -187,6 +204,29 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   }, [pdfDocument, currentPage, previewRotation]);
 
   useEffect(() => {
+    const source = pageTextItemsRef.current;
+    const textLayer = textLayerRef.current;
+    const stage = pageStageRef.current;
+    if (!canvasReady || !pageDimensions || source?.page !== currentPage || !textLayer || !stage || !searchHits.length) {
+      setSearchRects((current) => current.length ? [] : current);
+      return;
+    }
+    const pageHits = searchHits
+      .map((hit, hitIndex) => ({ hit, hitIndex }))
+      .filter(({ hit }) => hit.page === currentPage)
+      .map(({ hit, hitIndex }) => ({ hitIndex, segments: hit.segments }));
+    const bounds = stage.getBoundingClientRect();
+    setSearchRects(measurePdfSearchHitRects(textLayer, bounds, source.items, pageHits));
+  }, [canvasReady, currentPage, displayScale, pageDimensions, searchHits]);
+
+  useEffect(() => {
+    const hit = searchHits[currentSearchIndex];
+    if (!canvasReady || hit?.page !== currentPage || !searchRects.some((rect) => rect.hitIndex === currentSearchIndex)) return;
+    const currentMark = textLayerRef.current?.parentElement?.querySelector<HTMLElement>(`[data-pdf-search-hit="${currentSearchIndex}"]`);
+    currentMark?.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'center' });
+  }, [canvasReady, currentPage, currentSearchIndex, searchHits, searchRects]);
+
+  useEffect(() => {
     const stage = pageStageRef.current;
     const canvas = canvasRef.current;
     if (!stage || !canvas || !pageDimensions) return undefined;
@@ -201,6 +241,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   }, [pageDimensions]);
 
   const selectFile = (id: string) => {
+    searchRequestIdRef.current += 1;
     setSelectedId(id);
     setPdfDocument(null);
     setCanvasReady(false);
@@ -216,15 +257,18 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     setCurrentPage(1);
     setSearchHits([]);
     setCurrentSearchIndex(-1);
+    setSearchRects([]);
     setSearchTruncated(false);
     setNotice('');
   };
 
   const navigateToPage = (page: number) => {
+    if (page === currentPage) return;
     setSelection(null);
     setCommentEditorOpen(false);
     setPageDimensions(null);
     setCanvasReady(false);
+    setSearchRects([]);
     setCurrentPage(page);
   };
   const rotateView = () => { setSelection(null); setCommentEditorOpen(false); setPageDimensions(null); setCanvasReady(false); setPreviewRotation((rotation) => (rotation + 90) % 360); };
@@ -330,35 +374,72 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
 
   const toggleMerge = (id: string) => setMergeIds((current) => current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]);
 
+  const resetSearchResults = (clearNotice = true) => {
+    searchRequestIdRef.current += 1;
+    setSearchHits([]);
+    setCurrentSearchIndex(-1);
+    setSearchRects([]);
+    setSearchTruncated(false);
+    setSearching(false);
+    if (clearNotice) setNotice('');
+  };
+
+  const clearSearch = () => {
+    resetSearchResults();
+    setSearchTerm('');
+    setError('');
+  };
+
+  const changeSearchTerm = (value: string) => {
+    setSearchTerm(value);
+    resetSearchResults();
+    setError('');
+  };
+
   const runSearch = async () => {
+    const requestId = ++searchRequestIdRef.current;
     const query = searchTerm.trim();
-    if (!pdfDocument || !query) { setSearchHits([]); setCurrentSearchIndex(-1); setSearchTruncated(false); return; }
-    setSearching(true); setError(''); setSearchHits([]); setCurrentSearchIndex(-1); setSearchTruncated(false);
+    if (!pdfDocument || !query) {
+      setSearchHits([]); setCurrentSearchIndex(-1); setSearchRects([]); setSearchTruncated(false); setSearching(false); setNotice('');
+      return;
+    }
+    setSearching(true); setError(''); setNotice(''); setSearchHits([]); setCurrentSearchIndex(-1); setSearchRects([]); setSearchTruncated(false);
     try {
       const pages: string[] = [];
+      const pageItems: string[][] = [];
       for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
         const page = await pdfDocument.getPage(pageNumber);
         const textContent = await page.getTextContent();
-        pages.push(textContent.items.map((item) => 'str' in item ? item.str : '').join(' '));
+        if (requestId !== searchRequestIdRef.current) return;
+        const itemTexts = textContent.items.map((item) => 'str' in item ? item.str : '');
+        pageItems.push(itemTexts);
+        pages.push(itemTexts.join(' '));
       }
+      if (requestId !== searchRequestIdRef.current) return;
       const result = findPdfTextMatches(pages, query);
-      const hits: SearchHit[] = result.matches.map(({ page, offset }) => {
+      const hits: SearchHit[] = result.matches.map(({ page, offset, length }) => {
         const text = pages[page - 1] ?? '';
-        return { page, offset, excerpt: text.slice(Math.max(0, offset - 45), Math.min(text.length, offset + query.length + 55)) };
+        return {
+          page,
+          offset,
+          length,
+          excerpt: text.slice(Math.max(0, offset - 45), Math.min(text.length, offset + length + 55)),
+          segments: mapPdfSearchTextRangeToItems(pageItems[page - 1] ?? [], offset, length),
+        };
       });
       setSearchHits(hits);
       setSearchTruncated(result.truncated);
       if (!hits.length) setNotice(`No matches for “${query}” in this PDF.`);
       else { setCurrentSearchIndex(0); navigateToPage(hits[0].page); }
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not search this PDF.'); }
-    finally { setSearching(false); }
+    } catch (cause) { if (requestId === searchRequestIdRef.current) setError(cause instanceof Error ? cause.message : 'Could not search this PDF.'); }
+    finally { if (requestId === searchRequestIdRef.current) setSearching(false); }
   };
 
   const navigateToSearchHit = (index: number) => {
     if (!searchHits.length) return;
     const nextIndex = (index + searchHits.length) % searchHits.length;
     setCurrentSearchIndex(nextIndex);
-    navigateToPage(searchHits[nextIndex].page);
+    if (searchHits[nextIndex].page !== currentPage) navigateToPage(searchHits[nextIndex].page);
   };
 
   const downloadOriginal = async () => {
@@ -442,17 +523,18 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
                 <canvas ref={canvasRef} className={`pdf-canvas ${canvasReady ? 'pdf-canvas-ready' : ''}`} aria-label={`Rendered PDF page ${currentPage}`} role="img" />
                 <div className="pdf-mark-layer" aria-hidden="true">{currentPageAnnotations.map((annotation) => annotation.rects.map((pdfRect, index) => { const rect = pageDimensions ? pdfRectToViewportRect(pdfRect, pageDimensions.viewport, pageDimensions.viewBox) : pdfRect; return <span key={`${annotation.id}-${index}`} className={`pdf-mark-rect pdf-mark-${annotation.kind} pdf-mark-${annotation.color}`} style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%` }} />; }))}</div>
                 <div ref={textLayerRef} className="pdf-text-layer" data-testid="pdf-text-layer" style={{ transform: `scale(${displayScale})` }} />
+                <div className="pdf-search-mark-layer" data-testid="pdf-search-highlight-layer" aria-hidden="true">{searchRects.map((rect, rectIndex) => <span key={`${rect.hitIndex}-${rectIndex}`} className={`pdf-search-mark-rect${rect.hitIndex === currentSearchIndex ? ' pdf-search-mark-current' : ''}`} data-testid="pdf-search-hit-mark" data-pdf-search-hit={rect.hitIndex} data-current={rect.hitIndex === currentSearchIndex} style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%` }} />)}</div>
                 <div className="pdf-comment-markers">{currentPageAnnotations.filter((annotation) => annotation.kind === 'comment' && annotation.rects[0]).map((annotation) => { const storedRect = annotation.rects[0]; const rect = pageDimensions ? pdfRectToViewportRect(storedRect, pageDimensions.viewport, pageDimensions.viewBox) : storedRect; return <button key={annotation.id} className="pdf-comment-marker" aria-label={`Show comment: ${annotation.note}`} title={annotation.note} style={{ left: `${Math.min(98, (rect.x + rect.width) * 100)}%`, top: `${rect.y * 100}%` }} onClick={() => setActiveAnnotationId(annotation.id)}><MessageSquare size={12} /></button>; })}</div>
                 {!canvasReady && !previewError && <div className="pdf-canvas-overlay" role="status"><LoaderCircle size={17} className="pdf-spinner" /> Rendering page…</div>}
               </div></div>
-              <p className="pdf-viewer-footnote">PDF.js text on this page is selectable. Highlights and comments below are local notes tied to the original file; they are not written into the PDF or shared with others.</p>
+              <p className="pdf-viewer-footnote">PDF.js text on this page is selectable. Search matches are temporary overlays and disappear when the search is cleared; saved highlights and comments remain separate local notes and are not written into the PDF.</p>
               {selection && <div className="pdf-selection-toolbar" role="group" aria-label="Actions for selected PDF text"><div><strong>Selected text</strong><small title={selection.text}>“{selection.text.slice(0, 160)}{selection.text.length > 160 ? '…' : ''}”</small></div><button className="button-tertiary" onClick={() => saveSelectedAnnotation('highlight')}><Highlighter size={14} /> Highlight</button><button className="button-secondary" onClick={() => { setCommentEditorOpen(true); setCommentDraft(''); }}><MessageSquare size={14} /> Comment</button><button className="icon-button" aria-label="Dismiss text selection" onClick={() => { setSelection(null); setCommentEditorOpen(false); }}><X size={14} /></button></div>}
               {commentEditorOpen && selection && <form className="pdf-comment-form" onSubmit={saveComment}><label htmlFor="pdf-comment-draft">Comment on selected text</label><textarea id="pdf-comment-draft" rows={3} maxLength={4_000} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Write a note about this passage" /><div><small>{selection.text.slice(0, 120)}{selection.text.length > 120 ? '…' : ''}</small><button className="button-primary" type="submit" disabled={!commentDraft.trim()}>Save comment locally</button><button className="button-tertiary" type="button" onClick={() => { setCommentEditorOpen(false); setCommentDraft(''); }}>Cancel</button></div></form>}
               <section className="pdf-annotations" aria-label="Local PDF annotations"><div className="pdf-annotations-heading"><div><span className="eyebrow">THIS BROWSER ONLY</span><h2>Highlights &amp; comments</h2></div><span>{annotations.length} saved</span></div><p className="pdf-annotations-note">Select text on the page to highlight it or attach a comment. These notes are private to this browser and current local workspace.</p>
                 {currentPageAnnotations.length ? <ul className="pdf-annotation-list">{currentPageAnnotations.map((annotation) => <li key={annotation.id} id={`pdf-annotation-${annotation.id}`} className={`pdf-annotation-item ${activeAnnotationId === annotation.id ? 'pdf-annotation-item-active' : ''}`}><div className={`pdf-annotation-icon pdf-annotation-icon-${annotation.kind}`} aria-hidden="true">{annotation.kind === 'highlight' ? <Highlighter size={14} /> : <MessageSquare size={14} />}</div><div className="pdf-annotation-copy"><strong>{annotation.kind === 'highlight' ? 'Highlight' : 'Comment'} · page {annotation.page}</strong><blockquote>“{annotation.quote}”</blockquote>{annotation.note && <p>{annotation.note}</p>}</div><button className="icon-button pdf-delete-annotation" aria-label={`Delete PDF ${annotation.kind}`} title="Remove this local annotation" onClick={() => removeAnnotation(annotation)}><Trash2 size={14} /></button></li>)}</ul> : <div className="pdf-annotations-empty">No saved marks on page {currentPage}. Select text above to add one.</div>}
               </section>
-              <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button></div>
-              {(searchHits.length > 0 || searchTruncated) && <div className="pdf-search-results" aria-label="PDF search results"><div className="pdf-search-heading"><strong>{searchHits.length} match{searchHits.length === 1 ? '' : 'es'}{searchTruncated ? ' (first 2,000 shown)' : ''}</strong>{searchHits.length > 0 && <div className="pdf-search-navigation"><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex - 1)} aria-label="Previous search match" title="Previous match"><ArrowLeft size={14} /></button><span>{currentSearchIndex + 1} / {searchHits.length}</span><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex + 1)} aria-label="Next search match" title="Next match"><ArrowRight size={14} /></button></div>}</div>{searchHits.map((hit, index) => <button key={`${hit.page}-${hit.offset}`} className={index === currentSearchIndex ? 'pdf-search-result-active' : ''} onClick={() => navigateToSearchHit(index)}><span>Match {index + 1} · Page {hit.page}</span><small>{hit.excerpt}</small></button>)}{searchTruncated && <small className="pdf-search-truncated">Search stopped at 2,000 matches.</small>}</div>}
+              <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => changeSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button>{searchTerm && <button className="button-tertiary pdf-search-clear" onClick={clearSearch} aria-label="Clear PDF search" title="Clear search"><X size={14} /> Clear</button>}</div>
+              {(searchHits.length > 0 || searchTruncated) && <div className="pdf-search-results" aria-label="PDF search results"><div className="pdf-search-heading"><strong>{searchHits.length} match{searchHits.length === 1 ? '' : 'es'}{searchTruncated ? ' (first 2,000 shown)' : ''}</strong>{searchHits.length > 0 && <div className="pdf-search-navigation"><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex - 1)} aria-label="Previous search match" title="Previous match"><ArrowLeft size={14} /></button><span aria-live="polite" aria-atomic="true">{currentSearchIndex + 1} / {searchHits.length} · Page {searchHits[currentSearchIndex]?.page ?? currentPage}</span><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex + 1)} aria-label="Next search match" title="Next match"><ArrowRight size={14} /></button></div>}</div>{searchHits.map((hit, index) => <button key={`${hit.page}-${hit.offset}`} className={index === currentSearchIndex ? 'pdf-search-result-active' : ''} aria-current={index === currentSearchIndex ? 'true' : undefined} onClick={() => navigateToSearchHit(index)}><span>Match {index + 1} · Page {hit.page}</span><small>{hit.excerpt}</small></button>)}{searchTruncated && <small className="pdf-search-truncated">Search stopped at 2,000 matches.</small>}</div>}
               <section className="pdf-edit-tools"><div className="pdf-tools-heading"><div><span className="eyebrow">COPY-BASED PAGE TOOLS</span><h2>Create a new PDF copy</h2></div><span className="pdf-original-badge">Original stays unchanged</span></div>
                 <div className="pdf-tool-card"><div><strong>Rotate current page</strong><small>Apply a 90° rotation to page {currentPage} in a saved copy.</small></div><button className="button-tertiary" onClick={() => void exportRotatedPage()} disabled={busy}><RotateCw size={14} /> Rotate copy</button></div>
                 <div className="pdf-tool-card pdf-tool-range"><div><strong>Extract pages</strong><small>Enter individual page numbers or inclusive ranges, such as 1-3,5.</small></div><div className="pdf-tool-controls"><input aria-label="Pages to extract" value={pageRange} onChange={(event) => setPageRange(event.target.value)} /><button className="button-tertiary" onClick={() => void exportExtract()} disabled={busy}>Extract copy</button></div></div>
