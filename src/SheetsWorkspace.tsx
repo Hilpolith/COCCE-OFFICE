@@ -2,14 +2,14 @@ import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent } from 'react';
 import {
   ArrowLeft, ArrowUpRight, Check, Download, FileSpreadsheet,
-  LockKeyhole, Plus, Table2, Upload,
+  LockKeyhole, Plus, Table2, TrendingUp, Upload,
 } from 'lucide-react';
 import {
   addWorkbook, addWorksheet, selectWorksheet, updateWorkbook,
   updateWorksheetCell, updateWorksheetCells,
 } from './lib/localStore';
 import type { OfficeWorkbook, PreviewState } from './lib/localStore';
-import { cellAddress, csvRowsToCells, displayCellValue, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange, SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS } from './lib/spreadsheetEngine';
+import { cellAddress, csvRowsToCells, displayCellValue, fillNumericSeries, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange, SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS } from './lib/spreadsheetEngine';
 
 const GRID_ROWS = SHEET_VISIBLE_ROWS;
 const GRID_COLUMNS = SHEET_VISIBLE_COLUMNS;
@@ -275,6 +275,30 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
       setMessage(`Pasted ${height} × ${width} cells at ${firstAddress}; formulas remain local.`);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Clipboard data could not be pasted.'); }
   };
+  const applyNumericSeries = () => {
+    try {
+      const result = fillNumericSeries(worksheet.cells, selectedRange, GRID_ROWS, GRID_COLUMNS);
+      if (result.changedCount === 0) {
+        setMessage('The selected cells already match this numeric series; no cells were changed.');
+        return;
+      }
+      if (result.overwrittenCount > 0) {
+        const first = cellAddress(selectedRange.startRow, selectedRange.startColumn);
+        const last = cellAddress(selectedRange.endRow, selectedRange.endColumn);
+        const rangeLabel = first === last ? first : `${first}:${last}`;
+        const populated = result.overwrittenCount;
+        if (!window.confirm(`Fill ${rangeLabel} using its first two numeric cells and replace ${populated} existing cell${populated === 1 ? '' : 's'}? This operation stays on this device.`)) {
+          setMessage('Fill cancelled; no cells were changed.');
+          return;
+        }
+      }
+      if (!saveState(updateWorksheetCells(state, workbook.id, worksheet.id, result.cells))) return;
+      const cellLabel = result.generatedCount === 1 ? 'cell' : 'cells';
+      setMessage(`Filled ${result.generatedCount} ${cellLabel} ${result.axis === 'vertical' ? 'down' : 'right'} from the first two numeric cells; saved on this device.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Numeric series fill failed.');
+    }
+  };
   const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>, address: string) => {
     if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
     if (event.key === 'Escape') {
@@ -332,6 +356,10 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
         <span className="formula-equals">fx</span>
         <input className="formula-input" value={rawValue} onChange={(event) => updateCell(selectedAddress, event.target.value)} onKeyDown={formulaKeyDown} aria-label={`Formula or value for ${selectedAddress}`} placeholder="Enter a value or formula, e.g. =SUM(A1:A5)" />
       </div>
+      <div className="sheet-range-tools" role="toolbar" aria-label="Spreadsheet range tools">
+        <button type="button" className="button-secondary" aria-label="Fill numeric series" title="Fill a single selected row or column from its first two finite numeric cells" onClick={applyNumericSeries}><TrendingUp size={15} /> Fill series</button>
+        <span>Extends the arithmetic step from the first two finite numeric cells in a selected row or column; formulas, dates, and text are not supported.</span>
+      </div>
       <div className="sheet-grid-scroll" role="region" aria-label="Spreadsheet grid; scroll horizontally and vertically to see cells">
         <table className="sheet-grid">
           <thead><tr><th className="row-number-head" aria-label="Row number" />{Array.from({ length: GRID_COLUMNS }, (_, index) => <th key={index}>{cellAddress(1, index + 1).replace(/\d+$/, '')}</th>)}</tr></thead>
@@ -354,7 +382,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
         </table>
       </div>
       <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · cell references · SUM · AVERAGE · IF'}</span></div>
-      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Clipboard paste is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell, stays inside the visible 12 × 24 grid, and asks before replacing populated cells. XLSX, charting, collaboration, and cloud backup are not included.</p>
+      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Fill series uses the first two finite numeric seeds in a single row or column, rejects formulas/text/dates, and asks before replacing populated targets. Clipboard paste is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell, stays inside the visible 12 × 24 grid, and asks before replacing populated cells. XLSX, charting, formatting, collaboration, and cloud backup are not included.</p>
     </div>
   );
 }

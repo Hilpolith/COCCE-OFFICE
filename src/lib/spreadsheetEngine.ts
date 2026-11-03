@@ -397,6 +397,91 @@ export type SheetClipboardRange = {
   endColumn: number;
 };
 
+export type NumericSeriesFillResult = {
+  cells: Record<string, string>;
+  axis: 'vertical' | 'horizontal';
+  generatedCount: number;
+  changedCount: number;
+  overwrittenCount: number;
+};
+
+function parseNumericSeriesSeed(value: string, address: string): number {
+  const trimmed = value.trim();
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) {
+    throw new Error(`The first two selected cells must contain finite numeric values. ${address} contains unsupported content; formulas, text, dates, and booleans are not supported.`);
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    throw new RangeError(`The numeric series seed in ${address} is outside the finite number range.`);
+  }
+  return parsed;
+}
+
+/** Fill a visible one-dimensional selection from its first two finite numeric cells. */
+export function fillNumericSeries(
+  cells: Record<string, string>,
+  range: SheetClipboardRange,
+  maxRows = SHEET_VISIBLE_ROWS,
+  maxColumns = SHEET_VISIBLE_COLUMNS,
+): NumericSeriesFillResult {
+  const { startRow, startColumn, endRow, endColumn } = range;
+  if (![maxRows, maxColumns].every(Number.isSafeInteger) || maxRows < 1 || maxColumns < 1) {
+    throw new RangeError('The visible spreadsheet grid bounds are invalid.');
+  }
+  if (![startRow, startColumn, endRow, endColumn].every(Number.isSafeInteger)
+    || startRow < 1 || startColumn < 1 || endRow < startRow || endColumn < startColumn
+    || endRow > maxRows || endColumn > maxColumns) {
+    throw new RangeError('The selected range is outside the visible spreadsheet grid.');
+  }
+  const height = endRow - startRow + 1;
+  const width = endColumn - startColumn + 1;
+  if (height > 1 && width > 1) {
+    throw new RangeError('Numeric series fill supports one row or one column at a time.');
+  }
+  const axis = height > 1 ? 'vertical' : 'horizontal';
+  const length = axis === 'vertical' ? height : width;
+  if (length < 3) {
+    throw new RangeError('Select at least three cells in one row or one column, with two numeric seed cells and one destination.');
+  }
+
+  const firstAddress = cellAddress(startRow, startColumn);
+  const secondAddress = axis === 'vertical' ? cellAddress(startRow + 1, startColumn) : cellAddress(startRow, startColumn + 1);
+  const first = parseNumericSeriesSeed(cells[firstAddress] ?? '', firstAddress);
+  const second = parseNumericSeriesSeed(cells[secondAddress] ?? '', secondAddress);
+  const step = second - first;
+  if (!Number.isFinite(step)) throw new RangeError('The numeric step is outside the finite browser number range. No cells were changed.');
+
+  const generated: Array<[string, string]> = [];
+  for (let offset = 2; offset < length; offset += 1) {
+    const value = first + step * offset;
+    if (!Number.isFinite(value)) throw new RangeError('The numeric series exceeds the finite browser number range. No cells were changed.');
+    const normalized = Number(value.toPrecision(15));
+    if (!Number.isFinite(normalized)) throw new RangeError('The numeric series cannot be represented safely. No cells were changed.');
+    const address = axis === 'vertical'
+      ? cellAddress(startRow + offset, startColumn)
+      : cellAddress(startRow, startColumn + offset);
+    generated.push([address, Object.is(normalized, -0) ? '0' : String(normalized)]);
+  }
+
+  let changedCount = 0;
+  let overwrittenCount = 0;
+  const nextCells = { ...cells };
+  for (const [address, value] of generated) {
+    const previous = cells[address] ?? '';
+    if (previous === value) continue;
+    changedCount += 1;
+    if (previous !== '') overwrittenCount += 1;
+    nextCells[address] = value;
+  }
+  return {
+    cells: changedCount ? nextCells : cells,
+    axis,
+    generatedCount: generated.length,
+    changedCount,
+    overwrittenCount,
+  };
+}
+
 export function serializeTsvRange(
   cells: Record<string, string>,
   range: SheetClipboardRange,

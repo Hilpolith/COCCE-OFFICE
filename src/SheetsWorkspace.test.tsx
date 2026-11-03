@@ -256,3 +256,109 @@ describe('Sheets workspace keyboard navigation', () => {
     expect(copy.defaultPrevented).toBe(false);
   });
 });
+
+
+describe('Sheets local numeric series fill', () => {
+  const stateWithCells = (cells: Record<string, string>): PreviewState => ({
+    ...state,
+    workbooks: [{ ...workbook, worksheets: [{ ...worksheet, cells }] }],
+  });
+  const fillButton = () => screen.getByRole('button', { name: 'Fill numeric series' });
+
+  it('fills a selected vertical range from two numeric seeds with one local state update', () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    openGrid(onState, stateWithCells({ A1: '1', A2: '3', B1: 'keep' }));
+    fireEvent.click(cell('A1'));
+    for (const address of ['A1', 'A2', 'A3', 'A4']) fireEvent.keyDown(cell(address), { key: 'ArrowDown', shiftKey: true });
+
+    fireEvent.click(fillButton());
+
+    expect(onState).toHaveBeenCalledTimes(1);
+    const cells = onState.mock.calls[0][0].workbooks[0].worksheets[0].cells;
+    expect(cells).toMatchObject({ A1: '1', A2: '3', A3: '5', A4: '7', A5: '9', B1: 'keep' });
+    expect(screen.getByRole('status').textContent).toContain('Filled 3 cells down');
+    expect(screen.getByText(/formulas, dates, and text are not supported/)).toBeTruthy();
+  });
+
+  it('fills a selected horizontal fractional series to the right', () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    openGrid(onState, stateWithCells({ B2: '10', C2: '7.5' }));
+    fireEvent.click(cell('B2'));
+    fireEvent.keyDown(cell('B2'), { key: 'ArrowRight', shiftKey: true });
+    fireEvent.keyDown(cell('C2'), { key: 'ArrowRight', shiftKey: true });
+
+    fireEvent.click(fillButton());
+
+    expect(onState).toHaveBeenCalledTimes(1);
+    expect(onState.mock.calls[0][0].workbooks[0].worksheets[0].cells).toMatchObject({ B2: '10', C2: '7.5', D2: '5' });
+    expect(screen.getByRole('status').textContent).toContain('Filled 1 cell right');
+  });
+
+  it('rejects two-dimensional selections and formula seeds without writing any cells', () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    openGrid(onState, stateWithCells({ A1: '=SUM(1,2)', A2: '2' }));
+    fireEvent.click(cell('A1'));
+    fireEvent.keyDown(cell('A1'), { key: 'ArrowDown', shiftKey: true });
+    fireEvent.keyDown(cell('A2'), { key: 'ArrowRight', shiftKey: true });
+    fireEvent.click(fillButton());
+    expect(onState).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toContain('one row or one column');
+
+    cleanup();
+    openGrid(onState, stateWithCells({ A1: '=SUM(1,2)', A2: '2' }));
+    fireEvent.click(cell('A1'));
+    fireEvent.keyDown(cell('A1'), { key: 'ArrowDown', shiftKey: true });
+    fireEvent.keyDown(cell('A2'), { key: 'ArrowDown', shiftKey: true });
+    fireEvent.click(fillButton());
+    expect(onState).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toContain('formulas, text, dates, and booleans are not supported');
+  });
+
+  it('asks before replacing populated targets, cancels safely, and applies only after approval', () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    openGrid(onState, stateWithCells({ A1: '1', A2: '2', A3: 'old', A4: '4' }));
+    originalConfirm = window.confirm;
+    confirmOverridden = true;
+    const confirm = vi.fn(() => false);
+    Object.defineProperty(window, 'confirm', { configurable: true, writable: true, value: confirm });
+    fireEvent.click(cell('A1'));
+    for (const address of ['A1', 'A2', 'A3']) fireEvent.keyDown(cell(address), { key: 'ArrowDown', shiftKey: true });
+
+    fireEvent.click(fillButton());
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('replace 1 existing cell'));
+    expect(onState).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toContain('Fill cancelled; no cells were changed.');
+    expect(cell('A3').getAttribute('aria-label')).toContain('old');
+
+    confirm.mockReturnValueOnce(true);
+    fireEvent.click(fillButton());
+    expect(onState).toHaveBeenCalledTimes(1);
+    expect(onState.mock.calls[0][0].workbooks[0].worksheets[0].cells).toMatchObject({ A3: '3', A4: '4' });
+  });
+
+  it('avoids a save when values already match and preserves the displayed copy on save failure', () => {
+    const noOpSave = vi.fn((_next: PreviewState) => true);
+    openGrid(noOpSave, stateWithCells({ A1: '1', A2: '2', A3: '3' }));
+    fireEvent.click(cell('A1'));
+    fireEvent.keyDown(cell('A1'), { key: 'ArrowDown', shiftKey: true });
+    fireEvent.keyDown(cell('A2'), { key: 'ArrowDown', shiftKey: true });
+    fireEvent.click(fillButton());
+    expect(noOpSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toContain('already match this numeric series');
+
+    cleanup();
+    const failedSave = vi.fn((_next: PreviewState) => false);
+    openGrid(failedSave, stateWithCells({ A1: '1', A2: '2', A3: 'old' }));
+    originalConfirm = window.confirm;
+    confirmOverridden = true;
+    Object.defineProperty(window, 'confirm', { configurable: true, writable: true, value: vi.fn(() => true) });
+    fireEvent.click(cell('A1'));
+    fireEvent.keyDown(cell('A1'), { key: 'ArrowDown', shiftKey: true });
+    fireEvent.keyDown(cell('A2'), { key: 'ArrowDown', shiftKey: true });
+    fireEvent.click(fillButton());
+    expect(failedSave).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole('alert').some((element) => element.textContent?.includes('Changes were not saved'))).toBe(true);
+    expect(cell('A3').getAttribute('aria-label')).toContain('old');
+    expect(screen.getByRole('status').textContent).not.toContain('Filled 1 cell down');
+  });
+});
