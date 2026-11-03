@@ -100,11 +100,53 @@ describe('bounded local DOCX interchange', () => {
     expect(imported.richText).not.toContain('<a');
   });
 
-  it('flattens table cells into readable text and reports that loss', async () => {
+  it('round-trips a simple bounded table with its grid and first-row header', async () => {
+    const blob = await createDocxBlob({
+      title: 'Synthetic table', content: '',
+      richText: '<table><tbody><tr><th><p><strong>Name</strong></p></th><th><p>Amount</p></th></tr><tr><td><p>A</p></td><td><p>2</p></td></tr></tbody></table>',
+    });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const generatedXml = strFromU8(unzipSync(bytes)['word/document.xml']!);
+    expect(generatedXml).toContain('<w:tbl');
+    expect(generatedXml).toContain('<w:tblHeader');
+    const imported = await importDocxFile(fileFromBytes(bytes));
+    expect(imported.richText).toContain('<table><tbody>');
+    expect(imported.richText).toContain('<th><p><strong>Name</strong></p></th>');
+    expect(imported.richText).toContain('<td><p>A</p></td>');
+    expect(imported.content).toBe('Name\tAmount\nA\t2');
+    expect(imported.warnings.some((warning) => warning.includes('simple table(s) were preserved'))).toBe(true);
+    expect(imported.warnings.some((warning) => warning.includes('flattened to readable text'))).toBe(false);
+  });
+
+  it('imports simple Word tables without losing their cells and warns when merged structures are flattened', async () => {
     const body = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Left cell</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Right cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
     const imported = await importDocxFile(makeDocx({ 'word/document.xml': xml(body) }));
-    expect(imported.richText).toContain('<p>Left cell | Right cell</p>');
-    expect(imported.warnings.some((warning) => warning.includes('table(s) were flattened'))).toBe(true);
+    expect(imported.richText).toContain('<table><tbody><tr><td><p>Left cell</p></td><td><p>Right cell</p></td></tr></tbody></table>');
+    expect(imported.content).toBe('Left cell\tRight cell');
+
+    const merged = '<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>Span</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const flattened = await importDocxFile(makeDocx({ 'word/document.xml': xml(merged) }));
+    expect(flattened.richText).toContain('<p>Span</p>');
+    expect(flattened.richText).not.toContain('<table');
+    expect(flattened.warnings.some((warning) => warning.includes('flattened to readable text'))).toBe(true);
+  });
+
+  it('flattens a Word table over the documented row limit and fails malformed rows safely', async () => {
+    const rows = Array.from({ length: 51 }, (_, index) => `<w:tr><w:tc><w:p><w:r><w:t>Row ${index}</w:t></w:r></w:p></w:tc></w:tr>`).join('');
+    const imported = await importDocxFile(makeDocx({ 'word/document.xml': xml(`<w:tbl>${rows}</w:tbl>`) }));
+    expect(imported.richText).not.toContain('<table');
+    expect(imported.content).toContain('Row 50');
+    expect(imported.warnings.some((warning) => warning.includes('flattened to readable text'))).toBe(true);
+
+    const malformed = '<w:tbl><w:tr><w:trPr/></w:tr></w:tbl>';
+    await expect(importDocxFile(makeDocx({ 'word/document.xml': xml(malformed) }))).rejects.toThrow(/malformed table/);
+  });
+
+  it('refuses to export unsupported table structures instead of silently flattening them', async () => {
+    await expect(createDocxBlob({
+      title: 'Unsupported table', content: '',
+      richText: '<table><tr><td rowspan="2"><p>A</p></td><td><p>B</p></td></tr><tr><td><p>C</p></td></tr></table>',
+    })).rejects.toThrow(/export refused an unsupported or over-limit table/);
   });
 
   it('rejects invalid extensions, oversized files, DOCM, and malformed ZIP packages', async () => {

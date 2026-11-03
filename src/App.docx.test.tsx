@@ -73,6 +73,37 @@ describe('Docs local DOCX import UI', () => {
     expect((output as Blob).size).toBeGreaterThan(100);
   });
 
+  it('persists a locally authored table across reload without a network request', async () => {
+    const network = vi.spyOn(globalThis, 'fetch');
+    const firstRender = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: /Existing draft/ }));
+    const content = await screen.findByRole('textbox', { name: 'Document content' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Insert' }));
+    await waitFor(() => expect(content.querySelectorAll('table tr')).toHaveLength(3));
+
+    const firstCell = content.querySelector('th p')!;
+    fireEvent.mouseDown(firstCell);
+    const paste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', { value: { getData: (type: string) => type === 'text/plain' ? 'Synthetic header' : '' } });
+    fireEvent(firstCell, paste);
+
+    await waitFor(() => {
+      const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).documents as typeof existing[];
+      expect(saved[0]?.richText).toContain('<table>');
+      expect(saved[0]?.richText).toContain('Synthetic header');
+    });
+    firstRender.unmount();
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: /Existing draft/ }));
+    const reloaded = await screen.findByRole('textbox', { name: 'Document content' });
+    await waitFor(() => expect(reloaded.querySelectorAll('table tr')).toHaveLength(3));
+    expect(reloaded.textContent).toContain('Synthetic header');
+    expect(network).not.toHaveBeenCalled();
+  });
+
   it('keeps an imported draft in this tab when local storage is full and offers recovery controls', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     const originalSetItem = window.localStorage.setItem.bind(window.localStorage);

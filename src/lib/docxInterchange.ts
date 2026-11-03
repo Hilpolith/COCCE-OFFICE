@@ -1,4 +1,5 @@
-import { initialDocumentHtml, richTextToPlainText, sanitizeRichTextHtml } from './documentEditor';
+import { DOCS_TABLE_LIMITS, docsTableGridViolation } from './docsTableLimits';
+import { initialDocumentHtml, richTextToPlainText, sanitizeRichTextHtml, sanitizeRichTextHtmlWithWarnings } from './documentEditor';
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 export const MAX_DOCX_FILE_BYTES = 5 * 1024 * 1024;
@@ -12,7 +13,7 @@ const MAX_XML_DEPTH = 64;
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const ORDERED_LIST_REFERENCE = 'cocce-office-decimal-v1';
 
-export const DOCX_IMPORT_LIMITS_COPY = 'Import a new local document from a limited DOCX subset (5 MB file limit; 25 MB expanded-package limit). Text, headings 1–3, common emphasis and simple lists are supported. Tables are flattened to text; images, page layout, comments, tracked changes and advanced Word features may be omitted. Links are imported as text only; no external targets are followed. The original file stays on this device and is not stored in Docs or uploaded.';
+export const DOCX_IMPORT_LIMITS_COPY = `Import a new local document from a limited DOCX subset (5 MB file limit; 25 MB expanded-package limit). Text, headings 1–3, common emphasis, simple lists, and rectangular tables up to ${DOCS_TABLE_LIMITS.maxRows} rows × ${DOCS_TABLE_LIMITS.maxColumns} columns are supported. Tables are limited to ${DOCS_TABLE_LIMITS.maxTables} per document, ${DOCS_TABLE_LIMITS.maxCellTextChars.toLocaleString()} text characters per cell, and ${DOCS_TABLE_LIMITS.maxTotalTextChars.toLocaleString()} table-text characters total. Merged, nested, uneven, complex, or over-limit tables are imported as readable text with a warning. Images, page layout, comments, tracked changes, table styling, and advanced Word features may be omitted. Links are imported as text only; no external targets are followed. The original file stays on this device and is not stored in Docs or uploaded.`;
 
 export interface ImportedDocx {
   title: string;
@@ -37,6 +38,9 @@ interface ArchiveXmls {
 interface ImportWarnings {
   paragraphs: number;
   tables: number;
+  preservedTables: number;
+  flattenedTables: number;
+  tableTextChars: number;
   images: number;
   unsupportedLists: number;
   unsupportedBlocks: number;
@@ -357,18 +361,77 @@ function directWordParagraphs(node: Node, depth = 0): Element[] {
   return result;
 }
 
-function tableToHtml(table: Element, styles: Map<string, string>, numbering: NumberingMap, warnings: ImportWarnings, textCounter: { count: number }, depth = 0): string[] {
+function tableHasUnsupportedWordStructure(table: Element, rows: Element[], parsedRows: ParsedParagraph[][][]): boolean {
+  const supportedTableParts = new Set(['tblPr', 'tblGrid', 'tr']);
+  if (Array.from(table.childNodes).some((child) => isWordElement(child) && !supportedTableParts.has((child as Element).localName))) return true;
+  const expectedColumns = wordChildren(rows[0]!, 'tc').length;
+  const grid = wordChild(table, 'tblGrid');
+  const gridColumns = grid ? wordChildren(grid, 'gridCol').length : 0;
+  if (gridColumns > 0 && gridColumns !== expectedColumns) return true;
+
+  let sawHeader = false;
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex]!;
+    const supportedRowParts = new Set(['trPr', 'tc']);
+    if (Array.from(row.childNodes).some((child) => isWordElement(child) && !supportedRowParts.has((child as Element).localName))) return true;
+    const rowProperties = wordChild(row, 'trPr');
+    const isHeader = wordBoolean(wordChild(rowProperties, 'tblHeader'));
+    if (isHeader && (rowIndex !== 0 || sawHeader)) return true;
+    sawHeader ||= isHeader;
+    const cells = wordChildren(row, 'tc');
+    if (cells.length !== expectedColumns) return true;
+    for (const cell of cells) {
+      if (wordElements(cell, 'tbl').length > 0) return true;
+      const properties = wordChild(cell, 'tcPr');
+      const gridSpan = wordChild(properties, 'gridSpan');
+      if (gridSpan && Number(wordValue(gridSpan) ?? '1') !== 1) return true;
+      if (wordChild(properties, 'vMerge') || wordChild(properties, 'hMerge')) return true;
+      const supportedCellParts = new Set(['tcPr', 'p']);
+      if (Array.from(cell.childNodes).some((child) => isWordElement(child) && !supportedCellParts.has((child as Element).localName))) return true;
+    }
+    if (parsedRows[rowIndex]?.some((cell) => cell.some((paragraph) => paragraph.headingLevel || paragraph.list))) return true;
+  }
+  return false;
+}
+
+function tableToHtml(table: Element, styles: Map<string, string>, numbering: NumberingMap, warnings: ImportWarnings, textCounter: { count: number }, depth = 0): string {
   if (depth > MAX_XML_DEPTH) fail('DOCX table structure is nested too deeply for the local importer.');
   warnings.tables += 1;
   const rows = wordChildren(table, 'tr');
-  if (rows.length === 0) return [];
-  return rows.map((row) => {
-    const cells = wordChildren(row, 'tc').map((cell) => {
-      const paragraphs = directWordParagraphs(cell);
-      return paragraphs.map((paragraph) => parseParagraph(paragraph, styles, numbering, warnings, textCounter).inner).filter(Boolean).join('<br>');
-    });
-    return `<p>${cells.join(' | ')}</p>`;
-  });
+  if (rows.length === 0 || rows.some((row) => wordChildren(row, 'tc').length === 0)) {
+    fail('This DOCX contains a malformed table with a row or cell missing. No document was imported.');
+  }
+
+  const parsedRows: ParsedParagraph[][][] = rows.map((row) => wordChildren(row, 'tc').map((cell) => {
+    const paragraphs = directWordParagraphs(cell);
+    return paragraphs.length
+      ? paragraphs.map((paragraph) => parseParagraph(paragraph, styles, numbering, warnings, textCounter))
+      : [{ inner: '', headingLevel: null, list: null }];
+  }));
+  const flattenedRows = parsedRows.map((cells) => cells.map((paragraphs) => paragraphs.map((paragraph) => paragraph.inner).filter(Boolean).join('<br>')));
+  const plainGrid = flattenedRows.map((cells) => ({
+    cells: cells.map((cell) => new DOMParser().parseFromString(cell, 'text/html').body.textContent ?? ''),
+  }));
+  const violation = docsTableGridViolation(plainGrid, warnings.preservedTables, warnings.tableTextChars);
+  const unsupported = tableHasUnsupportedWordStructure(table, rows, parsedRows) || Boolean(violation);
+  if (unsupported || warnings.preservedTables >= DOCS_TABLE_LIMITS.maxTables) {
+    warnings.flattenedTables += 1;
+    return flattenedRows.map((cells) => `<p>${cells.map((cell) => cell || '').join(' | ') || '<br>'}</p>`).join('');
+  }
+
+  const totalTextChars = plainGrid.reduce((total, row) => total + row.cells.reduce((sum, cell) => sum + cell.length, 0), 0);
+  warnings.preservedTables += 1;
+  warnings.tableTextChars += totalTextChars;
+  const isHeader = wordBoolean(wordChild(wordChild(rows[0]!, 'trPr'), 'tblHeader'));
+  const htmlRows = rows.map((_row, rowIndex) => {
+    const tag = isHeader && rowIndex === 0 ? 'th' : 'td';
+    const cells = parsedRows[rowIndex]!.map((paragraphs) => {
+      const content = paragraphs.map((paragraph) => `<p>${paragraph.inner || '<br>'}</p>`).join('') || '<p><br></p>';
+      return `<${tag}>${content}</${tag}>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+  return `<table><tbody>${htmlRows}</tbody></table>`;
 }
 
 function parseDocumentParts(parts: ArchiveXmls): { richText: string; warnings: string[] } {
@@ -377,7 +440,7 @@ function parseDocumentParts(parts: ArchiveXmls): { richText: string; warnings: s
   if (!body) fail('The DOCX main document has no body.');
   const styles = headingStyleMap(parts.styles);
   const numbering = parseNumbering(parts.numbering);
-  const warnings: ImportWarnings = { paragraphs: 0, tables: 0, images: 0, unsupportedLists: 0, unsupportedBlocks: 0 };
+  const warnings: ImportWarnings = { paragraphs: 0, tables: 0, preservedTables: 0, flattenedTables: 0, tableTextChars: 0, images: 0, unsupportedLists: 0, unsupportedBlocks: 0 };
   const textCounter = { count: 0 };
   const blocks: string[] = [];
   let activeList: { kind: ListKind; numId: string; level: number; items: string[] } | null = null;
@@ -405,8 +468,7 @@ function parseDocumentParts(parts: ArchiveXmls): { richText: string; warnings: s
       }
     } else if (isWordElement(child, 'tbl')) {
       flushList();
-      const tableBlocks = tableToHtml(child, styles, numbering, warnings, textCounter);
-      blocks.push(...tableBlocks);
+      blocks.push(tableToHtml(child, styles, numbering, warnings, textCounter));
     } else if (isWordElement(child, 'sectPr') || isWordElement(child, 'bookmarkStart') || isWordElement(child, 'bookmarkEnd')) {
       // Page layout and bookmarks are deliberately not imported.
     } else if (isWordElement(child)) {
@@ -421,12 +483,15 @@ function parseDocumentParts(parts: ArchiveXmls): { richText: string; warnings: s
     }
   }
   flushList();
-  const richText = sanitizeRichTextHtml(blocks.join(''));
+  const sanitized = sanitizeRichTextHtmlWithWarnings(blocks.join(''));
+  const richText = sanitized.html;
   if (richText.length > MAX_DOCX_TEXT_CHARS * 5) fail('The formatted DOCX content exceeds the local storage safety limit.');
   const outputWarnings = [
-    'Import is limited to text, headings 1–3, common emphasis, and simple lists. Page layout, links, comments, tracked changes, and advanced Word features are not preserved.',
+    'Import is limited to text, headings 1–3, common emphasis, simple lists, and bounded rectangular tables. Page layout, links, comments, tracked changes, and advanced Word features are not preserved.',
   ];
-  if (warnings.tables) outputWarnings.push(`${warnings.tables} table(s) were flattened into text paragraphs.`);
+  if (warnings.preservedTables) outputWarnings.push(`${warnings.preservedTables} simple table(s) were preserved; widths, borders, shading, and advanced table styling are simplified.`);
+  if (warnings.flattenedTables) outputWarnings.push(`${warnings.flattenedTables} unsupported or over-limit table(s) were flattened to readable text; no cell text was silently discarded.`);
+  outputWarnings.push(...sanitized.warnings);
   if (warnings.images) outputWarnings.push(`${warnings.images} image or embedded object(s) were omitted.`);
   if (warnings.unsupportedLists) outputWarnings.push('Some custom or nested list formatting was simplified to paragraphs.');
   if (warnings.unsupportedBlocks) outputWarnings.push('Some unsupported document structures were omitted.');
@@ -504,6 +569,10 @@ export function safeDocxFilename(title: string): string {
 }
 
 export async function createDocxBlob(input: DocxExportInput): Promise<Blob> {
+  const sanitizedInput = typeof input.richText === 'string' ? sanitizeRichTextHtmlWithWarnings(input.richText) : { html: '', warnings: [] };
+  if (sanitizedInput.warnings.length) {
+    fail('DOCX export refused an unsupported or over-limit table. No file was generated; simplify the table and try again.');
+  }
   const safeHtml = initialDocumentHtml(input.content, input.richText);
   if (safeHtml.length > MAX_DOCX_XML_BYTES || new TextEncoder().encode(safeHtml).byteLength > MAX_DOCX_XML_BYTES) {
     fail('DOCX export is limited to 2 MB of formatted markup on this device.');
@@ -515,7 +584,7 @@ export async function createDocxBlob(input: DocxExportInput): Promise<Blob> {
     fail('DOCX export is limited to 10,000 paragraphs on this device.');
   }
   const docx = await import('docx');
-  const children: InstanceType<typeof docx.Paragraph>[] = [];
+  const children: Array<InstanceType<typeof docx.Paragraph> | InstanceType<typeof docx.Table>> = [];
   let listInstance = 0;
 
   const makeParagraph = (node: Node, properties: Record<string, unknown> = {}) => {
@@ -538,6 +607,24 @@ export async function createDocxBlob(input: DocxExportInput): Promise<Blob> {
     }
   };
 
+  const makeTable = (table: Element) => {
+    const rows = Array.from((table as HTMLTableElement).rows).map((row) => {
+      const cells = Array.from(row.cells);
+      const header = cells.length > 0 && cells.every((cell) => cell.tagName.toUpperCase() === 'TH');
+      const cellChildren = cells.map((cell) => {
+        const paragraphs = Array.from(cell.children).filter((child) => child.tagName.toUpperCase() === 'P');
+        const content = paragraphs.length ? paragraphs : [cell];
+        const wordParagraphs = content.map((paragraph) => {
+          const runs = inlineRuns(paragraph, docx, { bold: header, italic: false, underline: false, strike: false });
+          return new docx.Paragraph({ children: runs.length ? runs : [new docx.TextRun('')] });
+        });
+        return new docx.TableCell({ children: wordParagraphs });
+      });
+      return new docx.TableRow({ children: cellChildren, ...(header ? { tableHeader: true } : {}) });
+    });
+    return new docx.Table({ rows });
+  };
+
   for (const node of Array.from(parsed.body.childNodes)) {
     if (node.nodeType === Node.TEXT_NODE) {
       if ((node.nodeValue ?? '').trim()) makeParagraph(node);
@@ -546,6 +633,7 @@ export async function createDocxBlob(input: DocxExportInput): Promise<Blob> {
     if (node.nodeType !== Node.ELEMENT_NODE) continue;
     const element = node as Element;
     const tag = element.tagName.toUpperCase();
+    if (tag === 'TABLE') { children.push(makeTable(element)); continue; }
     if (tag === 'UL' || tag === 'OL') { addList(element); continue; }
     if (tag === 'LI') { makeParagraph(element); continue; }
     if (tag === 'H1' || tag === 'H2' || tag === 'H3') {

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { escapeMarkdownText, initialDocumentHtml, plainTextToRichHtml, richTextToMarkdown, richTextToPlainText, sanitizeRichTextHtml } from './documentEditor';
+import { escapeMarkdownText, initialDocumentHtml, plainTextToRichHtml, richTextToMarkdown, richTextToPlainText, sanitizeRichTextHtml, sanitizeRichTextHtmlWithWarnings } from './documentEditor';
+import { DOCS_TABLE_LIMITS } from './docsTableLimits';
 
 describe('local Docs content conversion and safety', () => {
   it('keeps empty drafts empty for the writing placeholder', () => {
@@ -56,5 +57,50 @@ describe('local Docs content conversion and safety', () => {
     expect(richTextToMarkdown('<ol><li><p>Parent</p><ul><li><p>Child</p></li></ul></li></ol>')).toBe('1. Parent\n   - Child');
     expect(richTextToMarkdown('<ul><li><p>First</p><p>Second</p></li></ul>')).toBe('- First\n\n  Second');
     expect(richTextToMarkdown('<ul><li>First <strong>bold</strong></li></ul>')).toBe('- First **bold**');
+  });
+
+  it('preserves simple bounded tables, strips attributes and active markup, and exports readable text/Markdown', () => {
+    const result = sanitizeRichTextHtmlWithWarnings('<table onclick="bad()"><tbody><tr><th colspan="1"><p>Name</p></th><th><p>Amount</p></th></tr><tr><td><p>A<script>alert(1)</script><img src="javascript:bad()" onerror="bad()"></p></td><td><p>2</p></td></tr></tbody></table>');
+    expect(result.warnings).toEqual([]);
+    expect(result.html).toBe('<table><tbody><tr><th><p>Name</p></th><th><p>Amount</p></th></tr><tr><td><p>A</p></td><td><p>2</p></td></tr></tbody></table>');
+    expect(result.html).not.toMatch(/onclick|onerror|javascript:|<script|<img/i);
+    expect(richTextToPlainText(result.html)).toBe('Name\tAmount\nA\t2');
+    expect(richTextToMarkdown(result.html)).toBe('| Name | Amount |\n| --- | --- |\n| A | 2 |');
+  });
+
+  it('flattens merged, nested, uneven, mixed-header and complex-cell tables with an explicit warning', () => {
+    const unsupported = [
+      '<table><tr><td rowspan="2"><p>A</p></td><td><p>B</p></td></tr><tr><td><p>C</p></td></tr></table>',
+      '<table><tr><td><p>Outer</p><table><tr><td><p>Inner</p></td></tr></table></td></tr></table>',
+      '<table><tr><th><p>Header</p></th><td><p>Mixed</p></td></tr></table>',
+      '<table><tr><td><ul><li><p>List</p></li></ul></td></tr></table>',
+    ];
+    for (const html of unsupported) {
+      const result = sanitizeRichTextHtmlWithWarnings(html);
+      expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.html).not.toContain('<table');
+      expect(result.html).toMatch(/<p>/);
+      expect(result.html).not.toMatch(/<script|onerror|javascript:/i);
+    }
+  });
+
+  it('flattens tables that exceed row, column, per-cell, total-text, and table-count limits', () => {
+    const makeTable = (rows: string[][]) => `<table><tbody>${rows.map((cells) => `<tr>${cells.map((cell) => `<td><p>${cell}</p></td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const cases = [
+      makeTable(Array.from({ length: DOCS_TABLE_LIMITS.maxRows + 1 }, () => ['x'])),
+      makeTable([Array.from({ length: DOCS_TABLE_LIMITS.maxColumns + 1 }, () => 'x')]),
+      makeTable([[`x`.repeat(DOCS_TABLE_LIMITS.maxCellTextChars + 1)]]),
+      makeTable(Array.from({ length: 2 }, () => Array.from({ length: DOCS_TABLE_LIMITS.maxColumns }, () => 'x'.repeat(1_100)))),
+    ];
+    for (const html of cases) {
+      const result = sanitizeRichTextHtmlWithWarnings(html);
+      expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.html).not.toContain('<table');
+    }
+
+    const tooManyTables = makeTable([['x']]).repeat(DOCS_TABLE_LIMITS.maxTables + 1);
+    const result = sanitizeRichTextHtmlWithWarnings(tooManyTables);
+    expect((result.html.match(/<table>/g) ?? []).length).toBe(DOCS_TABLE_LIMITS.maxTables);
+    expect(result.warnings.length).toBeGreaterThan(0);
   });
 });
