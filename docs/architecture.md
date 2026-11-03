@@ -70,3 +70,11 @@ The public GenOffice repository uses React/TypeScript but its apps are principal
 4. Use separate, audited services/workers for document conversion and native engine tasks. Browser-facing editors must be tested for format round-trips rather than claiming full DOCX/XLSX/PPTX fidelity based on the desktop app.
 5. The bounded AI route in `api/office-ai.js` verifies existing-account Auth, accepts only an explicit selection or prompt-only draft, applies request/output limits and a per-user cap, and uses a server-side OpenRouter key with one fixed `:free` model and provider fallback disabled. It rejects mismatched/positively priced responses and reports temporary free-model outages instead of selecting a paid model; provider-specific data retention is disclosed in [Docs AI behavior](office-ai.md). It does not provide background workflows, workspace-based AI policy, persistent execution logs, or a general provider abstraction; those would require separate design and review.
 6. Treat localization, collaboration, notifications, Vault protection, and release qualification as first-class workstreams—not UI badges.
+
+
+## Docs table cell-range selection
+
+The Docs table toolbar creates ProseMirror `CellSelection` ranges for the active row, column, or entire simple table using cell-node positions. The existing inline mark commands (bold, italic, underline, and strikethrough) apply through ordinary editor transactions; the resulting rich-text edit uses the same local autosave, undo/redo, and tab-recovery path. Selection is ephemeral and adds no persisted cell attributes. Review-comment data remains in its separate local sidecar and is neither rewritten nor exported by these actions. The bounded rectangular DOCX subset is unchanged and preserves supported inline marks; cell shading, alignment, custom widths, merging, and full Word fidelity remain unsupported.
+
+
+Cell-range selections are excluded from excerpt-AI capture and local review-comment creation. Prompt-only drafts continue to send only the typed brief. Full-document summaries can still include table text only through their existing separate affirmative confirmation; an AI preview cannot be inserted while a table-cell range is active.

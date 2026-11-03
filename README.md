@@ -50,3 +50,7 @@ The Office Team collaboration slice is released through the existing `cocce-offi
 
 
 The verified [Office capability matrix and roadmap](docs/office-capability-roadmap.md) distinguishes current local-first features from missing Microsoft Office/GenOffice compatibility and future AI work.
+
+
+**Docs table range authoring:** In a simple table, select the current row, current column, or all cells, then use the existing bold, italic, underline, or strikethrough controls across that selection. These are ordinary local editor edits covered by undo/redo and save/recovery; selection itself is transient. The bounded DOCX table subset is unchanged. Cell shading, alignment, custom widths, merging, and full Word compatibility are not included.
+Cell-range selection is for formatting only; it does not count as selected text for AI excerpt actions or local review comments. Table text is sent to AI only through the separate full-document summary confirmation, and a preview cannot be applied while a cell range remains active.

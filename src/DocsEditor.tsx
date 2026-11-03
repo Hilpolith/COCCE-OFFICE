@@ -9,6 +9,8 @@ import Underline from '@tiptap/extension-underline';
 import { DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import type { Selection } from '@tiptap/pm/state';
+import { CellSelection } from '@tiptap/pm/tables';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { OfficeDocument } from './lib/localStore';
 import { activeDocsTable, DOCS_TABLE_LIMITS, DOCS_TABLE_LIMITS_COPY, docsTableDocumentViolation, docsTableGridViolation, inspectDocsTableUsage } from './lib/docsTableLimits';
@@ -23,7 +25,7 @@ import type { DocsReviewComment } from './lib/docsReviewComments';
 import OfficeAiWriter from './OfficeAiWriter';
 import './docs.css';
 import {
-  ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft,
+  ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
   FileText, Heading1, Heading2, Heading3, Italic, List, ListOrdered, LockKeyhole, MessageSquarePlus,
   Pilcrow, Quote, Redo2, Rows3, Strikethrough, Table2, Trash2, RotateCcw,
   Underline as UnderlineIcon, Undo2, X,
@@ -172,6 +174,42 @@ function TableActionButton({ label, icon, disabled, onClick }: {
     onMouseDown={(event) => event.preventDefault()} onClick={onClick}>{icon}<span>{label}</span></button>;
 }
 
+type DocsTableSelectionKind = 'row' | 'column' | 'table';
+
+function docsTableCellSelectionRange(selection: Selection, kind: DocsTableSelectionKind) {
+  const activeCellPosition = selection instanceof CellSelection ? selection.$anchorCell : selection.$from;
+  let tableDepth = -1;
+  for (let depth = activeCellPosition.depth; depth > 0; depth -= 1) {
+    if (activeCellPosition.node(depth).type.name === 'table') { tableDepth = depth; break; }
+  }
+  if (tableDepth < 0) return null;
+
+  const tablePosition = activeCellPosition.before(tableDepth);
+  const table = activeCellPosition.node(tableDepth);
+  const rowIndex = activeCellPosition.index(tableDepth);
+  const columnIndex = activeCellPosition.index(tableDepth + 1);
+  const cellPositions: number[][] = [];
+  table.forEach((row, rowOffset) => {
+    const rowPositions: number[] = [];
+    row.forEach((cell, cellOffset) => {
+      if (cell.type.name !== 'tableCell' && cell.type.name !== 'tableHeader') return;
+      rowPositions.push(tablePosition + 1 + rowOffset + 1 + cellOffset);
+    });
+    cellPositions.push(rowPositions);
+  });
+
+  if (cellPositions.length === 0 || cellPositions.some((row) => row.length !== cellPositions[0]?.length)) return null;
+  const currentRow = cellPositions[rowIndex];
+  if (!currentRow || !currentRow[columnIndex]) return null;
+  if (kind === 'row') return { anchorCell: currentRow[0]!, headCell: currentRow[currentRow.length - 1]! };
+  if (kind === 'column') {
+    const columnCells = cellPositions.map((row) => row[columnIndex]);
+    if (columnCells.some((position) => position === undefined)) return null;
+    return { anchorCell: columnCells[0]!, headCell: columnCells[columnCells.length - 1]! };
+  }
+  return { anchorCell: cellPositions[0]![0]!, headCell: cellPositions[cellPositions.length - 1]![cellPositions[0]!.length - 1]! };
+}
+
 export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBack, onExport, onExportDocx, onDelete, onGoToTeam }: {
   document: OfficeDocument;
   hasUnsavedChanges: boolean;
@@ -305,11 +343,13 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         bold: false, italic: false, underline: false, heading1: false, heading2: false, heading3: false,
         strike: false, paragraph: false, bulletList: false, orderedList: false, blockquote: false,
         canUndo: false, canRedo: false, empty: true, tableActive: false, tableRows: 0, tableColumns: 0,
-        tableCount: 0, tableTextChars: 0, hasTextSelection: false,
+        tableCount: 0, tableTextChars: 0, hasTextSelection: false, selectedCells: 0,
       };
       const activeTable = activeDocsTable(activeEditor.state.selection);
       const usage = inspectDocsTableUsage(activeEditor.state.doc);
       const selection = activeEditor.state.selection;
+      let selectedCells = 0;
+      if (selection instanceof CellSelection) selection.forEachCell(() => { selectedCells += 1; });
       return {
         bold: activeEditor.isActive('bold'),
         italic: activeEditor.isActive('italic'),
@@ -330,7 +370,9 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         tableColumns: activeTable?.columns ?? 0,
         tableCount: usage.count,
         tableTextChars: usage.textChars,
-        hasTextSelection: !selection.empty && activeEditor.state.doc.textBetween(selection.from, selection.to, '\n').trim().length > 0,
+        hasTextSelection: !(selection instanceof CellSelection) && !selection.empty
+          && activeEditor.state.doc.textBetween(selection.from, selection.to, '\n').trim().length > 0,
+        selectedCells,
       };
     },
   });
@@ -354,6 +396,17 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     editor.chain().focus().insertTable({ rows, cols: columns, withHeaderRow: true }).run();
   };
 
+  const selectTableCells = (kind: DocsTableSelectionKind) => {
+    if (!editor) return;
+    const range = docsTableCellSelectionRange(editor.state.selection, kind);
+    if (!range) {
+      setTableNotice('Select a cell in a simple table before choosing a row, column, or table.');
+      return;
+    }
+    setTableNotice('');
+    editor.chain().focus().setCellSelection(range).run();
+  };
+
   const showReviewCommentNotice = (message: string, isError = false) => {
     setReviewCommentNotice(message);
     setReviewCommentError(isError);
@@ -362,7 +415,9 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const beginReviewComment = () => {
     if (!editor) return;
     const selection = editor.state.selection;
-    const quote = selection.empty ? '' : editor.state.doc.textBetween(selection.from, selection.to, '\n');
+    const quote = selection.empty || selection instanceof CellSelection
+      ? ''
+      : editor.state.doc.textBetween(selection.from, selection.to, '\n');
     if (!quote.trim()) {
       showReviewCommentNotice('Select text in the document before adding a review comment.', true);
       return;
@@ -498,6 +553,13 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </div>
       {editorState.tableActive ? <>
         <span className="docs-table-dimensions" aria-live="polite">{editorState.tableRows} × {editorState.tableColumns} table</span>
+        <span className="docs-table-divider" aria-hidden="true" />
+        <TableActionButton label="Select current row" icon={<Rows3 size={15} />} onClick={() => selectTableCells('row')} />
+        <TableActionButton label="Select current column" icon={<Columns3 size={15} />} onClick={() => selectTableCells('column')} />
+        <TableActionButton label="Select entire table" icon={<Table2 size={15} />} onClick={() => selectTableCells('table')} />
+        {editorState.selectedCells > 0 && <span className="docs-table-selection-status" role="status">
+          {editorState.selectedCells} {editorState.selectedCells === 1 ? 'cell' : 'cells'} selected · apply text formatting above
+        </span>}
         <span className="docs-table-divider" aria-hidden="true" />
         <TableActionButton label="Add row below" icon={<Rows3 size={15} />} disabled={editorState.tableRows >= DOCS_TABLE_LIMITS.maxRows} onClick={() => editor?.chain().focus().addRowAfter().run()} />
         <TableActionButton label="Add column right" icon={<ArrowRightToLine size={15} />} disabled={editorState.tableColumns >= DOCS_TABLE_LIMITS.maxColumns} onClick={() => editor?.chain().focus().addColumnAfter().run()} />

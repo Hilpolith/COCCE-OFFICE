@@ -110,6 +110,67 @@ describe('Docs local table authoring', () => {
     expect((screen.getByRole('button', { name: 'Delete table' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('selects rows, columns and the whole table for inline formatting, undo/redo and keeps local comments unchanged', async () => {
+    const tableDocument: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'Before table\nHeader A\tHeader B\nCell A\tCell B',
+      richText: '<p>Before table</p><table><tbody><tr><th><p>Header A</p></th><th><p>Header B</p></th></tr><tr><td><p>Cell A</p></td><td><p>Cell B</p></td></tr></tbody></table>',
+    };
+    const { onPatch, onExportDocx } = renderEditor(tableDocument);
+    const content = await screen.findByRole('textbox', { name: 'Document content' });
+    await createLocalReviewComment('Keep this note device-local.');
+    const savedComments = window.localStorage.getItem(DOCS_REVIEW_COMMENTS_STORAGE_KEY);
+    selectEditorText(content, 'Cell A');
+    await screen.findByRole('button', { name: 'Select current row' });
+
+    const clickToolbarButton = (name: string) => {
+      const button = screen.getByRole('button', { name });
+      fireEvent.mouseDown(button);
+      fireEvent.click(button);
+    };
+
+    clickToolbarButton('Select current row');
+    await waitFor(() => expect(content.querySelectorAll('.selectedCell')).toHaveLength(2));
+    expect(screen.getByText('2 cells selected · apply text formatting above')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Add comment to selected text' }) as HTMLButtonElement).disabled).toBe(true);
+    clickToolbarButton('Bold');
+    await waitFor(() => expect(content.querySelectorAll('strong')).toHaveLength(2));
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('<strong>Cell A</strong>') }));
+    expect(window.localStorage.getItem(DOCS_REVIEW_COMMENTS_STORAGE_KEY)).toBe(savedComments);
+
+    clickToolbarButton('Undo');
+    await waitFor(() => expect(content.querySelectorAll('strong')).toHaveLength(0));
+    clickToolbarButton('Redo');
+    await waitFor(() => expect(content.querySelectorAll('strong')).toHaveLength(2));
+
+    clickToolbarButton('Select current column');
+    await waitFor(() => expect(content.querySelectorAll('.selectedCell')).toHaveLength(2));
+    const selectedColumnText = Array.from(content.querySelectorAll('.selectedCell'), (cell) => cell.textContent);
+    expect(selectedColumnText).toContain('Header A');
+    expect(selectedColumnText).toContain('Cell A');
+    clickToolbarButton('Italic');
+    await waitFor(() => expect(content.querySelectorAll('em')).toHaveLength(2));
+
+    clickToolbarButton('Select entire table');
+    await waitFor(() => expect(content.querySelectorAll('.selectedCell')).toHaveLength(4));
+    expect(screen.getByText('4 cells selected · apply text formatting above')).toBeTruthy();
+    clickToolbarButton('Underline');
+    await waitFor(() => expect(content.querySelectorAll('u')).toHaveLength(4));
+    clickToolbarButton('Strikethrough');
+    await waitFor(() => expect(content.querySelectorAll('s, del')).toHaveLength(4));
+    expect(onPatch).toHaveBeenCalled();
+    expect(window.localStorage.getItem(DOCS_REVIEW_COMMENTS_STORAGE_KEY)).toBe(savedComments);
+
+    clickToolbarButton('Export .docx');
+    const exportedHtml = onExportDocx.mock.calls.at(-1)?.[0] ?? '';
+    const exportedMarkup = new DOMParser().parseFromString(exportedHtml, 'text/html');
+    expect(exportedMarkup.querySelector('td strong')?.textContent).toBe('Cell A');
+    expect(exportedMarkup.querySelector('th em')?.textContent).toBe('Header A');
+    expect(exportedMarkup.querySelectorAll('u')).toHaveLength(4);
+    expect(exportedMarkup.querySelectorAll('s, del')).toHaveLength(4);
+    expect(exportedHtml).not.toContain('Keep this note device-local.');
+  });
+
   it('rejects over-limit table dimensions and cell text before a change is saved', async () => {
     const { onPatch } = renderEditor();
     const content = screen.getByRole('textbox', { name: 'Document content' });

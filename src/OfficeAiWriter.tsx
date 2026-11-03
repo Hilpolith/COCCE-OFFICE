@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { CellSelection } from '@tiptap/pm/tables';
 import { AlertCircle, Check, ChevronDown, ChevronRight, LoaderCircle, Plus, Save, ShieldCheck, Sparkles, WandSparkles, X } from 'lucide-react';
 import {
   buildOfficeAiRequest,
@@ -24,7 +25,7 @@ import type { OfficeAiAction, OfficeAiDocumentSummaryRequest, OfficeAiWorkflow }
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 
-type Selection = { from: number; to: number; text: string };
+type Selection = { from: number; to: number; text: string; isCellSelection: boolean };
 type Availability = 'unknown' | 'checking' | 'available' | 'not-configured' | 'unavailable';
 type AuthStatus = 'loading' | 'signed-in' | 'signed-out' | 'misconfigured';
 type PreviewTarget = { kind: 'selection' | 'draft' | 'document-summary'; from: number; to: number; selectedText: string; doc: ProseMirrorNode; sourceChars?: number };
@@ -39,8 +40,15 @@ function readLocalWorkflows(): OfficeAiWorkflow[] {
 }
 
 function currentSelection(editor: Editor): Selection {
-  const { from, to } = editor.state.selection;
-  return { from, to, text: from === to ? '' : extractOfficeAiSelection(editor.state.doc, from, to) };
+  const activeSelection = editor.state.selection;
+  const { from, to } = activeSelection;
+  const isCellSelection = activeSelection instanceof CellSelection;
+  return {
+    from,
+    to,
+    text: isCellSelection || from === to ? '' : extractOfficeAiSelection(editor.state.doc, from, to),
+    isCellSelection,
+  };
 }
 
 function readableError(error: unknown): string {
@@ -58,7 +66,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
   const [expanded, setExpanded] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus>(() => client ? 'loading' : 'misconfigured');
   const [availability, setAvailability] = useState<Availability>('unknown');
-  const [selection, setSelection] = useState<Selection>({ from: 0, to: 0, text: '' });
+  const [selection, setSelection] = useState<Selection>({ from: 0, to: 0, text: '', isCellSelection: false });
   const [customInstruction, setCustomInstruction] = useState('');
   const [draftPrompt, setDraftPrompt] = useState('');
   const [draftTemplate, setDraftTemplate] = useState('');
@@ -153,6 +161,10 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     const current = currentSelection(editor);
     const sourceDoc = editor.state.doc;
     const isDraft = action === 'draft';
+    if (!isDraft && current.isCellSelection) {
+      setError('Table cell ranges are for formatting only. Select ordinary text for an excerpt AI action; no cell text was sent.');
+      return;
+    }
     const prompt = action === 'draft' ? draftPrompt : instruction || customInstruction;
     let payload;
     try {
@@ -345,6 +357,11 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       setError('The document changed while the preview was open. Run the action again on the current text before inserting it.');
       return;
     }
+    const activeSelection = editor.state.selection;
+    if (activeSelection instanceof CellSelection) {
+      setError('A table cell range is active for formatting. Click a text cursor before applying this AI preview; no table cells were changed.');
+      return;
+    }
     if (previewTarget.kind === 'selection') {
       const currentText = extractOfficeAiSelection(editor.state.doc, previewTarget.from, previewTarget.to);
       if (currentText !== previewTarget.selectedText) {
@@ -353,8 +370,11 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       }
     }
     try {
+      const insertionRange = previewTarget.kind === 'selection'
+        ? { from: previewTarget.from, to: previewTarget.to }
+        : { from: activeSelection.to, to: activeSelection.to };
       const inserted = editor.chain().focus().insertContentAt(
-        { from: previewTarget.from, to: previewTarget.to },
+        insertionRange,
         { type: 'text', text: result },
       ).run();
       if (!inserted) {
@@ -381,7 +401,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     : availability === 'available' ? 'Cloud AI configured'
       : availability === 'not-configured' ? 'AI not configured'
         : availability === 'checking' ? 'Checking service' : availability === 'unavailable' ? 'AI temporarily unavailable' : 'Service status unknown';
-  const selectionAvailable = selection.text.trim().length > 0;
+  const selectionAvailable = !selection.isCellSelection && selection.text.trim().length > 0;
   const canRunAiActions = authStatus === 'signed-in' && (availability === 'available' || availability === 'unavailable');
 
   return <section className="office-ai-panel" aria-label="AI writing studio">
@@ -393,6 +413,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     {expanded && <div className="office-ai-body">
       <p className="office-ai-privacy"><ShieldCheck size={16} /><span>Nothing is uploaded automatically. Selection edits send only the text you select (up to {OFFICE_AI_MAX_SELECTION_CHARS.toLocaleString()} characters), and new drafts send only your typed prompt. A full-document summary sends the document's plain text only after the separate confirmation below. No file, title, or document metadata is sent.</span></p>
       <p className="office-ai-help">User-triggered text is sent through OpenRouter to its fixed free Google AI Studio model. The current provider policy lists 55-day prompt retention and no training. No paid model or alternate provider fallback is used; send only text you are permitted to share.</p>
+      {selection.isCellSelection && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Table cell ranges are for local formatting, not excerpt selection. Select ordinary text for excerpt AI actions; prompt-only drafts remain separate, and full-document summaries still require their separate confirmation.</span></div>}
 
       {authStatus === 'misconfigured' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Cloud AI uses the existing COCCE Auth connection. This deployment is not configured for that connection.</span></div>}
       {authStatus === 'signed-out' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Sign in with an existing COCCE account to use cloud AI. Office does not create separate accounts.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Open Team sign-in</button></div>}

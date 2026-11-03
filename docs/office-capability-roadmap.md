@@ -33,3 +33,11 @@ The Docs review-comments tranche adds a versioned localStorage sidecar scoped by
 - [Adobe Acrobat PDF editing overview](https://www.adobe.com/acrobat/features/modify-pdfs.html) is a practical benchmark for PDF content editing, OCR, annotations and page operations.
 
 This matrix describes verified capability boundaries, not a claim of feature parity. New controls should appear only when the underlying behavior, tests and data boundary are ready.
+
+
+## Docs table range selection update
+
+The table-selection portion of roadmap item 2 is now implemented: users can select the active row, active column, or whole simple table and apply the existing bold, italic, underline, or strikethrough tools across its cells. The selection count is announced in the toolbar; the selection itself is temporary. Formatting stays within the current sanitized table markup, uses the ordinary local undo/save path, leaves review-comment sidecars unchanged, and does not widen the DOCX table schema. Component tests cover all three selection scopes, multi-cell marks, undo/redo, local patching, comment-sidecar stability, and export markup; DOCX fixtures cover supported inline-mark round trips. The next Docs table work should address only one additional format at a time—such as alignment or column sizing—after defining safe sanitizer and DOCX round-trip behavior. Cell shading, merged/nested cells, full Word fidelity, and cloud collaboration remain out of scope.
+
+
+Cell-range selection is formatting-only: it does not authorize an excerpt AI request or a selected-text review comment. Prompt-only drafts remain prompt-only, and table text is included in AI only by the separately confirmed full-document summary action. Preview insertion is blocked while a cell range is still selected.

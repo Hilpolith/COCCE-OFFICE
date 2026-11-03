@@ -4,11 +4,13 @@
 
 The Docs writing studio provides user-triggered selection tools for summaries, proofreading, quality checks, clarity and concision edits, expansion, key points, action items, outlines, email rewrites, custom instructions, and new drafts. Draft starters cover email, meeting notes, project briefs, proposals, and report outlines. Users can save up to 12 reusable instruction recipes in this browser and run them on a selected excerpt. A separate full-document summary is available only after a one-time, explicit confirmation for the active document.
 
-Every response is shown as a preview. Selection actions can replace only the selected range; prompt drafts and full-document summaries can be inserted at the captured cursor position. Nothing is inserted automatically. The editor verifies that the document has not changed while the preview is open, then uses the normal Tiptap history and local autosave so Undo can reverse an applied change.
+Every response is shown as a preview. Selection actions can replace only the ordinary text range explicitly selected for that request. Prompt drafts and full-document summaries are inserted at the active ordinary text selection's end only after the user chooses to apply them. An active table-cell range is never treated as an insertion target. Nothing is inserted automatically. The editor verifies that the document has not changed while the preview is open, then uses the normal Tiptap history and local autosave so Undo can reverse an applied change.
 
 ## What leaves the browser
 
 No document is uploaded, indexed, or scanned automatically. Selection editing/review sends only the selected plain-text excerpt, capped at 8,000 characters. A prompt draft sends only the prompt typed into its form and never includes the current editor selection. Custom and saved workflows send the instruction plus the selected excerpt.
+
+Table-cell ranges selected for formatting are not treated as excerpt selections or local review-comment selections. They are included in AI only when the user explicitly confirms a full-document summary.
 
 Full-document summarization is a separate action. The UI first displays an accessible confirmation naming the active document and stating that its complete plain-text content will be sent through OpenRouter to the fixed free Google AI Studio endpoint. It also states the provider's 55-day prompt-retention/no-training policy, the absence of paid-model or alternate-provider fallback, and that the title, ID, file, and other document metadata are not sent. The user must affirmatively click **Confirm and send full text** before the request begins; **Cancel** sends nothing. The exact text snapshot and active title are checked again before sending, so a changed document invalidates the confirmation. Only `{ action, documentText }` is sent from the browser to the Office route; no file or document metadata is included.
 

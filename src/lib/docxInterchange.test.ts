@@ -103,7 +103,7 @@ describe('bounded local DOCX interchange', () => {
   it('round-trips a simple bounded table with its grid and first-row header', async () => {
     const blob = await createDocxBlob({
       title: 'Synthetic table', content: '',
-      richText: '<table><tbody><tr><th><p><strong>Name</strong></p></th><th><p>Amount</p></th></tr><tr><td><p>A</p></td><td><p>2</p></td></tr></tbody></table>',
+      richText: '<table><tbody><tr><th><p><strong>Name</strong></p></th><th><p><em>Amount</em></p></th></tr><tr><td><p><u>A</u></p></td><td><p><del>2</del></p></td></tr></tbody></table>',
     });
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const generatedXml = strFromU8(unzipSync(bytes)['word/document.xml']!);
@@ -112,7 +112,9 @@ describe('bounded local DOCX interchange', () => {
     const imported = await importDocxFile(fileFromBytes(bytes));
     expect(imported.richText).toContain('<table><tbody>');
     expect(imported.richText).toContain('<th><p><strong>Name</strong></p></th>');
-    expect(imported.richText).toContain('<td><p>A</p></td>');
+    expect(imported.richText).toContain('<th><p><em><strong>Amount</strong></em></p></th>');
+    expect(imported.richText).toContain('<td><p><u>A</u></p></td>');
+    expect(imported.richText).toContain('<td><p><del>2</del></p></td>');
     expect(imported.content).toBe('Name\tAmount\nA\t2');
     expect(imported.warnings.some((warning) => warning.includes('simple table(s) were preserved'))).toBe(true);
     expect(imported.warnings.some((warning) => warning.includes('flattened to readable text'))).toBe(false);

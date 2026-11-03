@@ -1,6 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Editor as TiptapEditor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { TableKit } from '@tiptap/extension-table';
+import { CellSelection } from '@tiptap/pm/tables';
+import { TextSelection } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
 import OfficeAiWriter from './OfficeAiWriter';
 import { OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS } from './lib/officeAi';
@@ -40,6 +45,30 @@ function makeEditor(documentText = 'Synthetic full document content for consent 
     chain: vi.fn(() => chain),
   };
   return { editor: editor as unknown as Editor, doc, chain, setDocumentText: (text: string) => { currentDocumentText = text; } };
+}
+
+function syntheticTableCellPositions(editor: TiptapEditor): number[] {
+  const cellPositions: number[] = [];
+  editor.state.doc.descendants((node, position) => {
+    if (node.type.name === 'tableHeader' || node.type.name === 'tableCell') cellPositions.push(position);
+  });
+  return cellPositions;
+}
+
+function selectSyntheticTableCells(editor: TiptapEditor) {
+  const cellPositions = syntheticTableCellPositions(editor);
+  if (cellPositions.length !== 4) throw new Error('Synthetic table fixture did not create four cells.');
+  editor.view.dispatch(editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cellPositions[0]!, cellPositions[3]!)));
+}
+
+function makeTableCellSelectionEditor() {
+  const editor = new TiptapEditor({
+    element: document.createElement('div'),
+    extensions: [StarterKit.configure({ link: false }), TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } })],
+    content: '<p>Before table</p><table><tbody><tr><th><p>Synthetic private cell alpha</p></th><th><p>Synthetic private cell beta</p></th></tr><tr><td><p>Cell gamma</p></td><td><p>Cell delta</p></td></tr></tbody></table><p>After table</p>',
+  });
+  selectSyntheticTableCells(editor);
+  return editor;
 }
 
 function mockFetch() {
@@ -111,6 +140,97 @@ describe('Docs AI writing studio', () => {
       action: 'draft',
       prompt: 'Draft a memo from only the facts in this brief.',
     });
+  });
+
+  it('keeps table cell ranges out of excerpt AI and insertion while preserving explicit full-document consent', async () => {
+    const fetcher = mockFetch();
+    const editor = makeTableCellSelectionEditor();
+    const originalHtml = editor.getHTML();
+    try {
+      expect(editor.state.selection).toBeInstanceOf(CellSelection);
+      render(<OfficeAiWriter editor={editor as unknown as Editor} documentTitle="Synthetic table report" onGoToTeam={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+      await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+      expect(screen.getByText(/Table cell ranges are for local formatting/)).toBeTruthy();
+      expect((screen.getByLabelText('Selected excerpt') as HTMLTextAreaElement).value).toBe('');
+      const summarizeSelection = screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement;
+      expect(summarizeSelection.disabled).toBe(true);
+      fireEvent.click(summarizeSelection);
+      expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+
+      const prompt = 'Draft a short note from this prompt only.';
+      fireEvent.change(screen.getByPlaceholderText(/Describe what you want drafted/), { target: { value: prompt } });
+      fireEvent.click(screen.getByRole('button', { name: 'Draft preview' }));
+      expect(await screen.findByText('A preview edit.')).toBeTruthy();
+      const draftCall = fetcher.mock.calls.map(([url, init]) => ({ url, init }))
+        .find(({ init }) => init?.method === 'POST');
+      expect(JSON.parse(String(draftCall?.init?.body))).toEqual({ action: 'draft', prompt });
+      expect(String(draftCall?.init?.body)).not.toContain('Synthetic private cell');
+      fireEvent.click(screen.getByRole('button', { name: 'Insert at cursor' }));
+      expect((await screen.findByRole('alert')).textContent).toContain('table cell range is active');
+      expect(editor.getHTML()).toBe(originalHtml);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Discard AI preview' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+      expect(screen.getByRole('alertdialog', { name: 'Confirm full-document summary' })).toBeTruthy();
+      expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
+      expect(await screen.findByText('A preview edit.')).toBeTruthy();
+      const postBodies = fetcher.mock.calls
+        .filter(([, init]) => init?.method === 'POST')
+        .map(([, init]) => JSON.parse(String(init?.body)) as Record<string, unknown>);
+      expect(postBodies).toHaveLength(2);
+      expect(postBodies[1]).toMatchObject({ action: 'document_summary' });
+      expect(String(postBodies[1]?.documentText)).toContain('Synthetic private cell alpha');
+      expect(postBodies[1]).not.toHaveProperty('documentTitle');
+      fireEvent.click(screen.getByRole('button', { name: 'Insert summary at cursor' }));
+      expect((await screen.findByRole('alert')).textContent).toContain('table cell range is active');
+      expect(editor.getHTML()).toBe(originalHtml);
+
+      let afterTablePosition = -1;
+      editor.state.doc.descendants((node, position) => {
+        if (node.type.name === 'paragraph' && node.textContent === 'After table') afterTablePosition = position + node.nodeSize - 1;
+      });
+      if (afterTablePosition < 0) throw new Error('Safe synthetic insertion point was not found.');
+      const originalTableHtml = new DOMParser().parseFromString(originalHtml, 'text/html').querySelector('table')?.outerHTML;
+      editor.commands.setTextSelection(afterTablePosition);
+      fireEvent.click(screen.getByRole('button', { name: 'Insert summary at cursor' }));
+      await waitFor(() => expect(editor.state.doc.textContent).toContain('A preview edit.'));
+      const finalTableHtml = new DOMParser().parseFromString(editor.getHTML(), 'text/html').querySelector('table')?.outerHTML;
+      expect(finalTableHtml).toBe(originalTableHtml);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it('refuses to apply a text preview if a table cell range becomes active before review', async () => {
+    const fetcher = mockFetch();
+    const editor = makeTableCellSelectionEditor();
+    const originalHtml = editor.getHTML();
+    try {
+      const excerpt = 'Synthetic private cell alpha';
+      let excerptPosition = -1;
+      editor.state.doc.descendants((node, position) => {
+        if (node.isText && node.text === excerpt) excerptPosition = position;
+      });
+      if (excerptPosition < 0) throw new Error('Synthetic excerpt was not found in the table fixture.');
+      editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, excerptPosition, excerptPosition + excerpt.length)));
+
+      render(<OfficeAiWriter editor={editor as unknown as Editor} onGoToTeam={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+      await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
+      expect(await screen.findByText('A preview edit.')).toBeTruthy();
+      const request = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
+      expect(JSON.parse(String(request?.init?.body))).toEqual({ action: 'summarize', selectedText: excerpt });
+
+      selectSyntheticTableCells(editor);
+      fireEvent.click(screen.getByRole('button', { name: 'Replace selection' }));
+      expect((await screen.findByRole('alert')).textContent).toContain('table cell range is active');
+      expect(editor.getHTML()).toBe(originalHtml);
+    } finally {
+      editor.destroy();
+    }
   });
 
   it('requires affirmative full-document confirmation, sends only text, and inserts only after preview approval', async () => {
