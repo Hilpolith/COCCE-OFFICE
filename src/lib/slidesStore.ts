@@ -6,7 +6,15 @@ export const SLIDE_LAYOUTS = ['title-content', 'two-column', 'quote', 'section-d
 export type SlideLayout = typeof SLIDE_LAYOUTS[number];
 export const DEFAULT_SLIDE_LAYOUT: SlideLayout = 'title-content';
 export type SlidesTheme = 'violet' | 'ocean' | 'ember';
-export type Slide = { id: string; title: string; body: string; notes: string; layout: SlideLayout };
+export type Slide = {
+  id: string;
+  title: string;
+  body: string;
+  notes: string;
+  layout: SlideLayout;
+  imageAssetId?: string;
+  imageAltText?: string;
+};
 export type PresentationDeck = {
   id: string;
   workspaceId: string | null;
@@ -27,15 +35,25 @@ const isTheme = (value: unknown): value is SlidesTheme => value === 'violet' || 
 const isSlideLayout = (value: unknown): value is SlideLayout => typeof value === 'string' && SLIDE_LAYOUTS.some((layout) => layout === value);
 const textValue = (value: unknown, max = MAX_SLIDE_TEXT_LENGTH) => typeof value === 'string' ? value.slice(0, max) : '';
 
-type SlideInput = Pick<Slide, 'id' | 'title' | 'body' | 'notes'> & { layout?: unknown };
+type SlideInput = Pick<Slide, 'id' | 'title' | 'body' | 'notes'> & {
+  layout?: unknown;
+  imageAssetId?: unknown;
+  imageAltText?: unknown;
+  imageOmitted?: unknown;
+};
 type PresentationDeckInput = Omit<PresentationDeck, 'slides'> & { slides: SlideInput[] };
+
+export type ImportedSlideDeck = { deck: PresentationDeck; omittedImageCount: number };
 
 function validSlide(value: unknown): value is SlideInput {
   if (!isRecord(value)) return false;
   return typeof value.id === 'string' && value.id.length > 0
     && typeof value.title === 'string' && value.title.length <= MAX_SLIDE_TEXT_LENGTH
     && typeof value.body === 'string' && value.body.length <= MAX_SLIDE_TEXT_LENGTH
-    && typeof value.notes === 'string' && value.notes.length <= MAX_SLIDE_TEXT_LENGTH;
+    && typeof value.notes === 'string' && value.notes.length <= MAX_SLIDE_TEXT_LENGTH
+    && (value.imageAssetId === undefined || (typeof value.imageAssetId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.imageAssetId)))
+    && (value.imageAltText === undefined || (typeof value.imageAltText === 'string' && value.imageAltText.length <= 500))
+    && (value.imageOmitted === undefined || typeof value.imageOmitted === 'boolean');
 }
 
 function validDeck(value: unknown): value is PresentationDeckInput {
@@ -56,6 +74,8 @@ function normalizeSlide(slide: SlideInput): Slide {
     body: slide.body,
     notes: slide.notes,
     layout: isSlideLayout(slide.layout) ? slide.layout : DEFAULT_SLIDE_LAYOUT,
+    ...(typeof slide.imageAssetId === 'string' ? { imageAssetId: slide.imageAssetId } : {}),
+    ...(typeof slide.imageAltText === 'string' ? { imageAltText: slide.imageAltText } : {}),
   };
 }
 
@@ -102,7 +122,7 @@ export function updateDeck(state: SlidesState, deckId: string, patch: Partial<Pi
   return { ...state, decks: state.decks.map((deck) => deck.id === deckId ? { ...deck, ...patch, updatedAt: now() } : deck) };
 }
 
-export function updateSlide(state: SlidesState, deckId: string, slideId: string, patch: Partial<Pick<Slide, 'title' | 'body' | 'notes' | 'layout'>>): SlidesState {
+export function updateSlide(state: SlidesState, deckId: string, slideId: string, patch: Partial<Pick<Slide, 'title' | 'body' | 'notes' | 'layout' | 'imageAssetId' | 'imageAltText'>>): SlidesState {
   return { ...state, decks: state.decks.map((deck) => deck.id === deckId
     ? { ...deck, slides: deck.slides.map((slide) => slide.id === slideId ? { ...slide, ...patch } : slide), updatedAt: now() }
     : deck) };
@@ -156,23 +176,36 @@ export function removeDeck(state: SlidesState, deckId: string): SlidesState {
 }
 
 export function serializeDeck(deck: PresentationDeck): string {
-  return JSON.stringify({ format: 'cocce-office-slides', version: 1, title: deck.title, theme: deck.theme, slides: deck.slides }, null, 2);
+  const hasImages = deck.slides.some((slide) => Boolean(slide.imageAssetId));
+  const slides = deck.slides.map(({ imageAssetId, imageAltText, ...slide }) => ({
+    ...slide,
+    ...(imageAltText ? { imageAltText } : {}),
+    ...(imageAssetId ? { imageOmitted: true } : {}),
+  }));
+  return JSON.stringify({ format: 'cocce-office-slides', version: hasImages ? 2 : 1, title: deck.title, theme: deck.theme, slides }, null, 2);
 }
 
-export function importDeck(raw: string, workspaceId: string | null): PresentationDeck {
+export function importDeck(raw: string, workspaceId: string | null): ImportedSlideDeck {
   const parsed: unknown = JSON.parse(raw);
-  if (!isRecord(parsed) || parsed.format !== 'cocce-office-slides' || parsed.version !== 1
+  if (!isRecord(parsed) || parsed.format !== 'cocce-office-slides' || (parsed.version !== 1 && parsed.version !== 2)
     || typeof parsed.title !== 'string' || parsed.title.length > 300 || !isTheme(parsed.theme)
     || !Array.isArray(parsed.slides) || parsed.slides.length === 0 || parsed.slides.length > MAX_SLIDES_PER_DECK
     || !parsed.slides.every(validSlide)) {
     throw new Error(`Choose a COCCE Office Slides JSON file with 1–${MAX_SLIDES_PER_DECK} valid slides.`);
   }
-  return {
+  const slides = parsed.slides as SlideInput[];
+  const deck: PresentationDeck = {
     id: makeId(),
     workspaceId,
     title: textValue(parsed.title, 300) || 'Imported presentation',
     theme: parsed.theme,
-    slides: (parsed.slides as SlideInput[]).map((slide) => ({ ...normalizeSlide(slide), id: makeId() })),
+    slides: slides.map((slide) => {
+      const normalized = normalizeSlide(slide);
+      const transferSafeSlide = { ...normalized };
+      delete transferSafeSlide.imageAssetId;
+      return { ...transferSafeSlide, id: makeId() };
+    }),
     updatedAt: now(),
   };
+  return { deck, omittedImageCount: slides.filter((slide) => slide.imageOmitted === true).length };
 }

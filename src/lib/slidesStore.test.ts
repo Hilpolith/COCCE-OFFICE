@@ -56,7 +56,7 @@ describe('local Slides data model', () => {
     const exported = serializeDeck(source.decks[0]);
     const extended = JSON.parse(exported) as { slides: Array<Record<string, unknown>> };
     extended.slides[0].ignored = { nested: true };
-    const imported = importDeck(JSON.stringify(extended), 'destination');
+    const imported = importDeck(JSON.stringify(extended), 'destination').deck;
     expect(imported.workspaceId).toBe('destination');
     expect(imported.title).toBe(deck.title);
     expect(imported.slides[0].title).toBe('Quarterly update');
@@ -82,9 +82,44 @@ describe('local Slides data model', () => {
 
     const exported = JSON.parse(serializeDeck(deck)) as { slides: Array<Record<string, unknown>> };
     exported.slides[0].layout = 'unknown-template';
-    const imported = importDeck(JSON.stringify(exported), null);
+    const imported = importDeck(JSON.stringify(exported), null).deck;
     expect(imported.slides[0].layout).toBe(DEFAULT_SLIDE_LAYOUT);
     expect(imported.slides[0].body).toBe(deck.slides[0].body);
+  });
+
+  it('persists local image references while keeping image bytes and asset IDs out of JSON transfer', () => {
+    const deck = createDeck({ version: 1, decks: [] }, null).deck;
+    const withImage = updateSlide({ version: 1, decks: [deck] }, deck.id, deck.slides[0].id, {
+      imageAssetId: 'local-asset-123', imageAltText: 'A product roadmap',
+    });
+    writeSlidesState(disk, withImage);
+    expect(readSlidesState(disk).state?.decks[0].slides[0]).toMatchObject({
+      imageAssetId: 'local-asset-123', imageAltText: 'A product roadmap',
+    });
+
+    const exported = serializeDeck(withImage.decks[0]);
+    const transfer = JSON.parse(exported) as { version: number; slides: Array<Record<string, unknown>> };
+    expect(transfer.version).toBe(2);
+    expect(transfer.slides[0]).toMatchObject({ imageOmitted: true, imageAltText: 'A product roadmap' });
+    expect(transfer.slides[0]).not.toHaveProperty('imageAssetId');
+    expect(exported).not.toContain('local-asset-123');
+    expect(exported).not.toContain('data:image');
+
+    const imported = importDeck(exported, 'another-device');
+    expect(imported.omittedImageCount).toBe(1);
+    expect(imported.deck.workspaceId).toBe('another-device');
+    expect(imported.deck.slides[0]).not.toHaveProperty('imageAssetId');
+    expect(imported.deck.slides[0].imageAltText).toBe('A product roadmap');
+  });
+
+  it('never trusts an imported local asset ID and counts only declared omitted media', () => {
+    const deck = createDeck({ version: 1, decks: [] }, null).deck;
+    const exported = JSON.parse(serializeDeck(deck)) as { slides: Array<Record<string, unknown>> };
+    exported.slides[0].imageAssetId = 'attacker-controlled-local-reference';
+    exported.slides[0].imageOmitted = true;
+    const imported = importDeck(JSON.stringify(exported), null);
+    expect(imported.omittedImageCount).toBe(1);
+    expect(imported.deck.slides[0]).not.toHaveProperty('imageAssetId');
   });
 
   it('rejects malformed imports and preserves unsupported saved data instead of overwriting it', () => {

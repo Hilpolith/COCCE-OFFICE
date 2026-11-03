@@ -32,7 +32,8 @@ export function hasSameEditableDeckContent(left: PresentationDeck, right: Presen
   if (left.id !== right.id || left.title !== right.title || left.theme !== right.theme || left.slides.length !== right.slides.length) return false;
   return left.slides.every((slide, index) => {
     const other = right.slides[index];
-    return slide.id === other.id && slide.title === other.title && slide.body === other.body && slide.notes === other.notes && slide.layout === other.layout;
+    return slide.id === other.id && slide.title === other.title && slide.body === other.body && slide.notes === other.notes
+      && slide.layout === other.layout && slide.imageAssetId === other.imageAssetId && slide.imageAltText === other.imageAltText;
   });
 }
 

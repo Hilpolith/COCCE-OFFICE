@@ -38,6 +38,25 @@ describe('bounded local Slides edit history', () => {
     expect(redone.target?.deck.slides[0].layout).toBe('two-column');
   });
 
+  it('undoes and redoes local image insertion, replacement, and removal references', () => {
+    const { deck, slideId } = makeDeck();
+    const firstImage = updateSlide({ version: 1, decks: [deck] }, deck.id, slideId, {
+      imageAssetId: 'asset-one', imageAltText: 'First image',
+    }).decks[0];
+    const afterInsert = recordSlidesHistory(createSlidesHistory(), deck, firstImage, slideId);
+    const secondImage = updateSlide({ version: 1, decks: [firstImage] }, deck.id, slideId, {
+      imageAssetId: 'asset-two', imageAltText: 'Replacement image',
+    }).decks[0];
+    const afterReplace = recordSlidesHistory(afterInsert, firstImage, secondImage, slideId);
+
+    const undoneReplace = undoSlidesHistory(afterReplace, secondImage, slideId);
+    expect(undoneReplace.target?.deck.slides[0]).toMatchObject({ imageAssetId: 'asset-one', imageAltText: 'First image' });
+    const undoneInsert = undoSlidesHistory(undoneReplace.history, undoneReplace.target!.deck, slideId);
+    expect(undoneInsert.target?.deck.slides[0]).not.toHaveProperty('imageAssetId');
+    const redoneInsert = redoSlidesHistory(undoneInsert.history, undoneInsert.target!.deck, slideId);
+    expect(redoneInsert.target?.deck.slides[0].imageAssetId).toBe('asset-one');
+  });
+
   it('does not record no-op content changes or snapshots from another deck', () => {
     const { deck, slideId } = makeDeck();
     const sameContent = updateDeck({ version: 1, decks: [deck] }, deck.id, { title: deck.title }).decks[0];
