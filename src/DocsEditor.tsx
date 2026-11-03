@@ -258,7 +258,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   });
 
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     const nextScope = makeDocsReviewScope(document.workspaceId, document.id);
     const extensionStorage = getDocsReviewCommentExtensionStorage(editor);
     if (loadedDocumentScope.current === nextScope.key) {

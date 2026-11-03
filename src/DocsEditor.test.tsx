@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { OfficeDocument } from './lib/localStore';
@@ -131,6 +132,21 @@ describe('Docs local table authoring', () => {
 });
 
 describe('Docs local review comments', () => {
+  it('survives Tiptap editor lifecycle replay without losing its local comment panel', async () => {
+    const props = {
+      hasUnsavedChanges: false,
+      onPatch: vi.fn(() => true),
+      onBack: vi.fn(),
+      onExport: vi.fn(),
+      onExportDocx: vi.fn(),
+      onDelete: vi.fn(),
+      onGoToTeam: vi.fn(),
+    };
+    render(<StrictMode><DocsEditor document={syntheticDocument} {...props} /></StrictMode>);
+    await screen.findByRole('textbox', { name: 'Document content' });
+    expect(screen.getByRole('region', { name: 'Local document review comments' })).toBeTruthy();
+  });
+
   it('keeps comments isolated when switching between workspaces that reuse a document ID', async () => {
     const { switchDocument } = renderEditor();
     await createLocalReviewComment('Only in personal space.');
