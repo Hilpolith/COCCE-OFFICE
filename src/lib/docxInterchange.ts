@@ -615,7 +615,7 @@ export async function createDocxBlob(input: DocxExportInput): Promise<Blob> {
         const paragraphs = Array.from(cell.children).filter((child) => child.tagName.toUpperCase() === 'P');
         const content = paragraphs.length ? paragraphs : [cell];
         const wordParagraphs = content.map((paragraph) => {
-          const runs = inlineRuns(paragraph, docx, { bold: header, italic: false, underline: false, strike: false });
+          const runs = inlineRuns(paragraph, docx);
           return new docx.Paragraph({ children: runs.length ? runs : [new docx.TextRun('')] });
         });
         return new docx.TableCell({ children: wordParagraphs });

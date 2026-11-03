@@ -1,7 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { DOCS_TABLE_LIMITS, docsTableGridViolation } from './docsTableLimits';
+import { Schema } from '@tiptap/pm/model';
+import { DOCS_TABLE_LIMITS, countDocsTablesWithoutHeaderRow, docsTableGridViolation } from './docsTableLimits';
 
 const grid = (rows: number, columns: number, text = '') => Array.from({ length: rows }, () => ({ cells: Array.from({ length: columns }, () => text) }));
+
+const tableSchema = new Schema({ nodes: {
+  doc: { content: 'block+' },
+  paragraph: { group: 'block', content: 'text*' },
+  table: { group: 'block', content: 'tableRow+' },
+  tableRow: { content: '(tableCell | tableHeader)+' },
+  tableCell: { content: 'paragraph+' },
+  tableHeader: { content: 'paragraph+' },
+  text: { group: 'inline' },
+} });
+
+function docsTable(headerRow: boolean) {
+  const cell = (type: 'tableCell' | 'tableHeader', text: string) => tableSchema.node(type, null, [tableSchema.node('paragraph', null, [tableSchema.text(text)])]);
+  const headerType = headerRow ? 'tableHeader' : 'tableCell';
+  return tableSchema.node('table', null, [
+    tableSchema.node('tableRow', null, [cell(headerType, 'First'), cell(headerType, 'Second')]),
+    tableSchema.node('tableRow', null, [cell('tableCell', 'A'), cell('tableCell', 'B')]),
+  ]);
+}
 
 describe('bounded local Docs tables', () => {
   it('accepts the exact documented maximum grid and a document with 19 prior tables', () => {
@@ -22,5 +42,11 @@ describe('bounded local Docs tables', () => {
   it('rejects empty and uneven tables rather than guessing at a grid', () => {
     expect(docsTableGridViolation([])).toMatch(/rows/);
     expect(docsTableGridViolation([{ cells: ['a', 'b'] }, { cells: ['c'] }])).toMatch(/rectangular/);
+  });
+
+  it('counts tables without a semantic first-row header for Markdown export warnings', () => {
+    const doc = tableSchema.node('doc', null, [docsTable(true), docsTable(false)]);
+    expect(countDocsTablesWithoutHeaderRow(doc)).toBe(1);
+    expect(countDocsTablesWithoutHeaderRow(tableSchema.node('doc', null, [docsTable(true)]))).toBe(0);
   });
 });

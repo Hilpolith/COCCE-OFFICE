@@ -131,6 +131,46 @@ describe('Docs local table authoring', () => {
     expect((screen.getByRole('button', { name: 'Delete table' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('toggles the semantic header row, keeps comments local, and confirms Markdown header conversion', async () => {
+    const tableDocument: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'Before table\nHeader A\tHeader B\nCell A\tCell B',
+      richText: '<p>Before table</p><table><tbody><tr><th><p>Header A</p></th><th><p>Header B</p></th></tr><tr><td><p>Cell A</p></td><td><p>Cell B</p></td></tr></tbody></table>',
+    };
+    const { onPatch, onExport } = renderEditor(tableDocument);
+    const content = await screen.findByRole('textbox', { name: 'Document content' });
+    await createLocalReviewComment('This comment stays in its local sidecar.');
+    const savedComments = window.localStorage.getItem(DOCS_REVIEW_COMMENTS_STORAGE_KEY);
+    selectEditorText(content, 'Cell A');
+    await screen.findByRole('button', { name: 'Remove header row' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove header row' }));
+    await waitFor(() => expect(content.querySelectorAll('th')).toHaveLength(0));
+    expect(content.querySelectorAll('td')).toHaveLength(4);
+    expect(content.textContent).toContain('Header A');
+    expect((screen.getByRole('button', { name: 'Use first row as header' }) as HTMLButtonElement).getAttribute('aria-pressed')).toBe('false');
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('<td><p>Header A</p></td>') }));
+    expect(window.localStorage.getItem(DOCS_REVIEW_COMMENTS_STORAGE_KEY)).toBe(savedComments);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(content.querySelectorAll('th')).toHaveLength(2));
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
+    await waitFor(() => expect(content.querySelectorAll('th')).toHaveLength(0));
+
+    const denyMarkdownExport = vi.fn((_message?: string) => false);
+    stubWindowConfirm(denyMarkdownExport);
+    fireEvent.click(screen.getByRole('button', { name: 'Export .md' }));
+    expect(denyMarkdownExport).toHaveBeenCalledWith(expect.stringContaining('Markdown table syntax requires a header row'));
+    expect(onExport).not.toHaveBeenCalled();
+    expect(await screen.findByText('Markdown export cancelled; the document was not changed.')).toBeTruthy();
+
+    const approveMarkdownExport = vi.fn((_message?: string) => true);
+    stubWindowConfirm(approveMarkdownExport);
+    fireEvent.click(screen.getByRole('button', { name: 'Export .md' }));
+    expect(approveMarkdownExport).toHaveBeenCalledTimes(1);
+    expect(onExport).toHaveBeenCalledWith(expect.stringContaining('<td><p>Header A</p></td>'));
+  });
+
   it('selects rows, columns and the whole table for inline formatting, undo/redo and keeps local comments unchanged', async () => {
     const tableDocument: OfficeDocument = {
       ...syntheticDocument,

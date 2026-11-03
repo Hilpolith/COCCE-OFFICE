@@ -135,11 +135,29 @@ export function docsTableDocumentViolation(doc: ProseMirrorNode): string | null 
   return issue;
 }
 
-export function activeDocsTable(selection: Selection): { rows: number; columns: number } | null {
+function docsTableHasHeaderRow(table: ProseMirrorNode | null): boolean {
+  const firstRow = table?.firstChild;
+  if (!firstRow || firstRow.childCount === 0) return false;
+  let headerRow = true;
+  firstRow.forEach((cell) => { if (cell.type.name !== 'tableHeader') headerRow = false; });
+  return headerRow;
+}
+
+export function countDocsTablesWithoutHeaderRow(doc: ProseMirrorNode): number {
+  let count = 0;
+  doc.descendants((node) => {
+    if (node.type.name !== 'table') return true;
+    if (!docsTableHasHeaderRow(node)) count += 1;
+    return false;
+  });
+  return count;
+}
+
+export function activeDocsTable(selection: Selection): { rows: number; columns: number; headerRow: boolean } | null {
   for (let depth = selection.$from.depth; depth >= 0; depth -= 1) {
     const node = selection.$from.node(depth);
     if (node.type.name === 'table') {
-      return { rows: node.childCount, columns: node.firstChild?.childCount ?? 0 };
+      return { rows: node.childCount, columns: node.firstChild?.childCount ?? 0, headerRow: docsTableHasHeaderRow(node) };
     }
   }
   return null;

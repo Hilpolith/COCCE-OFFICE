@@ -13,7 +13,7 @@ import type { Selection } from '@tiptap/pm/state';
 import { CellSelection } from '@tiptap/pm/tables';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { OfficeDocument } from './lib/localStore';
-import { activeDocsTable, DOCS_TABLE_LIMITS, DOCS_TABLE_LIMITS_COPY, docsTableDocumentViolation, docsTableGridViolation, inspectDocsTableUsage } from './lib/docsTableLimits';
+import { activeDocsTable, countDocsTablesWithoutHeaderRow, DOCS_TABLE_LIMITS, DOCS_TABLE_LIMITS_COPY, docsTableDocumentViolation, docsTableGridViolation, inspectDocsTableUsage } from './lib/docsTableLimits';
 import { initialDocumentHtml, plainTextToRichHtml, richTextToPlainText, sanitizeRichTextHtmlWithWarnings } from './lib/documentEditor';
 import {
   createDocsReviewComment, deleteDocsReviewComment, listDocsReviewComments,
@@ -169,10 +169,10 @@ function FormattingButton({ label, icon, active, disabled, onClick }: {
     aria-pressed={active} disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={onClick}>{icon}</button>;
 }
 
-function TableActionButton({ label, icon, disabled, onClick }: {
-  label: string; icon: ReactNode; disabled?: boolean; onClick: () => void;
+function TableActionButton({ label, icon, disabled, pressed, onClick }: {
+  label: string; icon: ReactNode; disabled?: boolean; pressed?: boolean; onClick: () => void;
 }) {
-  return <button type="button" className="docs-table-action" aria-label={label} disabled={disabled}
+  return <button type="button" className="docs-table-action" aria-label={label} aria-pressed={pressed} disabled={disabled}
     onMouseDown={(event) => event.preventDefault()} onClick={onClick}>{icon}<span>{label}</span></button>;
 }
 
@@ -383,7 +383,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         bold: false, italic: false, underline: false, heading1: false, heading2: false, heading3: false,
         strike: false, paragraph: false, bulletList: false, orderedList: false, blockquote: false,
         canUndo: false, canRedo: false, empty: true, tableActive: false, tableRows: 0, tableColumns: 0,
-        tableCount: 0, tableTextChars: 0, hasTextSelection: false, selectedCells: 0,
+        tableCount: 0, tableTextChars: 0, tableHeaderRow: false, hasTextSelection: false, selectedCells: 0,
       };
       const activeTable = activeDocsTable(activeEditor.state.selection);
       const usage = inspectDocsTableUsage(activeEditor.state.doc);
@@ -410,6 +410,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         tableColumns: activeTable?.columns ?? 0,
         tableCount: usage.count,
         tableTextChars: usage.textChars,
+        tableHeaderRow: activeTable?.headerRow ?? false,
         hasTextSelection: !(selection instanceof CellSelection) && !selection.empty
           && activeEditor.state.doc.textBetween(selection.from, selection.to, '\n').trim().length > 0,
         selectedCells,
@@ -624,6 +625,24 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     }
   };
 
+  const exportMarkdown = () => {
+    if (!editor) {
+      setTableNotice('The document editor is still loading; nothing was exported.');
+      return;
+    }
+    const headerlessTables = countDocsTablesWithoutHeaderRow(editor.state.doc);
+    if (headerlessTables > 0) {
+      const tableLabel = headerlessTables === 1 ? 'table has' : 'tables have';
+      const approved = window.confirm(`Markdown table syntax requires a header row. ${headerlessTables} table ${tableLabel} no header row, so export will treat each first row as a header. Continue?`);
+      if (!approved) {
+        setTableNotice('Markdown export cancelled; the document was not changed.');
+        return;
+      }
+    }
+    setTableNotice('');
+    onExport(editor.getHTML());
+  };
+
   return <div className="page editor-page">
     <div className="editor-toolbar">
       <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
@@ -634,7 +653,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         </span>
         {hasUnsavedChanges && <button type="button" className="button-secondary small-button" onClick={() => { if (editor) saveEditor(editor); }}>Retry save</button>}
         <button type="button" className="button-secondary small-button" aria-expanded={findOpen} aria-controls={findOpen ? 'docs-find-panel' : undefined} onClick={() => { setFindOpen((open) => !open); setFindNotice({ text: '', error: false }); }}><Search size={14} /> Find &amp; Replace</button>
-        <button type="button" className="button-secondary small-button" onClick={() => onExport(editor?.getHTML() ?? document.richText ?? '')}><ArrowUpRight size={14} /> Export .md</button>
+        <button type="button" className="button-secondary small-button" disabled={!editor} onClick={exportMarkdown}><ArrowUpRight size={14} /> Export .md</button>
         <button type="button" className="button-secondary small-button" onClick={() => { void onExportDocx(editor?.getHTML() ?? document.richText ?? ''); }}><FileText size={14} /> Export .docx</button>
         <button type="button" className="icon-button danger-button" onClick={onDelete} aria-label="Delete document" title="Delete local document"><X size={16} /></button>
       </div>
@@ -687,6 +706,9 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <TableActionButton label="Select current row" icon={<Rows3 size={15} />} onClick={() => selectTableCells('row')} />
         <TableActionButton label="Select current column" icon={<Columns3 size={15} />} onClick={() => selectTableCells('column')} />
         <TableActionButton label="Select entire table" icon={<Table2 size={15} />} onClick={() => selectTableCells('table')} />
+        <TableActionButton label={editorState.tableHeaderRow ? 'Remove header row' : 'Use first row as header'}
+          icon={<Rows3 size={15} />} pressed={editorState.tableHeaderRow}
+          onClick={() => { const changed = editor?.chain().focus().toggleHeaderRow().run(); setTableNotice(changed ? '' : 'The table header row could not be changed.'); }} />
         {editorState.selectedCells > 0 && <span className="docs-table-selection-status" role="status">
           {editorState.selectedCells} {editorState.selectedCells === 1 ? 'cell' : 'cells'} selected · apply text formatting above
         </span>}
@@ -698,7 +720,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <TableActionButton label="Delete table" icon={<Trash2 size={15} />} onClick={() => editor?.chain().focus().deleteTable().run()} />
       </> : <span className="docs-table-hint">Select a cell to edit its rows and columns.</span>}
     </div>
-    <p className="docs-table-limit-copy">{DOCS_TABLE_LIMITS_COPY}</p>
+    <p className="docs-table-limit-copy">{DOCS_TABLE_LIMITS_COPY} The first row can be marked as a semantic header and is preserved in supported DOCX files. Markdown requires a header row, so headerless tables trigger an export confirmation.</p>
     {tableNotice && <p className="docs-table-warning" role="status">{tableNotice}</p>}
 
     {findOpen && <section id="docs-find-panel" className="docs-find-panel glass-card" role="search" aria-label="Find and replace in document">

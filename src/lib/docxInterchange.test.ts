@@ -112,12 +112,37 @@ describe('bounded local DOCX interchange', () => {
     const imported = await importDocxFile(fileFromBytes(bytes));
     expect(imported.richText).toContain('<table><tbody>');
     expect(imported.richText).toContain('<th><p><strong>Name</strong></p></th>');
-    expect(imported.richText).toContain('<th><p><em><strong>Amount</strong></em></p></th>');
+    expect(imported.richText).toContain('<th><p><em>Amount</em></p></th>');
     expect(imported.richText).toContain('<td><p><u>A</u></p></td>');
     expect(imported.richText).toContain('<td><p><del>2</del></p></td>');
     expect(imported.content).toBe('Name\tAmount\nA\t2');
     expect(imported.warnings.some((warning) => warning.includes('simple table(s) were preserved'))).toBe(true);
     expect(imported.warnings.some((warning) => warning.includes('flattened to readable text'))).toBe(false);
+  });
+
+  it('does not add bold formatting to plain or italic semantic header cells', async () => {
+    const blob = await createDocxBlob({
+      title: 'Header formatting', content: '',
+      richText: '<table><tbody><tr><th><p>Plain heading</p></th><th><p><em>Italic heading</em></p></th></tr><tr><td><p>Plain value</p></td><td><p>Italic value</p></td></tr></tbody></table>',
+    });
+    const imported = await importDocxFile(fileFromBytes(new Uint8Array(await blob.arrayBuffer())));
+    expect(imported.richText).toContain('<th><p>Plain heading</p></th>');
+    expect(imported.richText).toContain('<th><p><em>Italic heading</em></p></th>');
+    expect(imported.richText).not.toContain('<strong>');
+  });
+
+  it('round-trips a simple table with no header row without changing cell semantics', async () => {
+    const blob = await createDocxBlob({
+      title: 'Headerless table', content: '',
+      richText: '<table><tbody><tr><td><p>First row A</p></td><td><p>First row B</p></td></tr><tr><td><p>Second row A</p></td><td><p>Second row B</p></td></tr></tbody></table>',
+    });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const generatedXml = strFromU8(unzipSync(bytes)['word/document.xml']!);
+    expect(generatedXml).not.toContain('<w:tblHeader');
+    const imported = await importDocxFile(fileFromBytes(bytes));
+    expect(imported.richText).toContain('<td><p>First row A</p></td>');
+    expect(imported.richText).not.toContain('<th>');
+    expect(imported.content).toBe('First row A\tFirst row B\nSecond row A\tSecond row B');
   });
 
   it('imports simple Word tables without losing their cells and warns when merged structures are flattened', async () => {
