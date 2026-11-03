@@ -15,6 +15,10 @@ import {
   savePdfAnnotation, savePdfAnnotations,
 } from './lib/pdfAnnotationStore';
 import type { PdfAnnotation } from './lib/pdfAnnotationStore';
+import {
+  assertPdfAnnotationBundleMatchesSource, MAX_PDF_ANNOTATION_BUNDLE_BYTES,
+  mergePdfAnnotationBundle, parsePdfAnnotationBundle, serializePdfAnnotationBundle,
+} from './lib/pdfAnnotationInterchange';
 import { capturePdfTextSelection } from './lib/pdfSelection';
 import { pdfRectToViewportRect } from './lib/pdfSelection';
 import type { PdfCapturedSelection, PdfViewportLike } from './lib/pdfSelection';
@@ -51,6 +55,16 @@ const toArrayBuffer = (bytes: Uint8Array) => {
   return copy.buffer;
 };
 const outputName = (name: string, suffix: string) => `${name.replace(/\.pdf$/i, '')}-${suffix}.pdf`;
+const annotationBundleName = (name: string) => `${name.replace(/\.pdf$/i, '')}-annotations.json`;
+
+function downloadLocalBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = window.document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
 
 export default function PdfWorkspace({ workspaceId, repository = localDriveRepository }: Props) {
   const [files, setFiles] = useState<DriveFile[]>([]);
@@ -83,6 +97,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const [commentDraft, setCommentDraft] = useState('');
   const [activeAnnotationId, setActiveAnnotationId] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const annotationBundleInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pageStageRef = useRef<HTMLDivElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
@@ -91,6 +106,8 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const selectedFile = useMemo(() => files.find((file) => file.id === selectedId) ?? files[0] ?? null, [files, selectedId]);
   const selectedFileId = selectedFile?.id;
   const annotationScope = JSON.stringify([workspaceId, selectedFileId]);
+  const annotationScopeRef = useRef(annotationScope);
+  useEffect(() => { annotationScopeRef.current = annotationScope; }, [annotationScope]);
   const sourceFingerprint = sourceFingerprintState?.scope === annotationScope ? sourceFingerprintState.value : '';
   const visualAnnotations = useMemo(() => annotations.filter((annotation) => annotation.kind !== 'comment'), [annotations]);
   const unverifiedVisualAnnotationCount = useMemo(
@@ -342,6 +359,92 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     if (!selectedFile) throw new Error('Choose a PDF file first.');
     const result = await repository.readFile(selectedFile.id, workspaceId);
     return new Uint8Array(await result.blob.arrayBuffer());
+  };
+
+  const exportAnnotationBackup = async () => {
+    const file = selectedFile;
+    const document = pdfDocument;
+    const verifiedFingerprint = sourceFingerprint;
+    if (!file || !document || !verifiedFingerprint) { setError('Open a locally stored PDF whose exact bytes can be verified before creating an annotation backup.'); return; }
+    const scope = { workspaceId, fileId: file.id };
+    const operationScope = annotationScope;
+    const exportedAt = new Date();
+    let scopedAnnotations: PdfAnnotation[];
+    let json: string;
+    try {
+      scopedAnnotations = listPdfAnnotations(window.localStorage, workspaceId, file.id);
+      if (scopedAnnotations.some((annotation) => annotation.page > document.numPages)) throw new Error('Some local annotations refer to pages outside this PDF. Nothing was exported.');
+      json = serializePdfAnnotationBundle(scope, verifiedFingerprint, scopedAnnotations, exportedAt);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not prepare a local annotation backup.'); return; }
+
+    const confirmed = window.confirm(
+      `Download a browser-local JSON backup for “${file.name}” with ${scopedAnnotations.length} annotation${scopedAnnotations.length === 1 ? '' : 's'}? It includes selected-text quotes, positions, comments, and note text stored on any annotation (including visual marks), but no PDF bytes. The backup can contain sensitive text. It is not uploaded and can be restored only into a byte-identical PDF. Continue?`,
+    );
+    if (!confirmed) return;
+
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const { blob, file: storedSource } = await repository.readFile(file.id, workspaceId);
+      if (storedSource.id !== file.id || storedSource.workspaceId !== workspaceId) throw new Error('The selected PDF changed before backup; no file was downloaded.');
+      const actualFingerprint = await fingerprintPdfBytes(new Uint8Array(await blob.arrayBuffer()));
+      if (actualFingerprint !== verifiedFingerprint) throw new Error('The local PDF bytes changed since it was opened. Reopen the PDF before creating a backup.');
+      if (annotationScopeRef.current !== operationScope) throw new Error('The selected PDF changed during backup; no file was downloaded.');
+      const latestAnnotations = listPdfAnnotations(window.localStorage, workspaceId, file.id);
+      const latestJson = serializePdfAnnotationBundle(scope, actualFingerprint, latestAnnotations, exportedAt);
+      if (latestJson !== json) throw new Error('The local annotation sidecar changed during confirmation. Nothing was downloaded; retry to include the current annotations.');
+      downloadLocalBlob(new Blob([json], { type: 'application/json;charset=utf-8' }), annotationBundleName(file.name));
+      setNotice(`Downloaded a browser-local JSON backup of ${scopedAnnotations.length} annotations. It contains annotation text and positions, not PDF bytes; no upload occurred.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not download the local annotation backup.'); }
+    finally { setBusy(false); }
+  };
+
+  const importAnnotationBackup = async (backupFile: File) => {
+    const file = selectedFile;
+    const document = pdfDocument;
+    const verifiedFingerprint = sourceFingerprint;
+    if (!file || !document || !verifiedFingerprint) { setError('Open a locally stored, verified PDF before restoring annotations.'); return; }
+    const scope = { workspaceId, fileId: file.id };
+    const operationScope = annotationScope;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      if (!Number.isSafeInteger(backupFile.size) || backupFile.size < 1 || backupFile.size > MAX_PDF_ANNOTATION_BUNDLE_BYTES) {
+        throw new Error(`Annotation backup files must be ${MAX_PDF_ANNOTATION_BUNDLE_BYTES} bytes or smaller.`);
+      }
+      const bundle = parsePdfAnnotationBundle(await backupFile.text());
+      const confirmed = window.confirm(
+        `Merge ${bundle.annotations.length} annotation${bundle.annotations.length === 1 ? '' : 's'} from “${backupFile.name}” into the local sidecar for “${file.name}”? The backup can contain sensitive selected-text quotes, comments, and note text on any annotation. It has no PDF bytes and will not be uploaded. This browser will recheck the PDF’s SHA-256; a different PDF is refused, and conflicting IDs within this PDF’s local sidecar abort the entire import. Continue?`,
+      );
+      if (!confirmed) { setNotice('Annotation backup import canceled; the current sidecar was not changed.'); return; }
+
+      const { blob, file: storedSource } = await repository.readFile(file.id, workspaceId);
+      if (storedSource.id !== file.id || storedSource.workspaceId !== workspaceId) throw new Error('The selected PDF changed before import; no annotations were added.');
+      const actualFingerprint = await fingerprintPdfBytes(new Uint8Array(await blob.arrayBuffer()));
+      if (actualFingerprint !== verifiedFingerprint) throw new Error('The local PDF bytes changed since it was opened. Reopen the PDF before restoring annotations.');
+      assertPdfAnnotationBundleMatchesSource(bundle, actualFingerprint);
+      if (annotationScopeRef.current !== operationScope) throw new Error('The selected PDF changed during import; no annotations were added.');
+      if (bundle.annotations.some((annotation) => annotation.page > document.numPages)) throw new Error('This backup refers to a page outside the selected PDF. Nothing was imported.');
+
+      const existing = listPdfAnnotations(window.localStorage, workspaceId, file.id);
+      const merge = mergePdfAnnotationBundle(bundle, scope, existing);
+      if (!merge.added.length) {
+        setAnnotations(existing);
+        setNotice(`All ${merge.alreadyPresent} backup annotations are already present; the local sidecar was unchanged.`);
+        return;
+      }
+      savePdfAnnotations(window.localStorage, merge.added);
+      const saved = listPdfAnnotations(window.localStorage, workspaceId, file.id);
+      setAnnotations(saved);
+      recordAnnotationHistory({ added: merge.added, removed: [] });
+      setActiveAnnotationId('');
+      setNotice(`Added ${merge.added.length} annotation${merge.added.length === 1 ? '' : 's'} locally${merge.alreadyPresent ? `; ${merge.alreadyPresent} identical item${merge.alreadyPresent === 1 ? ' was' : 's were'} already present` : ''}. The source PDF was not changed.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not restore the local annotation backup.'); }
+    finally { setBusy(false); }
+  };
+
+  const onAnnotationBundleInput = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0];
+    event.target.value = '';
+    if (selected) void importAnnotationBackup(selected);
   };
 
   const exportAnnotatedCopy = async () => {
@@ -655,6 +758,17 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
               {commentEditorOpen && selection && <form className="pdf-comment-form" onSubmit={saveComment}><label htmlFor="pdf-comment-draft">Comment on selected text</label><textarea id="pdf-comment-draft" rows={3} maxLength={4_000} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Write a note about this passage" /><div><small>{selection.text.slice(0, 120)}{selection.text.length > 120 ? '…' : ''}</small><button className="button-primary" type="submit" disabled={!commentDraft.trim()}>Save comment locally</button><button className="button-tertiary" type="button" onClick={() => { setCommentEditorOpen(false); setCommentDraft(''); }}>Cancel</button></div></form>}
               <section className="pdf-annotations" aria-label="Local PDF annotations"><div className="pdf-annotations-heading"><div><span className="eyebrow">THIS BROWSER ONLY</span><h2>Highlights, comments &amp; text marks</h2></div><div className="pdf-annotation-actions"><button className="button-tertiary" aria-label="Undo last annotation change" title="Undo the last local annotation edit" onClick={undoLastAnnotationChange} disabled={!canUndoAnnotation}><Undo2 size={13} /> Undo</button><button className="button-tertiary" aria-label="Clear annotations on this page" onClick={clearCurrentPageAnnotations} disabled={!currentPageAnnotations.length}><Trash2 size={13} /> Clear page</button><span>{annotations.length} saved</span></div></div><p className="pdf-annotations-note">Select text to add a highlight, underline, strike-through, or comment. These overlays stay local and never change the source. A separate flattened copy can include only verified visual marks; comments and note text stay out.</p>
                 {currentPageAnnotations.length ? <ul className="pdf-annotation-list">{currentPageAnnotations.map((annotation) => <li key={annotation.id} id={`pdf-annotation-${annotation.id}`} className={`pdf-annotation-item ${activeAnnotationId === annotation.id ? 'pdf-annotation-item-active' : ''}`}><div className={`pdf-annotation-icon pdf-annotation-icon-${annotation.kind}`} aria-hidden="true">{annotation.kind === 'highlight' ? <Highlighter size={14} /> : annotation.kind === 'comment' ? <MessageSquare size={14} /> : annotation.kind === 'underline' ? <Underline size={14} /> : <Strikethrough size={14} />}</div><div className="pdf-annotation-copy"><strong>{annotation.kind === 'strike-through' ? 'Strikethrough' : annotation.kind[0].toUpperCase() + annotation.kind.slice(1)} · page {annotation.page}</strong><blockquote>“{annotation.quote}”</blockquote>{annotation.note && <p>{annotation.note}</p>}</div><button className="icon-button pdf-delete-annotation" aria-label={`Delete PDF ${annotation.kind}`} title="Remove this local annotation" onClick={() => removeAnnotation(annotation)}><Trash2 size={14} /></button></li>)}</ul> : <div className="pdf-annotations-empty">No saved marks on page {currentPage}. Select text above to add one.</div>}
+              </section>
+              <section className="pdf-annotation-backup" aria-label="Local annotation backup">
+                <div className="pdf-annotation-backup-copy">
+                  <strong>Back up or restore annotations</strong>
+                  <small>JSON backups include selected-text quotes, positions, comments and note text on any annotation, including visual marks, but no PDF bytes. These files can contain sensitive text. Restore requires a byte-identical PDF; nothing is uploaded. Each bundle is capped at 5 MB/2,000 annotations, and this browser’s sidecar holds at most 2,000 annotations total.</small>
+                </div>
+                <div className="pdf-annotation-backup-actions">
+                  <button className="button-tertiary" onClick={() => void exportAnnotationBackup()} disabled={busy || !annotations.length || !sourceFingerprint}><ArrowDownToLine size={13} /> Export backup</button>
+                  <button className="button-tertiary" onClick={() => annotationBundleInputRef.current?.click()} disabled={busy || !sourceFingerprint}><Upload size={13} /> Import backup</button>
+                  <input ref={annotationBundleInputRef} type="file" accept="application/json,.json" className="visually-hidden" aria-label="Choose local PDF annotation backup JSON" onChange={onAnnotationBundleInput} />
+                </div>
               </section>
               <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => changeSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button>{searchTerm && <button className="button-tertiary pdf-search-clear" onClick={clearSearch} aria-label="Clear PDF search" title="Clear search"><X size={14} /> Clear</button>}</div>
               {(searchHits.length > 0 || searchTruncated) && <div className="pdf-search-results" aria-label="PDF search results"><div className="pdf-search-heading"><strong>{searchHits.length} match{searchHits.length === 1 ? '' : 'es'}{searchTruncated ? ' (first 2,000 shown)' : ''}</strong>{searchHits.length > 0 && <div className="pdf-search-navigation"><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex - 1)} aria-label="Previous search match" title="Previous match"><ArrowLeft size={14} /></button><span aria-live="polite" aria-atomic="true">{currentSearchIndex + 1} / {searchHits.length} · Page {searchHits[currentSearchIndex]?.page ?? currentPage}</span><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex + 1)} aria-label="Next search match" title="Next match"><ArrowRight size={14} /></button></div>}</div>{searchHits.map((hit, index) => <button key={`${hit.page}-${hit.offset}`} className={index === currentSearchIndex ? 'pdf-search-result-active' : ''} aria-current={index === currentSearchIndex ? 'true' : undefined} onClick={() => navigateToSearchHit(index)}><span>Match {index + 1} · Page {hit.page}</span><small>{hit.excerpt}</small></button>)}{searchTruncated && <small className="pdf-search-truncated">Search stopped at 2,000 matches.</small>}</div>}

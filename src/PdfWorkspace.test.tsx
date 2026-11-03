@@ -4,9 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { PDFDocument } from 'pdf-lib';
 import type { DriveFile, DriveRepository } from './lib/driveStore';
 import {
-  createPdfAnnotation, PDF_ANNOTATION_STORAGE_KEY, savePdfAnnotation,
+  createPdfAnnotation, listPdfAnnotations, MAX_PDF_ANNOTATIONS, PDF_ANNOTATION_STORAGE_KEY, savePdfAnnotation, savePdfAnnotations,
 } from './lib/pdfAnnotationStore';
+import type { PdfAnnotation } from './lib/pdfAnnotationStore';
 import { fingerprintPdfBytes } from './lib/pdfAnnotatedCopy';
+import { serializePdfAnnotationBundle } from './lib/pdfAnnotationInterchange';
 import PdfWorkspace from './PdfWorkspace';
 
 const pdfjsMock = vi.hoisted(() => ({ getDocument: vi.fn() }));
@@ -504,5 +506,344 @@ describe('local flattened PDF annotated-copy export', () => {
     expect(outputDocument.getPageCount()).toBe(3);
     expect(outputDocument.getPage(0).getRotation().angle).toBe(0);
     expect(screen.getByText(/Created a separate local copy with/).textContent).toContain('flattened visual marks');
+  });
+});
+
+
+describe('local PDF annotation backup and restore', () => {
+  const makePortableBackup = (sourceFingerprint: string, overrides: Partial<PdfAnnotation> = {}) => {
+    const backupScope = { workspaceId: 'backup-workspace', fileId: 'backup-local-file-id' };
+    const row: PdfAnnotation = {
+      ...createPdfAnnotation({
+      workspaceId: backupScope.workspaceId,
+      fileId: backupScope.fileId,
+      page: 3,
+      kind: 'comment',
+      quote: 'Synthetic backup quote',
+      note: 'Synthetic backup note',
+      color: 'cyan',
+      rects: [{ x: 0.2, y: 0.3, width: 0.15, height: 0.04 }],
+      sourceFingerprint,
+      }, new Date('2026-11-03T12:00:00.000Z')),
+      ...overrides,
+    };
+    return { row, json: serializePdfAnnotationBundle(backupScope, sourceFingerprint, [row], new Date('2026-11-03T12:30:00.000Z')) };
+  };
+
+  const chooseBackup = (json: string, name = 'annotations.json') => {
+    fireEvent.change(screen.getByLabelText('Choose local PDF annotation backup JSON'), {
+      target: { files: [new File([json], name, { type: 'application/json' })] },
+    });
+  };
+
+  it('downloads a confirmed local JSON backup with quotes/notes but no PDF bytes or local file IDs', async () => {
+    const { sourceBytes, sourceFile, blobs } = await configureBoundPdfForCopy();
+    const sourceSnapshot = sourceBytes.slice();
+    const sourceFingerprint = await fingerprintPdfBytes(sourceBytes);
+    savePdfAnnotation(window.localStorage, createPdfAnnotation({
+      workspaceId: null, fileId: sourceFile.id, page: 1, kind: 'highlight', quote: 'Synthetic highlighted quote',
+      note: 'PRIVATE visual-mark note', color: 'yellow', rects: [{ x: 0.1, y: 0.2, width: 0.2, height: 0.03 }], sourceFingerprint,
+    }));
+    const sidecarSnapshot = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    let downloaded: Blob | undefined;
+    let downloadName = '';
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => { downloaded = blob as Blob; return 'blob:synthetic-backup'; });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { downloadName = this.download; });
+    const confirm = vi.fn().mockReturnValue(true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await openSyntheticPdf();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export backup' }));
+    await waitFor(() => expect(screen.getByText(/Downloaded a browser-local JSON backup/)).toBeTruthy());
+
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm.mock.calls[0][0]).toContain('selected-text quotes');
+    expect(confirm.mock.calls[0][0]).toContain('note text stored on any annotation');
+    expect(confirm.mock.calls[0][0]).not.toContain('PRIVATE visual-mark note');
+    expect(confirm.mock.calls[0][0]).toContain('not uploaded');
+    expect(createUrl).toHaveBeenCalledOnce();
+    expect(downloadName).toBe('synthetic-annotations.json');
+    expect(downloaded).toBeInstanceOf(Blob);
+    const bundle = JSON.parse(await downloaded!.text());
+    expect(bundle).toMatchObject({ format: 'cocce-office-pdf-annotations', version: 1 });
+    expect(bundle.sourceFingerprint).toBe(await fingerprintPdfBytes(sourceSnapshot));
+    expect(bundle.annotations).toHaveLength(3);
+    expect(bundle.annotations.some((row: { note: string }) => row.note === 'PRIVATE synthetic note excluded')).toBe(true);
+    expect(bundle.annotations.some((row: { kind: string; note: string }) => row.kind === 'highlight' && row.note === 'PRIVATE visual-mark note')).toBe(true);
+    expect(JSON.stringify(bundle)).not.toContain('workspaceId');
+    expect(JSON.stringify(bundle)).not.toContain('fileId');
+    expect(JSON.stringify(bundle)).not.toContain(sourceFile.id);
+    expect(JSON.stringify(bundle)).not.toContain('%PDF-');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(repository.saveFile).not.toHaveBeenCalled();
+    expect(sourceBytes).toEqual(sourceSnapshot);
+    expect(new Uint8Array(await blobs.get(sourceFile.id)!.arrayBuffer())).toEqual(sourceSnapshot);
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarSnapshot);
+  });
+
+  it('cancels export before reading the PDF or creating a download', async () => {
+    await configureBoundPdfForCopy();
+    await openSyntheticPdf();
+    const readCount = (repository.readFile as ReturnType<typeof vi.fn>).mock.calls.length;
+    const confirm = vi.fn().mockReturnValue(false);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+    fireEvent.click(screen.getByRole('button', { name: 'Export backup' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect((repository.readFile as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(readCount);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+
+  it('refuses to export legacy unverified annotations rather than omitting them from the backup', async () => {
+    await openSyntheticPdf();
+    const confirm = vi.fn().mockReturnValue(true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+    fireEvent.click(screen.getByRole('button', { name: 'Export backup' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('every annotation must be verified'));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+
+  it('imports a matching backup into the current local scope, merges it, and supports session undo', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const fingerprint = await fingerprintPdfBytes(sourceBytes);
+    const { row, json } = makePortableBackup(fingerprint);
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const confirm = vi.fn().mockReturnValue(true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await openSyntheticPdf();
+
+    chooseBackup(json, 'portable-annotations.json');
+    await waitFor(() => expect(screen.getByText(/Added 1 annotation locally/)).toBeTruthy());
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm.mock.calls[0][0]).toContain('SHA-256');
+    expect(confirm.mock.calls[0][0]).toContain('not be uploaded');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(repository.saveFile).not.toHaveBeenCalled();
+    expect(listPdfAnnotations(window.localStorage, null, driveFile.id)).toHaveLength(3);
+    expect(listPdfAnnotations(window.localStorage, null, driveFile.id)).toContainEqual({
+      ...row, workspaceId: null, fileId: driveFile.id,
+    });
+    expect(JSON.parse(sidecarBefore ?? 'null').annotations).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last annotation change' }));
+    await waitFor(() => expect(listPdfAnnotations(window.localStorage, null, driveFile.id)).toHaveLength(2));
+    expect(listPdfAnnotations(window.localStorage, null, driveFile.id).some((item) => item.id === row.id)).toBe(false);
+  });
+
+  it('treats re-import of identical annotations as a no-op without duplicate rows', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const { json } = makePortableBackup(await fingerprintPdfBytes(sourceBytes));
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => true });
+    await openSyntheticPdf();
+    chooseBackup(json);
+    await waitFor(() => expect(screen.getByText(/Added 1 annotation locally/)).toBeTruthy());
+    const afterFirstImport = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    chooseBackup(json);
+    await waitFor(() => expect(screen.getByText(/already present/)).toBeTruthy());
+    expect(listPdfAnnotations(window.localStorage, null, driveFile.id)).toHaveLength(3);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(afterFirstImport);
+  });
+
+  it('rejects a different PDF fingerprint and conflicting IDs without changing the current sidecar', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const actualFingerprint = await fingerprintPdfBytes(sourceBytes);
+    const originalAnnotations = listPdfAnnotations(window.localStorage, null, driveFile.id);
+    const mismatch = makePortableBackup('b'.repeat(64));
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => true });
+    await openSyntheticPdf();
+    const beforeMismatch = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    chooseBackup(mismatch.json);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('different PDF bytes'));
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(beforeMismatch);
+
+    const conflicting = makePortableBackup(actualFingerprint, {
+      id: originalAnnotations[0].id,
+      quote: 'Different synthetic quote for the same ID',
+    });
+    chooseBackup(conflicting.json);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('conflicts with a different annotation on the selected PDF'));
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(beforeMismatch);
+    expect(listPdfAnnotations(window.localStorage, null, driveFile.id)).toHaveLength(2);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+
+  it('keeps the existing sidecar and UI unchanged when browser storage rejects the import', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const json = makePortableBackup(await fingerprintPdfBytes(sourceBytes)).json;
+    const confirm = vi.fn().mockReturnValue(true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+    await openSyntheticPdf();
+    const before = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
+    const quota = vi.spyOn(window.localStorage, 'setItem').mockImplementation((key: string, value: string) => {
+      if (key === PDF_ANNOTATION_STORAGE_KEY) throw new Error('QuotaExceededError');
+      return originalSetItem(key, value);
+    });
+    try {
+      chooseBackup(json);
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('QuotaExceededError'));
+      expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(before);
+      expect(listPdfAnnotations(window.localStorage, null, driveFile.id)).toHaveLength(2);
+      expect(repository.saveFile).not.toHaveBeenCalled();
+    } finally { quota.mockRestore(); }
+  });
+});
+
+
+describe('PDF annotation backup source and page guards', () => {
+  it('refuses to import a source-matched backup that refers to a page outside the PDF', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const fingerprint = await fingerprintPdfBytes(sourceBytes);
+    const backupScope = { workspaceId: 'backup-workspace', fileId: 'backup-pdf' };
+    const outOfRange = createPdfAnnotation({
+      ...backupScope, page: 4, kind: 'highlight', quote: 'Synthetic out-of-range quote', note: '', color: 'yellow',
+      rects: [{ x: 0.1, y: 0.2, width: 0.1, height: 0.03 }], sourceFingerprint: fingerprint,
+    });
+    const json = serializePdfAnnotationBundle(backupScope, fingerprint, [outOfRange]);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => true });
+    await openSyntheticPdf();
+    const before = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    fireEvent.change(screen.getByLabelText('Choose local PDF annotation backup JSON'), {
+      target: { files: [new File([json], 'out-of-range.json', { type: 'application/json' })] },
+    });
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('page outside the selected PDF'));
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(before);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+
+  it('refuses import when the selected local PDF bytes changed after the viewer verified them', async () => {
+    const { sourceBytes, sourceFile, blobs } = await configureBoundPdfForCopy();
+    await openSyntheticPdf();
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const changedDocument = await PDFDocument.create();
+    for (let page = 0; page < pages.length; page += 1) changedDocument.addPage([600, 800]);
+    changedDocument.setTitle('Synthetic source changed after viewer load');
+    const changedBytes = new Uint8Array(await changedDocument.save({ useObjectStreams: false }));
+    const changedFingerprint = await fingerprintPdfBytes(changedBytes);
+    expect(changedFingerprint).not.toBe(await fingerprintPdfBytes(sourceBytes));
+    blobs.set(sourceFile.id, new Blob([changedBytes.slice().buffer as ArrayBuffer], { type: 'application/pdf' }));
+    const backupScope = { workspaceId: 'backup-workspace', fileId: 'backup-pdf' };
+    const row = createPdfAnnotation({
+      ...backupScope, page: 1, kind: 'comment', quote: 'Synthetic changed source quote', note: 'Synthetic note', color: 'cyan',
+      rects: [{ x: 0.2, y: 0.2, width: 0.1, height: 0.03 }], sourceFingerprint: changedFingerprint,
+    });
+    const json = serializePdfAnnotationBundle(backupScope, changedFingerprint, [row]);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => true });
+    fireEvent.change(screen.getByLabelText('Choose local PDF annotation backup JSON'), {
+      target: { files: [new File([json], 'changed-source.json', { type: 'application/json' })] },
+    });
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('changed since it was opened'));
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarBefore);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+
+  it('refuses annotation backup when saved page positions exceed the current document', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const fingerprint = await fingerprintPdfBytes(sourceBytes);
+    savePdfAnnotation(window.localStorage, createPdfAnnotation({
+      workspaceId: null, fileId: driveFile.id, page: 4, kind: 'highlight', quote: 'Synthetic invalid page quote', note: '', color: 'yellow',
+      rects: [{ x: 0.1, y: 0.2, width: 0.1, height: 0.03 }], sourceFingerprint: fingerprint,
+    }));
+    const confirm = vi.fn().mockReturnValue(true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+    await openSyntheticPdf();
+    fireEvent.click(screen.getByRole('button', { name: 'Export backup' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('pages outside this PDF'));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('PDF annotation backup import atomicity', () => {
+  const backupForSource = (sourceFingerprint: string) => {
+    const backupScope = { workspaceId: 'backup-workspace', fileId: 'backup-file-id' };
+    const row = createPdfAnnotation({
+      ...backupScope, page: 1, kind: 'highlight', quote: 'Synthetic import quote', note: '', color: 'yellow',
+      rects: [{ x: 0.15, y: 0.25, width: 0.2, height: 0.03 }], sourceFingerprint,
+    });
+    return serializePdfAnnotationBundle(backupScope, sourceFingerprint, [row]);
+  };
+
+  it('cancels restore before reading the PDF or changing the sidecar', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const json = backupForSource(await fingerprintPdfBytes(sourceBytes));
+    await openSyntheticPdf();
+    const before = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const readCount = (repository.readFile as ReturnType<typeof vi.fn>).mock.calls.length;
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => false });
+    fireEvent.change(screen.getByLabelText('Choose local PDF annotation backup JSON'), {
+      target: { files: [new File([json], 'canceled.json', { type: 'application/json' })] },
+    });
+    await waitFor(() => expect(screen.getByText(/import canceled/)).toBeTruthy());
+    expect((repository.readFile as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(readCount);
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(before);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+
+  it('refuses a merge that would exceed the global sidecar limit without changing any scope', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const fingerprint = await fingerprintPdfBytes(sourceBytes);
+    const json = backupForSource(fingerprint);
+    const unrelated = Array.from({ length: MAX_PDF_ANNOTATIONS - 2 }, (_, index) => ({
+      ...createPdfAnnotation({
+        workspaceId: 'other-workspace', fileId: `other-pdf-${index}`, page: 1, kind: 'highlight',
+        quote: `Synthetic unrelated annotation ${index}`, note: '', color: 'yellow',
+        rects: [{ x: 0.1, y: 0.2, width: 0.1, height: 0.03 }], sourceFingerprint: 'c'.repeat(64),
+      }),
+      id: `other-mark-${index}`,
+    }));
+    savePdfAnnotations(window.localStorage, unrelated);
+    const before = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => true });
+    await openSyntheticPdf();
+    fireEvent.change(screen.getByLabelText('Choose local PDF annotation backup JSON'), {
+      target: { files: [new File([json], 'fills-global-limit.json', { type: 'application/json' })] },
+    });
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('local PDF annotation store is full'));
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(before);
+    expect(listPdfAnnotations(window.localStorage, null, driveFile.id)).toHaveLength(2);
+    expect(listPdfAnnotations(window.localStorage, 'other-workspace', 'other-pdf-0')).toHaveLength(1);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('PDF annotation IDs are scoped to their local PDF', () => {
+  it('preserves a same-ID annotation on another local PDF while importing into the selected scope', async () => {
+    const { sourceBytes } = await configureBoundPdfForCopy();
+    const fingerprint = await fingerprintPdfBytes(sourceBytes);
+    const sharedId = 'synthetic-same-id-other-pdf';
+    const otherScope = { workspaceId: 'other-workspace', fileId: 'other-local-pdf' };
+    const otherAnnotation: PdfAnnotation = {
+      ...createPdfAnnotation({
+        ...otherScope, page: 1, kind: 'comment', quote: 'Other PDF quote', note: 'Preserve this other note', color: 'cyan',
+        rects: [{ x: 0.1, y: 0.2, width: 0.1, height: 0.03 }], sourceFingerprint: 'd'.repeat(64),
+      }),
+      id: sharedId,
+    };
+    savePdfAnnotation(window.localStorage, otherAnnotation);
+    const backupScope = { workspaceId: 'backup-workspace', fileId: 'backup-pdf' };
+    const incoming: PdfAnnotation = {
+      ...createPdfAnnotation({
+        ...backupScope, page: 2, kind: 'highlight', quote: 'Selected PDF quote', note: '', color: 'yellow',
+        rects: [{ x: 0.3, y: 0.4, width: 0.1, height: 0.03 }], sourceFingerprint: fingerprint,
+      }),
+      id: sharedId,
+    };
+    const json = serializePdfAnnotationBundle(backupScope, fingerprint, [incoming]);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => true });
+    await openSyntheticPdf();
+    fireEvent.change(screen.getByLabelText('Choose local PDF annotation backup JSON'), {
+      target: { files: [new File([json], 'scoped-ids.json', { type: 'application/json' })] },
+    });
+    await waitFor(() => expect(screen.getByText(/Added 1 annotation locally/)).toBeTruthy());
+    expect(listPdfAnnotations(window.localStorage, 'other-workspace', 'other-local-pdf')).toContainEqual(otherAnnotation);
+    expect(listPdfAnnotations(window.localStorage, null, driveFile.id)).toContainEqual({
+      ...incoming, workspaceId: null, fileId: driveFile.id,
+    });
   });
 });

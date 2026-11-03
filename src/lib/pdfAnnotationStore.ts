@@ -72,11 +72,14 @@ function readState(storage: PdfAnnotationStorage): PdfAnnotationState {
   if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.annotations)) {
     throw new Error('Saved PDF annotations use an unsupported format; the stored data was preserved.');
   }
-  const annotations = parsed.annotations.filter(isPdfAnnotation);
-  if (annotations.length > MAX_PDF_ANNOTATIONS) {
+  const rawAnnotations = parsed.annotations;
+  if (rawAnnotations.length > MAX_PDF_ANNOTATIONS) {
     throw new Error('The local PDF annotation store is full; remove some annotations before adding more.');
   }
-  return { version: 1, annotations };
+  if (!rawAnnotations.every(isPdfAnnotation)) {
+    throw new Error('Saved PDF annotations contain invalid entries; the stored data was preserved.');
+  }
+  return { version: 1, annotations: rawAnnotations as PdfAnnotation[] };
 }
 
 export function listPdfAnnotations(

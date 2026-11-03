@@ -102,6 +102,15 @@ describe('browser-local PDF annotation store', () => {
     expect(malformed.read()).toBe('{broken');
   });
 
+  it('preserves a sidecar containing an invalid row instead of silently filtering it during reads or writes', () => {
+    const invalid = { ...mark(), page: 0 };
+    const original = JSON.stringify({ version: 1, annotations: [invalid] });
+    const damaged = memoryStorage(original);
+    expect(() => listPdfAnnotations(damaged.storage, 'office-a', 'pdf-a')).toThrow('invalid entries');
+    expect(() => savePdfAnnotation(damaged.storage, mark())).toThrow('invalid entries');
+    expect(damaged.read()).toBe(original);
+  });
+
   it('surfaces browser storage quota failures', () => {
     const blocked: PdfAnnotationStorage = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError'); } };
     expect(() => savePdfAnnotation(blocked, mark())).toThrow('QuotaExceededError');
