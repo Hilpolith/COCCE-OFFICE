@@ -2,13 +2,18 @@ import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent } from 'react';
 import {
   ArrowLeft, ArrowUpRight, Check, Download, FileSpreadsheet, FunctionSquare,
-  LockKeyhole, Plus, Table2, TrendingUp, Upload,
+  LockKeyhole, Plus, Redo2, Table2, TrendingUp, Undo2, Upload,
 } from 'lucide-react';
 import {
   addWorkbook, addWorksheet, selectWorksheet, updateWorkbook,
   updateWorksheetCell, updateWorksheetCells,
 } from './lib/localStore';
 import type { OfficeWorkbook, PreviewState } from './lib/localStore';
+import {
+  canRedoSheetsHistory, canUndoSheetsHistory, createSheetsHistory,
+  recordSheetsHistory, redoSheetsHistory, sameWorksheetCells, undoSheetsHistory,
+} from './lib/spreadsheetHistory';
+import type { SheetsHistory } from './lib/spreadsheetHistory';
 import {
   cellAddress, csvRowsToCells, displayCellValue, fillFormula, fillNumericSeries,
   isCsvFileSizeAllowed, isFormulaTextWithinLimit, MAX_CSV_FILE_BYTES,
@@ -21,6 +26,7 @@ import { createXlsxBlob, importXlsxFile, MAX_XLSX_FILE_BYTES, safeXlsxFilename, 
 
 const GRID_ROWS = SHEET_VISIBLE_ROWS;
 const GRID_COLUMNS = SHEET_VISIBLE_COLUMNS;
+const EMPTY_SHEETS_HISTORY = createSheetsHistory();
 function shortDate(iso: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(iso));
 }
@@ -225,6 +231,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState(notice);
   const [persistenceError, setPersistenceError] = useState(false);
+  const [historyByWorksheet, setHistoryByWorksheet] = useState<Record<string, SheetsHistory>>({});
   const [exportingXlsx, setExportingXlsx] = useState(false);
   const cancelledEditAddress = useRef<string | null>(null);
   const cellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -239,6 +246,10 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
     return values;
   }, [worksheet]);
   const rawValue = worksheet.cells[selectedAddress] ?? '';
+  const historyKey = `${workbook.id}/${worksheet.id}`;
+  const history = historyByWorksheet[historyKey] ?? EMPTY_SHEETS_HISTORY;
+  const canUndo = canUndoSheetsHistory(history, worksheet.cells);
+  const canRedo = canRedoSheetsHistory(history, worksheet.cells);
 
   const saveState = (next: PreviewState) => {
     const saved = onState(next);
@@ -246,12 +257,37 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
     if (!saved) setMessage('Changes were not saved; the last saved copy was kept.');
     return saved;
   };
+  const saveWorksheetChange = (next: PreviewState, groupKey: string | null = null) => {
+    const nextWorksheet = next.workbooks.find((item) => item.id === workbook.id)?.worksheets.find((item) => item.id === worksheet.id);
+    if (!nextWorksheet || sameWorksheetCells(worksheet.cells, nextWorksheet.cells)) return false;
+    if (!saveState(next)) return false;
+    const nextHistory = recordSheetsHistory(history, worksheet.cells, nextWorksheet.cells, groupKey);
+    if (nextHistory !== history) {
+      setHistoryByWorksheet((current) => current[historyKey] === nextHistory ? current : { ...current, [historyKey]: nextHistory });
+    }
+    return true;
+  };
   const updateCell = (address: string, value: string) => {
     if (!isFormulaTextWithinLimit(value)) {
       setMessage(`Formula text is limited to ${MAX_SHEETS_FORMULA_CHARS} characters in this local evaluator; shorten it before saving.`);
       return false;
     }
-    return saveState(updateWorksheetCell(state, workbook.id, worksheet.id, address, value));
+    if ((worksheet.cells[address] ?? '') === value) return true;
+    return saveWorksheetChange(updateWorksheetCell(state, workbook.id, worksheet.id, address, value), `cell:${address}`);
+  };
+  const undoEdit = () => {
+    const transition = undoSheetsHistory(history, worksheet.cells);
+    if (!transition.cells) return;
+    if (!saveState(updateWorksheetCells(state, workbook.id, worksheet.id, transition.cells))) return;
+    setHistoryByWorksheet((current) => ({ ...current, [historyKey]: transition.history }));
+    setMessage('Undid the last worksheet cell edit; saved on this device.');
+  };
+  const redoEdit = () => {
+    const transition = redoSheetsHistory(history, worksheet.cells);
+    if (!transition.cells) return;
+    if (!saveState(updateWorksheetCells(state, workbook.id, worksheet.id, transition.cells))) return;
+    setHistoryByWorksheet((current) => ({ ...current, [historyKey]: transition.history }));
+    setMessage('Redid the worksheet cell edit; saved on this device.');
   };
   const commitEdit = (address: string, value: string) => {
     if (cancelledEditAddress.current === address) { cancelledEditAddress.current = null; return; }
@@ -346,7 +382,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
         setMessage('Paste cancelled; no cells were changed.');
         return;
       }
-      if (!saveState(updateWorksheetCells(state, workbook.id, worksheet.id, nextCells))) return;
+      if (!saveWorksheetChange(updateWorksheetCells(state, workbook.id, worksheet.id, nextCells))) return;
       const firstAddress = cellAddress(start.row, start.column);
       setSelectedAddress(firstAddress);
       setRangeAnchor(firstAddress);
@@ -371,7 +407,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
           return;
         }
       }
-      if (!saveState(updateWorksheetCells(state, workbook.id, worksheet.id, result.cells))) return;
+      if (!saveWorksheetChange(updateWorksheetCells(state, workbook.id, worksheet.id, result.cells))) return;
       const cellLabel = result.generatedCount === 1 ? 'cell' : 'cells';
       setMessage(`Filled ${result.generatedCount} ${cellLabel} ${result.axis === 'vertical' ? 'down' : 'right'} from the first two numeric cells; saved on this device.`);
     } catch (error) {
@@ -394,7 +430,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
           return;
         }
       }
-      if (!saveState(updateWorksheetCells(state, workbook.id, worksheet.id, result.cells))) return;
+      if (!saveWorksheetChange(updateWorksheetCells(state, workbook.id, worksheet.id, result.cells))) return;
       const cellLabel = result.generatedCount === 1 ? 'formula' : 'formulas';
       setMessage(`Filled ${result.generatedCount} ${cellLabel} ${result.axis === 'vertical' ? 'down' : 'right'} from ${cellAddress(selectedRange.startRow, selectedRange.startColumn)}; relative references translated and $ anchors preserved. Saved on this device.`);
     } catch (error) {
@@ -441,9 +477,25 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
   const formulaKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
   };
+  const handleHistoryShortcut = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || (!event.ctrlKey && !event.metaKey) || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
+    const key = event.key.toLowerCase();
+    if (key === 'z' && event.shiftKey && canRedo) {
+      event.preventDefault();
+      redoEdit();
+    } else if (key === 'y' && canRedo) {
+      event.preventDefault();
+      redoEdit();
+    } else if (key === 'z' && !event.shiftKey && canUndo) {
+      event.preventDefault();
+      undoEdit();
+    }
+  };
 
   return (
-    <div className="page subpage sheet-editor-page" onCopy={copyRange} onPaste={pasteRange}>
+    <div className="page subpage sheet-editor-page" onCopy={copyRange} onPaste={pasteRange} onKeyDown={handleHistoryShortcut}>
       <div className="sheet-editor-topline">
         <button className="back-button" onClick={onBack}><ArrowLeft size={15} /> All spreadsheets</button>
         <span className="local-only-chip" role={persistenceError ? 'alert' : undefined}><LockKeyhole size={13} /> {persistenceError ? 'Not saved' : 'Saved on this device'}</span>
@@ -460,6 +512,11 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
         <span className="name-box" aria-label="Selected cell">{selectedAddress}</span>
         <span className="formula-equals">fx</span>
         <input className="formula-input" value={rawValue} onChange={(event) => updateCell(selectedAddress, event.target.value)} onKeyDown={formulaKeyDown} aria-label={`Formula or value for ${selectedAddress}`} placeholder='Try =COUNTIF(A1:A10,">5")' title={`Local formulas are limited to ${MAX_SHEETS_FORMULA_CHARS} characters. IFERROR, COUNTIF and SUMIF support exact or relational criteria; relational comparisons require matching value types, not-equal counts unlike types as different, and wildcards are unsupported.`} />
+      </div>
+      <div className="sheet-range-tools sheet-history-tools" role="toolbar" aria-label="Spreadsheet undo and redo">
+        <button type="button" className="button-secondary" aria-label="Undo spreadsheet cell edit" title="Undo last saved cell edit (Ctrl/Cmd+Z)" onClick={undoEdit} disabled={!canUndo}><Undo2 size={15} /> Undo</button>
+        <button type="button" className="button-secondary" aria-label="Redo spreadsheet cell edit" title="Redo last undone cell edit (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)" onClick={redoEdit} disabled={!canRedo}><Redo2 size={15} /> Redo</button>
+        <span className="sheet-history-note">{history.past.length} undoable · {history.future.length} redoable · up to 50 session steps per worksheet. Includes cell/formula edits, TSV paste, and both fills; not names, structure, or import/export. Ctrl/Cmd+Z undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redo on the grid (text fields keep native shortcuts). History clears on reload or when leaving this workbook.</span>
       </div>
       <div className="sheet-range-tools" role="toolbar" aria-label="Spreadsheet range tools">
         <button type="button" className="button-secondary" aria-label="Fill numeric series" title="Fill a single selected row or column from its first two finite numeric cells" onClick={applyNumericSeries}><TrendingUp size={15} /> Fill series</button>
@@ -487,11 +544,11 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
                   : <button ref={(element) => { cellRefs.current[address] = element; }} className="cell-display" onClick={(event) => { setSelectedAddress(address); if (!event.shiftKey) setRangeAnchor(address); setEditingAddress(null); }} onDoubleClick={() => beginEdit(address)} onKeyDown={(event) => cellKeyDown(event, address)} aria-label={`${address}${value ? `, ${value}` : ', blank'}${isSelected ? ', active cell' : isInRange ? ', selected range cell' : ''}`} title="Click to select; Shift+arrows extend a range. Double-click or press F2 to edit">{value}</button>}
               </td>;
             })}</tr>;
-          })}</tbody>
-        </table>
+              })}</tbody>
+            </table>
+          </div>
+          <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · references/ranges · IF · IFERROR · COUNTIF · SUMIF'}</span></div>
+      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Local formula text is capped at {MAX_SHEETS_FORMULA_CHARS} characters; IFERROR, COUNTIF and SUMIF support exact and relational criteria, relational comparisons require matching value types, not-equal criteria count unlike types as different, and wildcards are unsupported. Criteria are capped at 256 characters, formula ranges at 10,000 cells. Fill series uses two finite numeric seeds in one row or column and asks before overwriting; Fill formula translates relative A1 references and preserves `$` anchors, but refuses unsupported or out-of-grid references and asks before overwriting. Undo/redo is capped at 50 session steps per worksheet and restores saved cell-content edits, paste, and fill operations; workbook/sheet names, structure, and import/export actions are not included. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
       </div>
-      <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · references/ranges · IF · IFERROR · COUNTIF · SUMIF'}</span></div>
-      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Local formula text is capped at {MAX_SHEETS_FORMULA_CHARS} characters; IFERROR, COUNTIF and SUMIF support exact and relational criteria, relational comparisons require matching value types, not-equal criteria count unlike types as different, and wildcards are unsupported. Criteria are capped at 256 characters, formula ranges at 10,000 cells. Fill series uses two finite numeric seeds in one row or column and asks before overwriting; Fill formula translates relative A1 references and preserves `$` anchors, but refuses unsupported or out-of-grid references and asks before overwriting. Formula fill is one atomic local save; Sheets does not yet have editor undo/redo. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
-    </div>
-  );
-}
+    );
+  }

@@ -52,3 +52,6 @@
 
 .sheet-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 @media(max-width:700px){.sheet-editor-heading{flex-wrap:wrap}.sheet-export-actions{width:100%}.sheet-export-actions button{flex:1;min-height:34px;padding-inline:9px;font-size:9px}}
+
+/* Sheets session-only cell history */
+.sheet-history-tools{flex-wrap:wrap}.sheet-history-tools .button-secondary:disabled{opacity:.42;cursor:not-allowed;transform:none}.sheet-history-tools .sheet-history-note{flex:1;min-width:260px}@media(max-width:700px){.sheet-history-tools .sheet-history-note{min-width:100%}}
