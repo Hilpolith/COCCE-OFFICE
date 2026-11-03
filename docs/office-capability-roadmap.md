@@ -41,3 +41,9 @@ The table-selection portion of roadmap item 2 is now implemented: users can sele
 
 
 Cell-range selection is formatting-only: it does not authorize an excerpt AI request or a selected-text review comment. Prompt-only drafts remain prompt-only, and table text is included in AI only by the separately confirmed full-document summary action. Preview insertion is blocked while a cell range is still selected.
+
+
+## Docs local Find & Replace update
+
+A local Find & Replace panel now searches ProseMirror text runs with optional case sensitivity, wraparound previous/next navigation, current-match replacement, and explicitly confirmed Replace All. It is bounded to 128-character queries, 1,000-character replacement text, 200,000 document text characters, and 2,000 matches. The search includes individual table-cell text but does not join text across marks, paragraphs, or cells, and it excludes local review-comment sidecars. Replacements enter as plain text with the replaced range's inline marks preserved, are prevalidated for staleness/overlap/size, and apply through one undoable transaction; local autosave/recovery remains in place. Tests cover limits, literal/case behavior, table text, mark preservation, count confirmation/cancellation, undo/redo, comment orphan/re-attachment, failed-save retry state, and no network calls. This increment does not add tracked changes, DOCX comments, advanced table formatting, page layout, or Word/GenOffice parity.
+Additional safety: every replacement range must match exactly one current text node and its unchanged mark set; crafted or stale cross-run/block/cell ranges are refused before mutation. Switching the active document clears search and replacement state, with a source-document guard preventing stale-position selection. Regression tests exercise these cases in addition to ordinary search and replacement flows.

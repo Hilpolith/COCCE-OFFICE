@@ -8,10 +8,25 @@ import DocsEditor from './DocsEditor';
 
 vi.mock('./OfficeAiWriter', () => ({ default: () => null }));
 
+let originalWindowConfirm: Window['confirm'] | undefined;
+let windowConfirmStubbed = false;
+
+function stubWindowConfirm(confirm: Window['confirm']) {
+  if (!windowConfirmStubbed) originalWindowConfirm = window.confirm;
+  windowConfirmStubbed = true;
+  Object.defineProperty(window, 'confirm', { configurable: true, writable: true, value: confirm });
+}
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.restoreAllMocks();
+  if (windowConfirmStubbed) {
+    if (originalWindowConfirm) Object.defineProperty(window, 'confirm', { configurable: true, writable: true, value: originalWindowConfirm });
+    else Reflect.deleteProperty(window, 'confirm');
+    originalWindowConfirm = undefined;
+    windowConfirmStubbed = false;
+  }
 });
 
 const syntheticDocument: OfficeDocument = {
@@ -19,12 +34,18 @@ const syntheticDocument: OfficeDocument = {
   richText: '<p>Before table</p>', createdAt: '2026-11-03T09:00:00.000Z', updatedAt: '2026-11-03T09:00:00.000Z',
 };
 
-function renderEditor(document = syntheticDocument) {
-  const onPatch = vi.fn((_patch: Partial<Pick<OfficeDocument, 'title' | 'content' | 'richText'>>) => true);
+type DocsPatch = Partial<Pick<OfficeDocument, 'title' | 'content' | 'richText'>>;
+type DocsPatchMock = ReturnType<typeof vi.fn<(patch: DocsPatch) => boolean>>;
+
+function renderEditor(document = syntheticDocument, options: {
+  onPatch?: DocsPatchMock;
+  hasUnsavedChanges?: boolean;
+} = {}) {
+  const onPatch = options.onPatch ?? vi.fn<(patch: DocsPatch) => boolean>(() => true);
   const onExport = vi.fn();
   const onExportDocx = vi.fn();
   const props = {
-    hasUnsavedChanges: false,
+    hasUnsavedChanges: options.hasUnsavedChanges ?? false,
     onPatch,
     onBack: vi.fn(),
     onExport,
@@ -302,5 +323,214 @@ describe('Docs local review comments', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     await waitFor(() => expect(content.querySelector('.docs-review-comment-anchor')?.textContent).toBe('Before'));
+  });
+});
+
+async function openFindPanel() {
+  fireEvent.click(screen.getByRole('button', { name: 'Find & Replace' }));
+  return await screen.findByRole('search', { name: 'Find and replace in document' });
+}
+
+function findPanelStatus(panel: Element): string {
+  return panel.querySelector('[role="alert"], [role="status"]')?.textContent ?? '';
+}
+
+describe('Docs local Find & Replace', () => {
+  it('navigates literal matches, replaces only the current result, saves locally, and groups undo/redo', async () => {
+    const localDocument: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'alpha beta alpha',
+      richText: '<p>alpha beta alpha</p>',
+    };
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { onPatch } = renderEditor(localDocument);
+    const panel = await openFindPanel();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find in document' }), { target: { value: 'alpha' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Replace with' }), { target: { value: 'gamma' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 2'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(findPanelStatus(panel)).toContain('Match 2 of 2');
+    fireEvent.click(screen.getByRole('button', { name: 'Replace current' }));
+    const content = screen.getByRole('textbox', { name: 'Document content' });
+    await waitFor(() => expect(content.textContent).toBe('alpha beta gamma'));
+    expect(onPatch.mock.calls.some(([patch]) => patch.richText?.includes('alpha beta gamma'))).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(content.textContent).toBe('alpha beta alpha'));
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
+    await waitFor(() => expect(content.textContent).toBe('alpha beta gamma'));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('requires an affirmative count-confirmation for Replace All and leaves cancelled text untouched', async () => {
+    const localDocument: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'Before Before',
+      richText: '<p>Before Before</p>',
+    };
+    const confirm = vi.fn((_message?: string) => false);
+    confirm.mockReturnValueOnce(false).mockReturnValueOnce(true);
+    stubWindowConfirm(confirm);
+    const { onPatch } = renderEditor(localDocument);
+    const panel = await openFindPanel();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find in document' }), { target: { value: 'Before' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Replace with' }), { target: { value: 'Reviewed' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 2'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replace all' }));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Replace all 2 matches'));
+    expect(screen.getByRole('textbox', { name: 'Document content' }).textContent).toBe('Before Before');
+    expect(findPanelStatus(panel)).toContain('cancelled');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replace all' }));
+    const content = screen.getByRole('textbox', { name: 'Document content' });
+    await waitFor(() => expect(content.textContent).toBe('Reviewed Reviewed'));
+    expect(onPatch.mock.calls.some(([patch]) => patch.richText?.includes('Reviewed Reviewed'))).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(content.textContent).toBe('Before Before'));
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
+    await waitFor(() => expect(content.textContent).toBe('Reviewed Reviewed'));
+  });
+
+  it('searches table-cell text but excludes comment sidecars and safely orphans then reattaches changed comment anchors', async () => {
+    const tableDocument: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'Before table\nNeedle in cell',
+      richText: '<p>Before table</p><table><tbody><tr><td><p>Needle in cell</p></td></tr></tbody></table>',
+    };
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { onPatch } = renderEditor(tableDocument);
+    await createLocalReviewComment('This note is private sidecar text.');
+    const panel = await openFindPanel();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find in document' }), { target: { value: 'Needle' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 1'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find in document' }), { target: { value: 'private sidecar' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('No matches'));
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find in document' }), { target: { value: 'Before' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Replace with' }), { target: { value: 'Revised' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace current' }));
+    const content = screen.getByRole('textbox', { name: 'Document content' });
+    await screen.findByText(/original text has changed or moved/);
+    const stored = JSON.parse(window.localStorage.getItem(DOCS_REVIEW_COMMENTS_STORAGE_KEY) ?? 'null');
+    expect(stored.comments[0]).toMatchObject({ quote: 'Before', body: 'This note is private sidecar text.', anchorState: 'orphaned' });
+    expect(content.querySelector('.docs-review-comment-anchor')).toBeNull();
+    expect(content.querySelector('table td')?.textContent).toBe('Needle in cell');
+    expect(onPatch.mock.calls.some(([patch]) => patch.richText?.includes('<td><p>Needle in cell</p></td>'))).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(content.querySelector('.docs-review-comment-anchor')?.textContent).toBe('Before'));
+    expect(JSON.parse(window.localStorage.getItem(DOCS_REVIEW_COMMENTS_STORAGE_KEY) ?? 'null').comments[0].anchorState).toBe('attached');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('replace-all preserves rich-text marks and table structure through one saved local edit', async () => {
+    const localDocument: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'Needle in heading\nNeedle in cell',
+      richText: '<p><strong>Needle</strong> in heading</p><table><tbody><tr><td><p>Needle in cell</p></td></tr></tbody></table>',
+    };
+    const confirm = vi.fn((_message?: string) => true);
+    stubWindowConfirm(confirm);
+    const { onPatch } = renderEditor(localDocument);
+    const panel = await openFindPanel();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find in document' }), { target: { value: 'needle' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Replace with' }), { target: { value: 'Found' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 2'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace all' }));
+
+    const content = screen.getByRole('textbox', { name: 'Document content' });
+    await waitFor(() => expect(content.textContent).toBe('Found in headingFound in cell'));
+    expect(content.querySelector('strong')?.textContent).toBe('Found');
+    expect(content.querySelector('table td')?.textContent).toBe('Found in cell');
+    expect(content.querySelectorAll('table')).toHaveLength(1);
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Replace all 2 matches'));
+    expect(onPatch.mock.calls.some(([patch]) => patch.richText?.includes('<strong>Found</strong>'))).toBe(true);
+  });
+});
+
+
+describe('Docs Find & Replace keyboard and recovery paths', () => {
+  it('toggles case sensitivity and wraps Next/Previous with Enter and Shift+Enter', async () => {
+    const localDocument: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'CAT cat Cat',
+      richText: '<p>CAT cat Cat</p>',
+    };
+    renderEditor(localDocument);
+    const panel = await openFindPanel();
+    const find = screen.getByRole('textbox', { name: 'Find in document' });
+    fireEvent.change(find, { target: { value: 'cat' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 3'));
+
+    fireEvent.keyDown(find, { key: 'Enter' });
+    expect(findPanelStatus(panel)).toContain('Match 2 of 3');
+    fireEvent.keyDown(find, { key: 'Enter', shiftKey: true });
+    expect(findPanelStatus(panel)).toContain('Match 1 of 3');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Match case' }));
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 1'));
+  });
+
+  it('keeps the established unsaved/retry state when the parent rejects the local save', async () => {
+    const localDocument: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'Before table',
+      richText: '<p>Before table</p>',
+    };
+    const onPatch = vi.fn((_patch: Partial<Pick<OfficeDocument, 'title' | 'content' | 'richText'>>) => false);
+    renderEditor(localDocument, { onPatch, hasUnsavedChanges: true });
+    const panel = await openFindPanel();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find in document' }), { target: { value: 'Before' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Replace with' }), { target: { value: 'Revised' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace current' }));
+
+    const content = screen.getByRole('textbox', { name: 'Document content' });
+    await waitFor(() => expect(content.textContent).toBe('Revised table'));
+    expect(screen.getByText(/Unsaved · kept in this tab/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry save' })).toBeTruthy();
+    expect(onPatch.mock.calls.some(([patch]) => patch.richText?.includes('Revised table'))).toBe(true);
+    const priorCalls = onPatch.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry save' }));
+    expect(onPatch).toHaveBeenCalledTimes(priorCalls + 1);
+    expect(onPatch.mock.calls.at(-1)?.[0].richText).toContain('Revised table');
+  });
+});
+
+
+describe('Docs Find & Replace document switching', () => {
+  it('clears stale query/replacement state and searches the newly loaded document', async () => {
+    const firstDocument: OfficeDocument = {
+      ...syntheticDocument,
+      id: 'first-find-doc',
+      content: 'Unique first draft',
+      richText: '<p>Unique first draft</p>',
+    };
+    const secondDocument: OfficeDocument = {
+      ...syntheticDocument,
+      id: 'second-find-doc',
+      content: 'Other second draft',
+      richText: '<p>Other second draft</p>',
+    };
+    const { onPatch, switchDocument } = renderEditor(firstDocument);
+    const panel = await openFindPanel();
+    const find = screen.getByRole('textbox', { name: 'Find in document' });
+    const replaceWith = screen.getByRole('textbox', { name: 'Replace with' });
+    fireEvent.change(find, { target: { value: 'Unique' } });
+    fireEvent.change(replaceWith, { target: { value: 'Stale replacement' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 1'));
+
+    switchDocument(secondDocument);
+    await waitFor(() => expect((screen.getByRole('textbox', { name: 'Find in document' }) as HTMLInputElement).value).toBe(''));
+    expect((screen.getByRole('textbox', { name: 'Replace with' }) as HTMLInputElement).value).toBe('');
+    expect(findPanelStatus(panel)).toContain('Enter text to search');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find in document' }), { target: { value: 'Other' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Replace with' }), { target: { value: 'Updated' } });
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('Match 1 of 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace current' }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Document content' }).textContent).toBe('Updated second draft'));
+    expect(onPatch.mock.calls.some(([patch]) => patch.richText?.includes('Updated second draft'))).toBe(true);
   });
 });

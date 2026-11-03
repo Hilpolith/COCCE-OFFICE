@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { Extension } from '@tiptap/core';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import type { Editor } from '@tiptap/react';
@@ -8,7 +8,7 @@ import { TableKit } from '@tiptap/extension-table';
 import Underline from '@tiptap/extension-underline';
 import { DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import type { Selection } from '@tiptap/pm/state';
 import { CellSelection } from '@tiptap/pm/tables';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
@@ -22,12 +22,14 @@ import {
   saveDocsReviewComment,
 } from './lib/docsReviewComments';
 import type { DocsReviewComment } from './lib/docsReviewComments';
+import { findDocsTextMatches, MAX_DOCS_FIND_MATCHES, MAX_DOCS_FIND_QUERY_CHARS, MAX_DOCS_FIND_REPLACEMENT_CHARS, replaceDocsTextMatches } from './lib/docsFindReplace';
+import type { DocsTextMatch } from './lib/docsFindReplace';
 import OfficeAiWriter from './OfficeAiWriter';
 import './docs.css';
 import {
   ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
   FileText, Heading1, Heading2, Heading3, Italic, List, ListOrdered, LockKeyhole, MessageSquarePlus,
-  Pilcrow, Quote, Redo2, Rows3, Strikethrough, Table2, Trash2, RotateCcw,
+  Pilcrow, Quote, Redo2, Replace, Rows3, Search, Strikethrough, Table2, Trash2, RotateCcw,
   Underline as UnderlineIcon, Undo2, X,
 } from 'lucide-react';
 
@@ -237,6 +239,14 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const [initialHtml] = useState(() => initialDocumentHtml(document.content, document.richText));
   const [insertRows, setInsertRows] = useState('3');
   const [insertColumns, setInsertColumns] = useState('3');
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [findReplacement, setFindReplacement] = useState('');
+  const [findCaseSensitive, setFindCaseSensitive] = useState(false);
+  const [findMatchIndex, setFindMatchIndex] = useState(0);
+  const [findDocumentRevision, setFindDocumentRevision] = useState(0);
+  const [findNotice, setFindNotice] = useState<{ text: string; error: boolean }>({ text: '', error: false });
+  const findInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => { patchRef.current = onPatch; }, [onPatch]);
 
@@ -270,6 +280,10 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     onUpdate: ({ editor: activeEditor }) => { saveEditor(activeEditor); },
     onBlur: ({ editor: activeEditor }) => { saveEditor(activeEditor); },
     onTransaction: ({ editor: activeEditor, transaction }) => {
+      if (transaction.docChanged) {
+        setFindDocumentRevision((revision) => revision + 1);
+        setFindMatchIndex(0);
+      }
       if (!transaction.docChanged || suppressCommentAnchorPersistence.current) return;
       const pluginState = docsReviewCommentPluginKey.getState(activeEditor.state);
       const scope = reviewCommentScopeRef.current;
@@ -295,6 +309,17 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     },
   });
 
+  const findResult = useMemo(() => {
+    const sourceDoc = editor?.state.doc ?? null;
+    if (!editor || !findQuery) return { matches: [] as DocsTextMatch[], error: '', revision: findDocumentRevision, sourceDoc };
+    try { return { matches: findDocsTextMatches(editor.state.doc, findQuery, findCaseSensitive), error: '', revision: findDocumentRevision, sourceDoc }; }
+    catch (error) { return { matches: [] as DocsTextMatch[], error: error instanceof Error ? error.message : 'Document search failed.', revision: findDocumentRevision, sourceDoc }; }
+  }, [editor, findCaseSensitive, findDocumentRevision, findQuery]);
+
+  useEffect(() => {
+    if (findOpen) findInputRef.current?.focus();
+  }, [findOpen]);
+
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
     const nextScope = makeDocsReviewScope(document.workspaceId, document.id);
@@ -315,6 +340,11 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       return;
     }
     const loaded = loadDocsReviewComments(nextScope);
+    setFindQuery('');
+    setFindReplacement('');
+    setFindMatchIndex(0);
+    setFindNotice({ text: '', error: false });
+    setFindDocumentRevision((revision) => revision + 1);
     reviewCommentScopeRef.current = nextScope;
     reviewCommentsRef.current = loaded.comments;
     extensionStorage.scope = nextScope;
@@ -335,6 +365,16 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       suppressCommentAnchorPersistence.current = false;
     }
   }, [editor, document.id, document.workspaceId, document.content, document.richText]);
+
+  useEffect(() => {
+    const match = findResult.matches[0];
+    if (!findOpen || !editor || !findQuery || findResult.error || findResult.sourceDoc !== editor.state.doc || !match) return;
+    const selection = editor.state.selection;
+    if (selection.from === match.from && selection.to === match.to) return;
+    editor.view.dispatch(editor.state.tr
+      .setSelection(TextSelection.create(editor.state.doc, match.from, match.to))
+      .scrollIntoView());
+  }, [editor, findOpen, findQuery, findResult]);
 
   const editorState = useEditorState({
     editor,
@@ -495,6 +535,95 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     }
   };
 
+  const readCurrentFindMatches = (): DocsTextMatch[] | null => {
+    if (!editor) return null;
+    try { return findDocsTextMatches(editor.state.doc, findQuery, findCaseSensitive); }
+    catch (error) {
+      setFindNotice({ text: error instanceof Error ? error.message : 'Document search failed.', error: true });
+      return null;
+    }
+  };
+
+  const navigateFindMatch = (direction: -1 | 1) => {
+    const matches = readCurrentFindMatches();
+    if (!matches || !editor) return;
+    if (!matches.length) {
+      setFindNotice({ text: 'No matches in this document.', error: false });
+      return;
+    }
+    const current = Math.min(findMatchIndex, matches.length - 1);
+    const next = (current + direction + matches.length) % matches.length;
+    const match = matches[next]!;
+    setFindMatchIndex(next);
+    editor.view.dispatch(editor.state.tr
+      .setSelection(TextSelection.create(editor.state.doc, match.from, match.to))
+      .scrollIntoView());
+    setFindNotice({ text: `Match ${next + 1} of ${matches.length}.`, error: false });
+  };
+
+  const handleFindKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      navigateFindMatch(event.shiftKey ? -1 : 1);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setFindOpen(false);
+    }
+  };
+
+  const replaceCurrentFindMatch = () => {
+    if (!editor) return;
+    const matches = readCurrentFindMatches();
+    if (!matches) return;
+    if (!matches.length) {
+      setFindNotice({ text: 'No matches in this document; no text was changed.', error: false });
+      return;
+    }
+    const index = Math.min(findMatchIndex, matches.length - 1);
+    try {
+      const result = replaceDocsTextMatches(editor.state.tr, editor.state.doc, [matches[index]!], findReplacement);
+      if (!result.replacedCount) {
+        setFindNotice({ text: 'The replacement is identical to this match; no text was changed.', error: false });
+        return;
+      }
+      editor.view.dispatch(result.transaction.scrollIntoView());
+      setFindNotice({ text: 'Replaced the current match. Use Undo to restore it.', error: false });
+    } catch (error) {
+      setFindNotice({ text: error instanceof Error ? error.message : 'The current match could not be replaced.', error: true });
+    }
+  };
+
+  const replaceAllFindMatches = () => {
+    if (!editor) return;
+    const matches = readCurrentFindMatches();
+    if (!matches) return;
+    if (!matches.length) {
+      setFindNotice({ text: 'No matches in this document; no text was changed.', error: false });
+      return;
+    }
+    if (matches.every((match) => match.text === findReplacement)) {
+      setFindNotice({ text: 'The replacement already matches every result; no text was changed.', error: false });
+      return;
+    }
+    const approved = window.confirm(`Replace all ${matches.length.toLocaleString()} matches in this local document? This is one undoable edit; no document text is sent anywhere.`);
+    if (!approved) {
+      setFindNotice({ text: 'Replace all cancelled; no text was changed.', error: false });
+      return;
+    }
+    try {
+      const result = replaceDocsTextMatches(editor.state.tr, editor.state.doc, matches, findReplacement);
+      if (!result.replacedCount) {
+        setFindNotice({ text: 'No text was changed.', error: false });
+        return;
+      }
+      editor.view.dispatch(result.transaction.scrollIntoView());
+      const skipped = result.unchangedCount ? ` ${result.unchangedCount} already matched the replacement.` : '';
+      setFindNotice({ text: `Replaced ${result.replacedCount.toLocaleString()} matches.${skipped} Undo restores the whole edit.`, error: false });
+    } catch (error) {
+      setFindNotice({ text: error instanceof Error ? error.message : 'Replace all failed; no text was changed.', error: true });
+    }
+  };
+
   return <div className="page editor-page">
     <div className="editor-toolbar">
       <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
@@ -504,6 +633,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
           {hasUnsavedChanges ? 'Unsaved · kept in this tab' : 'Saved on this device'}
         </span>
         {hasUnsavedChanges && <button type="button" className="button-secondary small-button" onClick={() => { if (editor) saveEditor(editor); }}>Retry save</button>}
+        <button type="button" className="button-secondary small-button" aria-expanded={findOpen} aria-controls={findOpen ? 'docs-find-panel' : undefined} onClick={() => { setFindOpen((open) => !open); setFindNotice({ text: '', error: false }); }}><Search size={14} /> Find &amp; Replace</button>
         <button type="button" className="button-secondary small-button" onClick={() => onExport(editor?.getHTML() ?? document.richText ?? '')}><ArrowUpRight size={14} /> Export .md</button>
         <button type="button" className="button-secondary small-button" onClick={() => { void onExportDocx(editor?.getHTML() ?? document.richText ?? ''); }}><FileText size={14} /> Export .docx</button>
         <button type="button" className="icon-button danger-button" onClick={onDelete} aria-label="Delete document" title="Delete local document"><X size={16} /></button>
@@ -570,6 +700,29 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     </div>
     <p className="docs-table-limit-copy">{DOCS_TABLE_LIMITS_COPY}</p>
     {tableNotice && <p className="docs-table-warning" role="status">{tableNotice}</p>}
+
+    {findOpen && <section id="docs-find-panel" className="docs-find-panel glass-card" role="search" aria-label="Find and replace in document">
+      <div className="docs-find-heading"><div><strong><Search size={15} /> Find &amp; Replace</strong><span>Search this document locally; changes use normal undo and autosave.</span></div>
+        <button type="button" className="docs-find-close" aria-label="Close Find & Replace" onClick={() => setFindOpen(false)}><X size={16} /></button>
+      </div>
+      <div className="docs-find-fields">
+        <label className="docs-find-field"><span>Find</span><input ref={findInputRef} type="text" autoComplete="off" spellCheck={false} maxLength={MAX_DOCS_FIND_QUERY_CHARS}
+          value={findQuery} onKeyDown={handleFindKeyDown} onChange={(event) => { setFindQuery(event.target.value); setFindMatchIndex(0); setFindNotice({ text: '', error: false }); }} aria-label="Find in document" placeholder="Word or phrase" /></label>
+        <label className="docs-find-field"><span>Replace with</span><input type="text" maxLength={MAX_DOCS_FIND_REPLACEMENT_CHARS} value={findReplacement}
+          onKeyDown={handleFindKeyDown} onChange={(event) => { setFindReplacement(event.target.value); setFindNotice({ text: '', error: false }); }} aria-label="Replace with" placeholder="Plain text" /></label>
+        <label className="docs-find-case"><input type="checkbox" checked={findCaseSensitive} onChange={(event) => { setFindCaseSensitive(event.target.checked); setFindMatchIndex(0); setFindNotice({ text: '', error: false }); }} /> Match case</label>
+      </div>
+      <div className="docs-find-actions">
+        <button type="button" className="docs-find-button" disabled={!findResult.matches.length || Boolean(findResult.error)} onMouseDown={(event) => event.preventDefault()} onClick={() => navigateFindMatch(-1)}>Previous</button>
+        <button type="button" className="docs-find-button" disabled={!findResult.matches.length || Boolean(findResult.error)} onMouseDown={(event) => event.preventDefault()} onClick={() => navigateFindMatch(1)}>Next</button>
+        <button type="button" className="docs-find-button" disabled={!findResult.matches.length || Boolean(findResult.error)} onMouseDown={(event) => event.preventDefault()} onClick={replaceCurrentFindMatch}><Replace size={14} /> Replace current</button>
+        <button type="button" className="docs-find-button docs-find-primary" disabled={!findResult.matches.length || Boolean(findResult.error)} onMouseDown={(event) => event.preventDefault()} onClick={replaceAllFindMatches}><Replace size={14} /> Replace all</button>
+      </div>
+      <p className={`docs-find-status ${findResult.error || findNotice.error ? 'is-error' : ''}`} role={findResult.error || findNotice.error ? 'alert' : 'status'} aria-live="polite">
+        {findResult.error || findNotice.text || (!findQuery ? 'Enter text to search this document.' : findResult.matches.length ? `Match ${Math.min(findMatchIndex + 1, findResult.matches.length)} of ${findResult.matches.length}.` : 'No matches in this document.')}
+      </p>
+      <p className="docs-find-note">Search is local and excludes review-comment notes. Matches do not cross inline-formatting, paragraph, or table-cell boundaries. Limits: {MAX_DOCS_FIND_QUERY_CHARS}-character query, {MAX_DOCS_FIND_REPLACEMENT_CHARS.toLocaleString()}-character replacement, {MAX_DOCS_FIND_MATCHES.toLocaleString()} matches, and 200,000 document text characters.</p>
+    </section>}
 
     <OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} />
 

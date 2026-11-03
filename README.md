@@ -54,3 +54,9 @@ The verified [Office capability matrix and roadmap](docs/office-capability-roadm
 
 **Docs table range authoring:** In a simple table, select the current row, current column, or all cells, then use the existing bold, italic, underline, or strikethrough controls across that selection. These are ordinary local editor edits covered by undo/redo and save/recovery; selection itself is transient. The bounded DOCX table subset is unchanged. Cell shading, alignment, custom widths, merging, and full Word compatibility are not included.
 Cell-range selection is for formatting only; it does not count as selected text for AI excerpt actions or local review comments. Table text is sent to AI only through the separate full-document summary confirmation, and a preview cannot be applied while a cell range remains active.
+
+
+## Docs local Find & Replace
+
+Docs now searches and replaces literal text locally in the active document. Search is case-insensitive by default, with an optional case-sensitive mode; Previous/Next and Enter/Shift+Enter navigate through up to 2,000 matches. A query is limited to 128 characters, replacements to 1,000 characters, and a search scans documents up to 200,000 text characters. Matches are found within individual text runs, so they do not span inline-format boundaries, paragraphs, or table cells; table-cell text is searchable, while review-comment notes are excluded. Replacements are inserted as plain text, retain the replaced text's inline marks, and use the ordinary Docs autosave/recovery and undo/redo path. Replace All shows an explicit match-count confirmation and applies one undoable local edit; it never sends document text over the network or invokes AI. This does not add tracked changes or DOCX comment support.
+Find state belongs only to the active document; switching documents clears the query and replacement so old matches cannot carry over.

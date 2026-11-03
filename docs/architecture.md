@@ -78,3 +78,9 @@ The Docs table toolbar creates ProseMirror `CellSelection` ranges for the active
 
 
 Cell-range selections are excluded from excerpt-AI capture and local review-comment creation. Prompt-only drafts continue to send only the typed brief. Full-document summaries can still include table text only through their existing separate affirmative confirmation; an AI preview cannot be inserted while a table-cell range is active.
+
+
+## Docs local Find & Replace boundary
+
+`src/lib/docsFindReplace.ts` walks ProseMirror text nodes and returns local document positions; it does not concatenate paragraphs/cells or search comment sidecar data. It caps queries at 128 characters, replacements at 1,000 characters, scanned document text at 200,000 characters, and results at 2,000. Literal matches are case-insensitive by default. Each replacement is revalidated against current text; output size and all ranges are validated before a transaction is built. Plain-text inserted content preserves the matched inline marks, and Replace All applies all changed ranges in one ordinary editor transaction for the existing undo/autosave/recovery path. The UI requires explicit confirmation before Replace All. No fetch/API, AI, export-schema, storage-key, or cloud behavior is added.
+Replacement ranges are rechecked against one current ProseMirror text node and its current inline-mark set; ranges that cross marks, paragraphs, or cells, or carry altered marks, are rejected before any transaction step. Search results are tied to the current document object/revision, and switching document scope clears the query and replacement before the new content can be navigated.
