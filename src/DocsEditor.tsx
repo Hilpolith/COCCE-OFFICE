@@ -133,7 +133,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <span className="docs-format-hint">Local rich text</span>
     </div>
 
-    <OfficeAiWriter editor={editor} onGoToTeam={onGoToTeam} />
+    <OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} />
 
     <article className="document-canvas glass-card">
       <input className="document-title-input" value={document.title} onChange={(event) => {

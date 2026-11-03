@@ -117,6 +117,27 @@ test('POST sends only an explicitly selected excerpt to the fixed free OpenRoute
   assert.equal(JSON.stringify(res.body).includes(OPENROUTER_TEST_KEY), false);
 });
 
+test('document_summary sends only synthetic plain text plus the fixed server instruction', async () => {
+  const { handler, calls } = makeHarness();
+  const syntheticText = 'Synthetic full document body for contract testing.';
+  const res = await invoke(handler, { body: { action: 'document_summary', documentText: syntheticText } });
+  assert.equal(res.statusCode, 200);
+  const providerCall = providerCallFrom(calls);
+  assert.ok(providerCall);
+  const request = JSON.parse(providerCall.init.body);
+  assert.equal(request.model, FREE_MODEL_ID);
+  assert.deepEqual(request.provider, { only: ['google-ai-studio'], allow_fallbacks: false });
+  const userContent = JSON.parse(request.messages[1].content);
+  assert.deepEqual(Object.keys(userContent).sort(), ['action', 'documentText', 'instruction']);
+  assert.equal(userContent.action, 'document_summary');
+  assert.equal(userContent.documentText, syntheticText);
+  assert.match(userContent.instruction, /complete supplied document/i);
+  for (const forbidden of ['selectedText', 'prompt', 'documentTitle', 'documentId', 'fileName', 'documentContent']) {
+    assert.equal(Object.hasOwn(userContent, forbidden), false, `${forbidden} must not reach OpenRouter`);
+  }
+  assert.equal(JSON.stringify(request).includes('Synthetic local report'), false);
+});
+
 test('draft sends only the typed brief and never an existing document selection', async () => {
   const { handler, calls } = makeHarness();
   const res = await invoke(handler, { body: { action: 'draft', prompt: 'Draft notes from these user-supplied facts.' } });
@@ -140,6 +161,21 @@ test('invalid or over-broad request fields are rejected before any OpenRouter ca
   assert.equal(JSON.stringify(calls).includes('entire document'), false);
 });
 
+test('document summaries reject selected-text, prompt, and metadata fields rather than broadening the payload', async () => {
+  const { handler, calls } = makeHarness();
+  for (const body of [
+    { action: 'document_summary', documentText: 'Synthetic text.', selectedText: 'extra excerpt' },
+    { action: 'document_summary', documentText: 'Synthetic text.', prompt: 'extra prompt' },
+    { action: 'document_summary', documentText: 'Synthetic text.', documentTitle: 'private title' },
+    { action: 'summarize', selectedText: 'Synthetic excerpt.', documentText: 'must not append document' },
+  ]) {
+    const res = await invoke(handler, { body });
+    assert.equal(res.statusCode, 400);
+  }
+  assert.equal(providerCallFrom(calls), undefined);
+  assert.equal(JSON.stringify(calls).includes('must not append document'), false);
+});
+
 test('clients cannot supply model, alternate models, or provider-routing overrides', async () => {
   const { handler, calls } = makeHarness();
   for (const body of [
@@ -158,6 +194,8 @@ test('draft requests containing any selectedText field are rejected', async () =
   const res = await invoke(handler, { body: { action: 'draft', prompt: 'Write a note.', selectedText: 'existing text' } });
   assert.equal(res.statusCode, 400);
   assert.equal(res.body.error, 'DRAFT_MUST_NOT_INCLUDE_SELECTION');
+  const withDocumentText = await invoke(handler, { body: { action: 'draft', prompt: 'Write a note.', documentText: 'existing document' } });
+  assert.equal(withDocumentText.statusCode, 400);
   assert.equal(providerCallFrom(calls), undefined);
 });
 
@@ -206,7 +244,45 @@ test('enforces excerpt, prompt, and request-size limits', async () => {
   assert.equal(longPrompt.statusCode, 400);
   const hugeBody = await invoke(handler, { body: { action: 'summarize', selectedText: 'x'.repeat(40_001) } });
   assert.equal(hugeBody.statusCode, 413);
+  const longDocument = await invoke(handler, { body: { action: 'document_summary', documentText: 'x'.repeat(20_001) } });
+  assert.equal(longDocument.statusCode, 413);
+  assert.equal(longDocument.body.error, 'DOCUMENT_TOO_LARGE');
+  const multibyteDocument = await invoke(handler, { body: { action: 'document_summary', documentText: '😀'.repeat(10_000) } });
+  assert.equal(multibyteDocument.statusCode, 413);
+  assert.equal(multibyteDocument.body.error, 'DOCUMENT_TOO_LARGE');
   assert.equal(providerCallFrom(calls), undefined);
+});
+
+test('accepts a bounded multibyte synthetic full document and preserves the exact text', async () => {
+  const { handler, calls } = makeHarness();
+  const syntheticText = 'é'.repeat(10_000);
+  const res = await invoke(handler, { body: { action: 'document_summary', documentText: syntheticText } });
+  assert.equal(res.statusCode, 200);
+  const userContent = JSON.parse(JSON.parse(providerCallFrom(calls).init.body).messages[1].content);
+  assert.equal(userContent.documentText, syntheticText);
+});
+
+test('accepts exactly 38,000 serialized bytes and rejects the next byte before Auth', async () => {
+  const emptyPayload = JSON.stringify({ action: 'document_summary', documentText: '' });
+  const remainingBytes = 38_000 - Buffer.byteLength(emptyPayload, 'utf8');
+  const cjkCharacters = Math.floor(remainingBytes / 3);
+  const asciiRemainder = remainingBytes - cjkCharacters * 3;
+  const documentText = '界'.repeat(cjkCharacters) + 'x'.repeat(asciiRemainder);
+  const body = JSON.stringify({ action: 'document_summary', documentText });
+  assert.equal(Buffer.byteLength(body, 'utf8'), 38_000);
+  assert.ok(documentText.length <= 20_000);
+
+  const { handler, calls } = makeHarness();
+  const accepted = await invoke(handler, { body, contentLength: 38_000 });
+  assert.equal(accepted.statusCode, 200);
+  const callsAfterAccepted = calls.length;
+
+  const oneByteTooLarge = JSON.stringify({ action: 'document_summary', documentText: `${documentText}x` });
+  assert.equal(Buffer.byteLength(oneByteTooLarge, 'utf8'), 38_001);
+  const rejected = await invoke(handler, { body: oneByteTooLarge, contentLength: 38_001 });
+  assert.equal(rejected.statusCode, 413);
+  assert.equal(rejected.body.error, 'DOCUMENT_TOO_LARGE');
+  assert.equal(calls.length, callsAfterAccepted);
 });
 
 test('rejects oversized declared bodies before Auth or provider calls', async () => {

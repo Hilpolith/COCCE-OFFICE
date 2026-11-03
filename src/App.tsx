@@ -372,7 +372,7 @@ function SettingsPage({ state, onTheme, onAccent }: { state: PreviewState; onThe
     <section className="settings-panel glass-card connection-panel">
       <div className="settings-heading"><div className="settings-icon connection-icon"><Activity size={18} /></div><div><h2>Connection status</h2><p>Office Team collaboration is server-backed; most productivity tools remain browser-local.</p></div></div>
       <div className="connection-list"><ConnectionRow label="COCCE Auth" value="Existing accounts · Team only" /><ConnectionRow label="Office collaboration data" value="Office-specific backend" /><ConnectionRow label="Cloud file storage" value="Not connected" /><ConnectionRow label="AI provider" value="OpenRouter free model · Docs only" /></div>
-      <p className="connection-note">Office collaboration uses existing COCCE Auth and only Office-specific database objects. Docs AI sends only a selected excerpt or typed draft prompt to the fixed OpenRouter free model after a user action. The Google AI Studio provider policy listed by OpenRouter states 55-day prompt retention and no training; no whole-document uploads or background AI runs occur.</p>
+      <p className="connection-note">Office collaboration uses existing COCCE Auth and only Office-specific database objects. Docs AI sends selected excerpts or typed draft prompts after a user action; a full-document summary requires a separate confirmation and sends bounded plain text only. The fixed free Google AI Studio provider is listed as retaining prompts for 55 days with no training; no paid or alternate-provider fallback or background AI run occurs.</p>
     </section>
   </div>;
 }

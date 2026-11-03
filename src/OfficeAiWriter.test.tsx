@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Editor } from '@tiptap/react';
 import OfficeAiWriter from './OfficeAiWriter';
+import { OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS } from './lib/officeAi';
 
 const mocks = vi.hoisted(() => {
   const auth = { getSession: vi.fn(), onAuthStateChange: vi.fn() };
@@ -20,9 +21,11 @@ vi.mock('./lib/officeTeamSupabase', () => ({
   getOfficeTeamClient: () => mocks.client,
 }));
 
-function makeEditor() {
+function makeEditor(documentText = 'Synthetic full document content for consent tests.') {
+  let currentDocumentText = documentText;
   const doc = {
-    textBetween: vi.fn(() => 'Only the selected paragraph.'),
+    content: { size: documentText.length },
+    textBetween: vi.fn((from: number, to: number) => from === 0 && to === documentText.length ? currentDocumentText : 'Only the selected paragraph.'),
     eq: vi.fn(() => true),
   };
   const chain = {
@@ -36,7 +39,7 @@ function makeEditor() {
     off: vi.fn(),
     chain: vi.fn(() => chain),
   };
-  return { editor: editor as unknown as Editor, doc, chain };
+  return { editor: editor as unknown as Editor, doc, chain, setDocumentText: (text: string) => { currentDocumentText = text; } };
 }
 
 function mockFetch() {
@@ -108,6 +111,109 @@ describe('Docs AI writing studio', () => {
       action: 'draft',
       prompt: 'Draft a memo from only the facts in this brief.',
     });
+  });
+
+  it('requires affirmative full-document confirmation, sends only text, and inserts only after preview approval', async () => {
+    const fetcher = mockFetch();
+    const syntheticText = 'Synthetic full document content for consent tests.';
+    const { editor, chain } = makeEditor(syntheticText);
+    render(<OfficeAiWriter editor={editor} documentTitle="Synthetic local report" onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    const confirmation = screen.getByRole('alertdialog', { name: 'Confirm full-document summary' });
+    expect(confirmation.textContent).toContain('Synthetic local report');
+    expect(confirmation.textContent).toContain('complete plain-text content');
+    expect(confirmation.textContent).toContain('OpenRouter');
+    expect(confirmation.textContent).toContain('Google AI Studio');
+    expect(confirmation.textContent).toContain('55-day prompt retention and no training');
+    expect(confirmation.textContent).toContain('No paid model or alternate provider fallback');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Confirm and send full text' }));
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /Cancel/ }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    expect(chain.insertContentAt).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
+    expect(await screen.findByText('A preview edit.')).toBeTruthy();
+    const postCall = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
+    expect(JSON.parse(String(postCall?.init?.body))).toEqual({ action: 'document_summary', documentText: syntheticText });
+    expect(String(postCall?.init?.body)).not.toContain('Synthetic local report');
+    expect(chain.insertContentAt).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Insert summary at cursor' }));
+    expect(chain.insertContentAt).toHaveBeenCalledWith({ from: 30, to: 30 }, { type: 'text', text: 'A preview edit.' });
+  });
+
+  it('does not send a document if its snapshot changes after the confirmation is displayed', async () => {
+    const fetcher = mockFetch();
+    const { editor, doc } = makeEditor();
+    render(<OfficeAiWriter editor={editor} documentTitle="Synthetic local report" onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+
+    doc.eq.mockReturnValue(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Nothing was sent');
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('rechecks the exact plain-text snapshot after Auth preflight before sending', async () => {
+    let statusChecks = 0;
+    let releaseSecondStatusCheck: ((response: Response) => void) | undefined;
+    const secondStatusCheck = new Promise<Response>((resolve) => { releaseSecondStatusCheck = resolve; });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') return { ok: true, json: async () => ({ text: 'A preview edit.' }) } as Response;
+      statusChecks += 1;
+      if (statusChecks === 2) return secondStatusCheck;
+      return { ok: true, json: async () => ({ configured: true }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const originalText = 'Synthetic full document content for consent tests.';
+    const { editor, setDocumentText } = makeEditor(originalText);
+    render(<OfficeAiWriter editor={editor} documentTitle="Synthetic local report" onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
+    await waitFor(() => expect(statusChecks).toBe(2));
+
+    setDocumentText('x'.repeat(originalText.length));
+    releaseSecondStatusCheck?.({ ok: true, json: async () => ({ configured: true }) } as Response);
+    expect((await screen.findByRole('alert')).textContent).toContain('before the request started');
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('invalidates consent if the document title changes before confirmation', async () => {
+    const fetcher = mockFetch();
+    const { editor } = makeEditor();
+    const view = render(<OfficeAiWriter editor={editor} documentTitle="Original title" onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    view.rerender(<OfficeAiWriter editor={editor} documentTitle="Renamed document" onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Nothing was sent');
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('rejects an oversized synthetic document before showing consent or sending a request', async () => {
+    const fetcher = mockFetch();
+    const { editor } = makeEditor('x'.repeat(OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS + 1));
+    render(<OfficeAiWriter editor={editor} documentTitle="Synthetic oversized report" onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('no text has been sent');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
   });
 
   it('shows the no-paid-fallback message for a temporarily unavailable free model and allows retry', async () => {

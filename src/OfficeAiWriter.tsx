@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { AlertCircle, Check, ChevronDown, ChevronRight, LoaderCircle, Plus, Save, ShieldCheck, Sparkles, WandSparkles, X } from 'lucide-react';
 import {
   buildOfficeAiRequest,
+  buildOfficeAiDocumentSummaryRequest,
   checkOfficeAiStatus,
+  extractOfficeAiDocumentText,
   extractOfficeAiSelection,
   loadOfficeAiWorkflows,
   OFFICE_AI_ACTIONS,
   OFFICE_AI_DRAFT_TEMPLATES,
+  OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS,
+  OFFICE_AI_MAX_REQUEST_BYTES,
   OFFICE_AI_MAX_PROMPT_CHARS,
   OFFICE_AI_MAX_SAVED_WORKFLOWS,
   OFFICE_AI_MAX_SELECTION_CHARS,
@@ -16,14 +20,15 @@ import {
   requestOfficeAi,
   saveOfficeAiWorkflows,
 } from './lib/officeAi';
-import type { OfficeAiAction, OfficeAiWorkflow } from './lib/officeAi';
+import type { OfficeAiAction, OfficeAiDocumentSummaryRequest, OfficeAiWorkflow } from './lib/officeAi';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 
 type Selection = { from: number; to: number; text: string };
 type Availability = 'unknown' | 'checking' | 'available' | 'not-configured' | 'unavailable';
 type AuthStatus = 'loading' | 'signed-in' | 'signed-out' | 'misconfigured';
-type PreviewTarget = { from: number; to: number; selectedText: string; isDraft: boolean; doc: ProseMirrorNode };
+type PreviewTarget = { kind: 'selection' | 'draft' | 'document-summary'; from: number; to: number; selectedText: string; doc: ProseMirrorNode; sourceChars?: number };
+type DocumentSummaryConfirmation = { payload: OfficeAiDocumentSummaryRequest; title: string; doc: ProseMirrorNode; position: number };
 
 function readLocalWorkflows(): OfficeAiWorkflow[] {
   try {
@@ -44,7 +49,7 @@ function readableError(error: unknown): string {
   return 'The writing assistant could not complete that request. Try again.';
 }
 
-export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor | null; onGoToTeam: () => void }) {
+export default function OfficeAiWriter({ editor, documentTitle = 'Untitled document', onGoToTeam }: { editor: Editor | null; documentTitle?: string; onGoToTeam: () => void }) {
   const teamConfig = useMemo(
     () => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment),
     [],
@@ -66,6 +71,9 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
   const [notice, setNotice] = useState('');
   const [result, setResult] = useState('');
   const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(null);
+  const [documentSummaryConfirmation, setDocumentSummaryConfirmation] = useState<DocumentSummaryConfirmation | null>(null);
+  const documentSummaryTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const documentSummaryConfirmRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!editor) return;
@@ -119,6 +127,7 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
       setAvailability(session ? 'checking' : 'unknown');
       setResult('');
       setPreviewTarget(null);
+      setDocumentSummaryConfirmation(null);
       if (session) window.setTimeout(() => { void refreshAvailability(session.access_token); }, 0);
     });
     return () => {
@@ -126,6 +135,13 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
       subscription.unsubscribe();
     };
   }, [client]);
+
+  useEffect(() => {
+    if (!documentSummaryConfirmation) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    documentSummaryConfirmRef.current?.focus();
+    return () => { previouslyFocused?.focus(); };
+  }, [documentSummaryConfirmation]);
 
   const runAction = async (action: OfficeAiAction, instruction = '') => {
     if (!editor || busy) return;
@@ -174,11 +190,98 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
       setAvailability('available');
       setResult(output);
       setPreviewTarget({
+        kind: isDraft ? 'draft' : 'selection',
         from: isDraft ? current.to : current.from,
         to: isDraft ? current.to : current.to,
         selectedText: isDraft ? '' : current.text,
-        isDraft,
         doc: sourceDoc,
+      });
+    } catch (requestError) {
+      setAvailability(requestError instanceof OfficeAiError && requestError.code === 'AI_NOT_CONFIGURED' ? 'not-configured' : 'unavailable');
+      setError(readableError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openDocumentSummaryConfirmation = () => {
+    if (!editor || busy) return;
+    setError('');
+    setNotice('');
+    setResult('');
+    setPreviewTarget(null);
+    const sourceDoc = editor.state.doc;
+    try {
+      const payload = buildOfficeAiDocumentSummaryRequest(extractOfficeAiDocumentText(sourceDoc));
+      setDocumentSummaryConfirmation({
+        payload,
+        title: documentTitle.trim() || 'Untitled document',
+        doc: sourceDoc,
+        position: editor.state.selection.to,
+      });
+    } catch (requestError) {
+      setDocumentSummaryConfirmation(null);
+      setError(readableError(requestError));
+    }
+  };
+
+  const confirmDocumentSummary = async () => {
+    const pending = documentSummaryConfirmation;
+    if (!editor || !pending || busy) return;
+    const currentTitle = documentTitle.trim() || 'Untitled document';
+    const snapshotMatches = editor.state.doc.eq(pending.doc)
+      && extractOfficeAiDocumentText(editor.state.doc) === pending.payload.documentText
+      && pending.title === currentTitle;
+    setDocumentSummaryConfirmation(null);
+    if (!snapshotMatches) {
+      setError('The active document changed after confirmation was shown. Nothing was sent; review the current document and confirm again.');
+      return;
+    }
+    setError('');
+    setNotice('');
+    setResult('');
+    setPreviewTarget(null);
+    if (!client || teamConfig.status !== 'ready') {
+      setError('Connect the existing COCCE Auth session before using cloud AI. No document text was sent.');
+      setAuthStatus('misconfigured');
+      return;
+    }
+
+    setBusy(true);
+    setAvailability('checking');
+    try {
+      const { data, error: sessionError } = await client.auth.getSession();
+      if (sessionError || !data.session?.access_token) {
+        setAuthStatus('signed-out');
+        setAvailability('unknown');
+        setError('Sign in with an existing COCCE account to use cloud AI. No document text was sent.');
+        return;
+      }
+      setAuthStatus('signed-in');
+      const token = data.session.access_token;
+      const configured = await checkOfficeAiStatus(token);
+      if (!configured) {
+        setAvailability('not-configured');
+        setError('Cloud AI is not enabled on this deployment yet. No document text was sent.');
+        return;
+      }
+      const documentStillMatches = editor.state.doc.eq(pending.doc)
+        && extractOfficeAiDocumentText(editor.state.doc) === pending.payload.documentText
+        && pending.title === (documentTitle.trim() || 'Untitled document');
+      if (!documentStillMatches) {
+        setError('The active document changed before the request started. Nothing was sent; reopen the confirmation to review it again.');
+        return;
+      }
+      const output = await requestOfficeAi(token, pending.payload);
+      setAvailability('available');
+      setResult(output);
+      setPreviewTarget({
+        kind: 'document-summary',
+        from: pending.position,
+        to: pending.position,
+        selectedText: '',
+        doc: pending.doc,
+        sourceChars: pending.payload.documentText.length,
       });
     } catch (requestError) {
       setAvailability(requestError instanceof OfficeAiError && requestError.code === 'AI_NOT_CONFIGURED' ? 'not-configured' : 'unavailable');
@@ -242,7 +345,7 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
       setError('The document changed while the preview was open. Run the action again on the current text before inserting it.');
       return;
     }
-    if (!previewTarget.isDraft) {
+    if (previewTarget.kind === 'selection') {
       const currentText = extractOfficeAiSelection(editor.state.doc, previewTarget.from, previewTarget.to);
       if (currentText !== previewTarget.selectedText) {
         setError('The selected passage no longer matches this preview. Run the action again before replacing it.');
@@ -258,7 +361,12 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
         setError('The preview could not be inserted. Copy the text below and try again.');
         return;
       }
-      setNotice(previewTarget.isDraft ? 'Draft inserted at the chosen cursor position.' : 'Selected text replaced with the reviewed version. Use Undo to reverse it.');
+      const appliedNotice = previewTarget.kind === 'document-summary'
+        ? 'Document summary inserted at the captured cursor position. Use Undo to reverse it.'
+        : previewTarget.kind === 'draft'
+          ? 'Draft inserted at the chosen cursor position.'
+          : 'Selected text replaced with the reviewed version. Use Undo to reverse it.';
+      setNotice(appliedNotice);
       setResult('');
       setPreviewTarget(null);
       setError('');
@@ -278,13 +386,13 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
 
   return <section className="office-ai-panel" aria-label="AI writing studio">
     <button className="office-ai-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>AI writing studio</strong><small>Selection-based tools, reusable workflows, and draft starters</small></span></span>
+      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>AI writing studio</strong><small>Selection tools, confirmed document summaries, workflows, and draft starters</small></span></span>
       <span className="office-ai-disclosure-status">{availabilityLabel}{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
     </button>
 
     {expanded && <div className="office-ai-body">
-      <p className="office-ai-privacy"><ShieldCheck size={16} /><span>Nothing is uploaded automatically. Editing and review actions send only the text you select (up to {OFFICE_AI_MAX_SELECTION_CHARS.toLocaleString()} characters). New drafts send only the prompt you type. The rest of this document stays in this browser.</span></p>
-      <p className="office-ai-help">Selected text is sent to OpenRouter and its fixed free model provider. The current Google AI Studio provider policy lists 55-day prompt retention and no training. Send only text you are permitted to share with a cloud service.</p>
+      <p className="office-ai-privacy"><ShieldCheck size={16} /><span>Nothing is uploaded automatically. Selection edits send only the text you select (up to {OFFICE_AI_MAX_SELECTION_CHARS.toLocaleString()} characters), and new drafts send only your typed prompt. A full-document summary sends the document's plain text only after the separate confirmation below. No file, title, or document metadata is sent.</span></p>
+      <p className="office-ai-help">User-triggered text is sent through OpenRouter to its fixed free Google AI Studio model. The current provider policy lists 55-day prompt retention and no training. No paid model or alternate provider fallback is used; send only text you are permitted to share.</p>
 
       {authStatus === 'misconfigured' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Cloud AI uses the existing COCCE Auth connection. This deployment is not configured for that connection.</span></div>}
       {authStatus === 'signed-out' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Sign in with an existing COCCE account to use cloud AI. Office does not create separate accounts.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Open Team sign-in</button></div>}
@@ -304,6 +412,12 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
           <button className="office-ai-primary-button" disabled={busy || !selectionAvailable || !canRunAiActions || !customInstruction.trim()} onClick={() => { void runAction('custom', customInstruction); }}><WandSparkles size={15} /> Run</button>
         </div>
         <div className="office-ai-help">Custom instruction: {customInstruction.length.toLocaleString()} / {OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters.</div>
+      </div>
+
+      <div className="office-ai-document-block">
+        <div className="office-ai-section-heading"><div><span className="eyebrow">FULL DOCUMENT · CONFIRM FIRST</span><h3>Summarize the open document</h3></div></div>
+        <p className="office-ai-help">This separate action can send the complete plain-text document, but only after you review and confirm what will be sent. The request is limited to {OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS.toLocaleString()} characters and {Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB serialized; larger documents are rejected locally and are never truncated or chunked.</p>
+        <button ref={documentSummaryTriggerRef} type="button" className="office-ai-primary-button" disabled={busy || !canRunAiActions} onClick={openDocumentSummaryConfirmation}><Sparkles size={15} /> Summarize full document</button>
       </div>
 
       <div className="office-ai-divider" />
@@ -333,18 +447,43 @@ export default function OfficeAiWriter({ editor, onGoToTeam }: { editor: Editor 
         {workflows.length > 0 ? <div className="office-ai-workflow-list">{workflows.map((workflow) => <div className="office-ai-workflow" key={workflow.id}><div className="office-ai-workflow-copy"><strong>{workflow.name}</strong><span>{workflow.instruction}</span></div><button className="office-ai-action-button" disabled={busy || !selectionAvailable || !canRunAiActions} onClick={() => { void runAction('custom', workflow.instruction); }}>Run on selection</button><button className="office-ai-icon-button" aria-label={`Delete ${workflow.name}`} title="Remove saved workflow" onClick={() => deleteWorkflow(workflow.id)}><X size={15} /></button></div>)}</div> : <div className="office-ai-empty">No saved workflows yet. Save a reusable instruction above.</div>}
       </div>
 
-      {busy && <div className="office-ai-progress" role="status"><LoaderCircle size={16} className="office-ai-spinner" /> Preparing a preview from the selected content…</div>}
+      {busy && <div className="office-ai-progress" role="status"><LoaderCircle size={16} className="office-ai-spinner" /> Preparing an AI preview…</div>}
       {error && <div className="office-ai-message office-ai-error" role="alert"><AlertCircle size={15} />{error}</div>}
       {notice && <div className="office-ai-message office-ai-notice" role="status"><Check size={15} />{notice}</div>}
 
+      {documentSummaryConfirmation && <div className="office-ai-confirm-backdrop">
+        <div className="office-ai-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="office-ai-confirm-title" aria-describedby="office-ai-confirm-description" onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setDocumentSummaryConfirmation(null);
+          } else if (event.key === 'Tab') {
+            const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
+            const first = buttons.item(0);
+            const last = buttons.item(buttons.length - 1);
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+          }
+        }}>
+          <h3 id="office-ai-confirm-title">Confirm full-document summary</h3>
+          <p id="office-ai-confirm-description">The complete plain-text content of <strong>{documentSummaryConfirmation.title}</strong> ({documentSummaryConfirmation.payload.documentText.length.toLocaleString()} characters) will be sent through OpenRouter to its fixed free Google AI Studio endpoint. No text is sent until you choose the confirmation button.</p>
+          <p>Google AI Studio's current policy lists 55-day prompt retention and no training. No paid model or alternate provider fallback will be used. The document title, ID, file, and other metadata are not sent.</p>
+          <p>Confirm only if you are allowed to share this document with that cloud provider. The request limit is {OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS.toLocaleString()} characters and {Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB; the text will not be truncated or split.</p>
+          <div className="office-ai-confirm-actions">
+            <button type="button" className="office-ai-action-button" onClick={() => setDocumentSummaryConfirmation(null)}>Cancel · keep it local</button>
+            <button ref={documentSummaryConfirmRef} type="button" className="office-ai-primary-button" disabled={busy} onClick={() => { void confirmDocumentSummary(); }}>Confirm and send full text</button>
+          </div>
+        </div>
+      </div>}
+
       {result && previewTarget && <section className="office-ai-result" aria-labelledby="office-ai-result-title">
         <div className="office-ai-result-heading"><div><span className="eyebrow">REVIEW BEFORE APPLYING</span><h3 id="office-ai-result-title">AI preview</h3></div><button className="office-ai-icon-button" aria-label="Discard AI preview" onClick={() => { setResult(''); setPreviewTarget(null); }}><X size={16} /></button></div>
-        {!previewTarget.isDraft && <details className="office-ai-source"><summary>Sent excerpt ({previewTarget.selectedText.length.toLocaleString()} characters)</summary><pre>{previewTarget.selectedText}</pre></details>}
+        {previewTarget.kind === 'selection' && <details className="office-ai-source"><summary>Sent excerpt ({previewTarget.selectedText.length.toLocaleString()} characters)</summary><pre>{previewTarget.selectedText}</pre></details>}
+        {previewTarget.kind === 'document-summary' && <p className="office-ai-document-source">Summary based on the full document ({previewTarget.sourceChars?.toLocaleString()} characters) you confirmed. The document remains unchanged until you insert this preview.</p>}
         <pre className="office-ai-result-text">{result}</pre>
-        <div className="office-ai-result-footer"><span className="office-ai-help">AI can make mistakes. Review the text; it is not inserted until you choose.</span><button className="office-ai-primary-button" onClick={applyResult}><Check size={15} />{previewTarget.isDraft ? 'Insert at cursor' : 'Replace selection'}</button></div>
+        <div className="office-ai-result-footer"><span className="office-ai-help">AI can make mistakes. Review the text; it is not inserted until you choose.</span><button className="office-ai-primary-button" onClick={applyResult}><Check size={15} />{previewTarget.kind === 'selection' ? 'Replace selection' : previewTarget.kind === 'draft' ? 'Insert at cursor' : 'Insert summary at cursor'}</button></div>
       </section>}
 
-      <p className="office-ai-footnote">Cloud actions use OpenRouter's fixed <code>google/gemma-4-31b-it:free</code> model through the Office server route and require an existing COCCE account. The model and provider are fixed server-side, with no paid-model or alternate-provider fallback. Responses are shown here for review; no background automation runs or uploads documents.</p>
+      <p className="office-ai-footnote">Cloud actions use OpenRouter's fixed <code>google/gemma-4-31b-it:free</code> model through the Office server route and require an existing COCCE account. The model and provider are fixed server-side, with no paid-model or alternate-provider fallback. Responses are shown here for review; no AI action runs in the background, and no document file is uploaded.</p>
     </div>}
   </section>;
 }

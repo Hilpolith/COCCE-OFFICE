@@ -1,5 +1,7 @@
 export const OFFICE_AI_MAX_SELECTION_CHARS = 8_000;
 export const OFFICE_AI_MAX_PROMPT_CHARS = 1_200;
+export const OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS = 20_000;
+export const OFFICE_AI_MAX_REQUEST_BYTES = 38_000;
 export const OFFICE_AI_MAX_SAVED_WORKFLOWS = 12;
 export const OFFICE_AI_WORKFLOWS_STORAGE_KEY = 'cocce-office-ai-workflows-v1';
 
@@ -17,11 +19,13 @@ export const OFFICE_AI_ACTIONS = [
 ] as const;
 
 export type OfficeAiAction = typeof OFFICE_AI_ACTIONS[number]['id'] | 'custom' | 'draft';
-export type OfficeAiRequest = {
+export type OfficeAiSelectionRequest = {
   action: OfficeAiAction;
   selectedText?: string;
   prompt?: string;
 };
+export type OfficeAiDocumentSummaryRequest = { action: 'document_summary'; documentText: string };
+export type OfficeAiRequest = OfficeAiSelectionRequest | OfficeAiDocumentSummaryRequest;
 export type OfficeAiWorkflow = {
   id: string;
   name: string;
@@ -73,6 +77,26 @@ export function extractOfficeAiSelection(
 ): string {
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) return '';
   return doc.textBetween(from, to, '\n');
+}
+
+export function extractOfficeAiDocumentText(doc: {
+  content: { size: number };
+  textBetween: (from: number, to: number, blockSeparator?: string) => string;
+}): string {
+  if (!Number.isInteger(doc.content.size) || doc.content.size < 0) return '';
+  return doc.textBetween(0, doc.content.size, '\n');
+}
+
+export function buildOfficeAiDocumentSummaryRequest(documentText: string): OfficeAiDocumentSummaryRequest {
+  if (!documentText.trim()) throw new OfficeAiError('DOCUMENT_TEXT_REQUIRED', 'This document has no text to summarize.');
+  if (documentText.length > OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS) {
+    throw new OfficeAiError('DOCUMENT_TOO_LARGE', `Full-document summaries are limited to ${OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS.toLocaleString()} characters and ${Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB per request. Use a shorter document or summarize selected text instead; no text has been sent.`);
+  }
+  const payload: OfficeAiDocumentSummaryRequest = { action: 'document_summary', documentText };
+  if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > OFFICE_AI_MAX_REQUEST_BYTES) {
+    throw new OfficeAiError('DOCUMENT_TOO_LARGE', `This document exceeds the ${Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB request limit. Use a shorter document or summarize selected text instead; no text has been sent.`);
+  }
+  return payload;
 }
 
 export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: string, prompt: string): OfficeAiRequest {
@@ -128,13 +152,23 @@ export async function checkOfficeAiStatus(accessToken: string, fetcher: typeof f
 }
 
 export async function requestOfficeAi(accessToken: string, payload: OfficeAiRequest, fetcher: typeof fetch = fetch): Promise<string> {
+  const body = JSON.stringify(payload);
+  if (new TextEncoder().encode(body).byteLength > OFFICE_AI_MAX_REQUEST_BYTES) {
+    const isDocumentSummary = payload.action === 'document_summary';
+    throw new OfficeAiError(
+      isDocumentSummary ? 'DOCUMENT_TOO_LARGE' : 'REQUEST_TOO_LARGE',
+      isDocumentSummary
+        ? `This document exceeds the ${Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB request limit. Use a shorter document or summarize selected text instead; no text has been sent.`
+        : `This AI request exceeds the ${Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB limit. Select a shorter excerpt; no text has been sent.`,
+    );
+  }
   const response = await fetcher('/api/office-ai', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body,
     cache: 'no-store',
   });
   const data = asRecord(await readJson(response));
