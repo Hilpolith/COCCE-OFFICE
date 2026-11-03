@@ -15,7 +15,7 @@ import {
   XLSX_IMPORT_WARNING,
   XLSX_MIME,
 } from './xlsxInterchange';
-import { displayCellValue, isSupportedFormulaWithinVisibleGrid } from './spreadsheetEngine';
+import { displayCellValue, fillFormula, isSupportedFormulaWithinVisibleGrid } from './spreadsheetEngine';
 
 const MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const OFFICE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -184,6 +184,23 @@ describe('bounded local XLSX interchange', () => {
     expect(displayCellValue(imported.cells, 'J2')).toBe('#CYCLE!');
     expect(imported.warnings[0]).toContain('Cell styles/themes');
     expect(blob.type).toBe(XLSX_MIME);
+  });
+
+  it('round-trips generated formulas with translated and absolute references without widening XLSX support', async () => {
+    const generated = fillFormula(
+      { B1: '=A1+$A$1+SUM(A1:A1)' },
+      { startRow: 1, startColumn: 2, endRow: 3, endColumn: 2 },
+    ).cells;
+    expect(generated).toMatchObject({
+      B1: '=A1+$A$1+SUM(A1:A1)',
+      B2: '=A2+$A$1+SUM(A2:A2)',
+      B3: '=A3+$A$1+SUM(A3:A3)',
+    });
+
+    const blob = await createXlsxBlob({ title: 'Filled formulas', sheetName: 'Data', cells: generated });
+    const imported = await importXlsxFile(fileFromBlob(blob, 'Filled formulas.xlsx'));
+    expect(imported.cells).toEqual(generated);
+    expect(isSupportedFormulaWithinVisibleGrid(imported.cells.B3!)).toBe(true);
   });
 
   it('reads shared and inline strings, rich-run text, numbers, booleans, and supported formula text', async () => {

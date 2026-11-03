@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent } from 'react';
 import {
-  ArrowLeft, ArrowUpRight, Check, Download, FileSpreadsheet,
+  ArrowLeft, ArrowUpRight, Check, Download, FileSpreadsheet, FunctionSquare,
   LockKeyhole, Plus, Table2, TrendingUp, Upload,
 } from 'lucide-react';
 import {
@@ -9,7 +9,14 @@ import {
   updateWorksheetCell, updateWorksheetCells,
 } from './lib/localStore';
 import type { OfficeWorkbook, PreviewState } from './lib/localStore';
-import { cellAddress, csvRowsToCells, displayCellValue, fillNumericSeries, isCsvFileSizeAllowed, isFormulaTextWithinLimit, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, MAX_SHEETS_FORMULA_CHARS, parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange, SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS } from './lib/spreadsheetEngine';
+import {
+  cellAddress, csvRowsToCells, displayCellValue, fillFormula, fillNumericSeries,
+  isCsvFileSizeAllowed, isFormulaTextWithinLimit, MAX_CSV_FILE_BYTES,
+  MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS,
+  MAX_SHEETS_FORMULA_CHARS, MAX_SHEETS_FORMULA_FILL_CELLS,
+  parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange,
+  SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS,
+} from './lib/spreadsheetEngine';
 import { createXlsxBlob, importXlsxFile, MAX_XLSX_FILE_BYTES, safeXlsxFilename, XLSX_EXPORT_WARNING, XLSX_IMPORT_WARNING } from './lib/xlsxInterchange';
 
 const GRID_ROWS = SHEET_VISIBLE_ROWS;
@@ -371,6 +378,29 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
       setMessage(error instanceof Error ? error.message : 'Numeric series fill failed.');
     }
   };
+  const applyFormulaFill = () => {
+    try {
+      const result = fillFormula(worksheet.cells, selectedRange, GRID_ROWS, GRID_COLUMNS);
+      if (result.changedCount === 0) {
+        setMessage('The selected formulas already match the translated fill; no cells were changed.');
+        return;
+      }
+      if (result.overwrittenCount > 0) {
+        const first = cellAddress(selectedRange.startRow, selectedRange.startColumn);
+        const last = cellAddress(selectedRange.endRow, selectedRange.endColumn);
+        const rangeLabel = first === last ? first : `${first}:${last}`;
+        if (!window.confirm(`Fill the formula from ${first} through ${last} in ${rangeLabel}, translating relative A1 references and preserving $ anchors? This will replace ${result.overwrittenCount} populated target cell${result.overwrittenCount === 1 ? '' : 's'}. The operation stays on this device.`)) {
+          setMessage('Formula fill cancelled; no cells were changed.');
+          return;
+        }
+      }
+      if (!saveState(updateWorksheetCells(state, workbook.id, worksheet.id, result.cells))) return;
+      const cellLabel = result.generatedCount === 1 ? 'formula' : 'formulas';
+      setMessage(`Filled ${result.generatedCount} ${cellLabel} ${result.axis === 'vertical' ? 'down' : 'right'} from ${cellAddress(selectedRange.startRow, selectedRange.startColumn)}; relative references translated and $ anchors preserved. Saved on this device.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Formula fill failed. No cells were changed.');
+    }
+  };
   const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>, address: string) => {
     if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
     if (event.key === 'Escape') {
@@ -435,6 +465,10 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
         <button type="button" className="button-secondary" aria-label="Fill numeric series" title="Fill a single selected row or column from its first two finite numeric cells" onClick={applyNumericSeries}><TrendingUp size={15} /> Fill series</button>
         <span>Extends the arithmetic step from the first two finite numeric cells in a selected row or column; formulas, dates, and text are not supported.</span>
       </div>
+      <div className="sheet-range-tools" role="toolbar" aria-label="Spreadsheet formula tools">
+        <button type="button" className="button-secondary" aria-label="Fill formula" title={`Fill one supported seed formula down or right; ranges are limited to ${MAX_SHEETS_FORMULA_FILL_CELLS} visible cells`} onClick={applyFormulaFill}><FunctionSquare size={15} /> Fill formula</button>
+        <span>Copies the first cell's formula through one selected row or column (up to {MAX_SHEETS_FORMULA_FILL_CELLS} cells), translating relative A1 references and keeping $ anchors. Cross-sheet, out-of-grid, unsupported, or malformed references are refused; populated targets require confirmation.</span>
+      </div>
       <div className="sheet-grid-scroll" role="region" aria-label="Spreadsheet grid; scroll horizontally and vertically to see cells">
         <table className="sheet-grid">
           <thead><tr><th className="row-number-head" aria-label="Row number" />{Array.from({ length: GRID_COLUMNS }, (_, index) => <th key={index}>{cellAddress(1, index + 1).replace(/\d+$/, '')}</th>)}</tr></thead>
@@ -457,7 +491,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
         </table>
       </div>
       <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · references/ranges · IF · IFERROR · COUNTIF · SUMIF'}</span></div>
-      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Local formula text is capped at {MAX_SHEETS_FORMULA_CHARS} characters; IFERROR, COUNTIF and SUMIF support exact and relational criteria, relational comparisons require matching value types, not-equal criteria count unlike types as different, and wildcards are unsupported. Criteria are capped at 256 characters, formula ranges at 10,000 cells. Fill series uses two finite numeric seeds in one row or column and asks before overwriting. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
+      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Local formula text is capped at {MAX_SHEETS_FORMULA_CHARS} characters; IFERROR, COUNTIF and SUMIF support exact and relational criteria, relational comparisons require matching value types, not-equal criteria count unlike types as different, and wildcards are unsupported. Criteria are capped at 256 characters, formula ranges at 10,000 cells. Fill series uses two finite numeric seeds in one row or column and asks before overwriting; Fill formula translates relative A1 references and preserves `$` anchors, but refuses unsupported or out-of-grid references and asks before overwriting. Formula fill is one atomic local save; Sheets does not yet have editor undo/redo. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
     </div>
   );
 }

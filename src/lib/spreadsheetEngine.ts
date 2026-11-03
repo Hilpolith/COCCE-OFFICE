@@ -454,6 +454,7 @@ export const SHEET_VISIBLE_ROWS = 24;
 export const SHEET_VISIBLE_COLUMNS = 12;
 export const MAX_SHEETS_CLIPBOARD_CHARS = 64 * 1024;
 export const MAX_SHEETS_CLIPBOARD_CELL_CHARS = 16 * 1024;
+export const MAX_SHEETS_FORMULA_FILL_CELLS = 24;
 
 /** Validate imported formulas against the evaluator and visible single-sheet bounds. */
 export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
@@ -651,6 +652,152 @@ export function fillNumericSeries(
     changedCount += 1;
     if (previous !== '') overwrittenCount += 1;
     nextCells[address] = value;
+  }
+  return {
+    cells: changedCount ? nextCells : cells,
+    axis,
+    generatedCount: generated.length,
+    changedCount,
+    overwrittenCount,
+  };
+}
+
+export type FormulaFillResult = {
+  cells: Record<string, string>;
+  axis: 'vertical' | 'horizontal';
+  generatedCount: number;
+  changedCount: number;
+  overwrittenCount: number;
+};
+
+function columnNumber(label: string): number {
+  let value = 0;
+  for (const character of label.toUpperCase()) value = value * 26 + character.charCodeAt(0) - 64;
+  return value;
+}
+
+function translateFormulaReferences(formula: string, rowDelta: number, columnDelta: number): string {
+  let output = '';
+  let inString = false;
+  let index = 0;
+  while (index < formula.length) {
+    const character = formula[index]!;
+    if (character === '"') {
+      if (inString && formula[index + 1] === '"') {
+        output += '""';
+        index += 2;
+        continue;
+      }
+      inString = !inString;
+      output += character;
+      index += 1;
+      continue;
+    }
+    if (inString) {
+      output += character;
+      index += 1;
+      continue;
+    }
+    if (character === '!') throw new Error('Cross-sheet and external references are not supported by local formula fill; no cells were changed.');
+
+    const previous = formula[index - 1] ?? '';
+    const boundaryBefore = !/[A-Za-z0-9_.]/.test(previous);
+    const reference = boundaryBefore && (character === '$' || /[A-Za-z]/.test(character))
+      ? formula.slice(index).match(/^(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)/)
+      : null;
+    if (reference) {
+      const end = index + reference[0].length;
+      const next = formula[end] ?? '';
+      if (!/[A-Za-z0-9_.]/.test(next)) {
+        const currentColumn = columnNumber(reference[2]!);
+        const currentRow = Number(reference[4]);
+        if (!Number.isSafeInteger(currentRow) || currentRow < 1
+          || currentRow > SHEET_VISIBLE_ROWS || currentColumn < 1 || currentColumn > SHEET_VISIBLE_COLUMNS) {
+          throw new RangeError(`Formula reference ${reference[0]} is outside the visible ${SHEET_VISIBLE_ROWS} × ${SHEET_VISIBLE_COLUMNS} grid; no cells were changed.`);
+        }
+        const nextColumn = currentColumn + (reference[1] ? 0 : columnDelta);
+        const nextRow = currentRow + (reference[3] ? 0 : rowDelta);
+        if (!Number.isSafeInteger(nextRow) || nextRow < 1 || nextRow > SHEET_VISIBLE_ROWS
+          || !Number.isSafeInteger(nextColumn) || nextColumn < 1 || nextColumn > SHEET_VISIBLE_COLUMNS) {
+          throw new RangeError(`Formula fill would move reference ${reference[0]} outside the visible ${SHEET_VISIBLE_ROWS} × ${SHEET_VISIBLE_COLUMNS} grid; no cells were changed.`);
+        }
+        output += `${reference[1]}${columnLabel(nextColumn)}${reference[3]}${nextRow}`;
+        index = end;
+        continue;
+      }
+    }
+    output += character;
+    index += 1;
+  }
+  if (inString) throw new Error('The seed formula contains an unterminated string; no cells were changed.');
+  return output;
+}
+
+function translateSupportedFormula(formula: string, rowDelta: number, columnDelta: number): string {
+  if (!isFormulaCellValue(formula)) throw new Error('The first cell in the selected range must contain a formula. No cells were changed.');
+  if (!isFormulaTextWithinLimit(formula)) throw new RangeError(`Seed formulas are limited to ${MAX_SHEETS_FORMULA_CHARS} characters; no cells were changed.`);
+  const translated = translateFormulaReferences(formula, rowDelta, columnDelta);
+  if (!isSupportedFormulaWithinVisibleGrid(formula)) {
+    throw new Error('The seed formula is malformed or uses unsupported local syntax or references; no cells were changed.');
+  }
+  if (!isFormulaTextWithinLimit(translated)) {
+    throw new RangeError(`A translated formula would exceed the ${MAX_SHEETS_FORMULA_CHARS}-character limit; no cells were changed.`);
+  }
+  if (!isSupportedFormulaWithinVisibleGrid(translated)) {
+    throw new Error('A translated formula is outside the supported local formula subset; no cells were changed.');
+  }
+  return translated;
+}
+
+/** Fill from the first formula in one selected row/column; all targets validate before a new cell map is returned. */
+export function fillFormula(
+  cells: Record<string, string>,
+  range: SheetClipboardRange,
+  maxRows = SHEET_VISIBLE_ROWS,
+  maxColumns = SHEET_VISIBLE_COLUMNS,
+): FormulaFillResult {
+  const { startRow, startColumn, endRow, endColumn } = range;
+  if (![maxRows, maxColumns].every(Number.isSafeInteger) || maxRows < 1 || maxColumns < 1) {
+    throw new RangeError('The visible spreadsheet grid bounds are invalid.');
+  }
+  if (maxRows > SHEET_VISIBLE_ROWS || maxColumns > SHEET_VISIBLE_COLUMNS) {
+    throw new RangeError('Formula fill cannot extend beyond the visible spreadsheet grid.');
+  }
+  if (![startRow, startColumn, endRow, endColumn].every(Number.isSafeInteger)
+    || startRow < 1 || startColumn < 1 || endRow < startRow || endColumn < startColumn
+    || endRow > maxRows || endColumn > maxColumns) {
+    throw new RangeError('The selected range is outside the visible spreadsheet grid; no cells were changed.');
+  }
+  const height = endRow - startRow + 1;
+  const width = endColumn - startColumn + 1;
+  if (height > 1 && width > 1) throw new RangeError('Formula fill supports one selected row or one selected column at a time.');
+  const axis = height > 1 ? 'vertical' : 'horizontal';
+  const length = axis === 'vertical' ? height : width;
+  if (length < 2) throw new RangeError('Select at least two cells in one row or one column, including the seed formula and a target.');
+  if (length > MAX_SHEETS_FORMULA_FILL_CELLS) {
+    throw new RangeError(`Formula fill is limited to ${MAX_SHEETS_FORMULA_FILL_CELLS} cells per operation; no cells were changed.`);
+  }
+
+  const seedAddress = cellAddress(startRow, startColumn);
+  const seedFormula = cells[seedAddress] ?? '';
+  const generated: Array<[string, string]> = [];
+  for (let offset = 1; offset < length; offset += 1) {
+    const row = axis === 'vertical' ? startRow + offset : startRow;
+    const column = axis === 'horizontal' ? startColumn + offset : startColumn;
+    const address = cellAddress(row, column);
+    const translated = translateSupportedFormula(seedFormula, row - startRow, column - startColumn);
+    generated.push([address, translated]);
+  }
+
+  let changedCount = 0;
+  let overwrittenCount = 0;
+  const nextCells = { ...cells };
+  for (const [address, formula] of generated) {
+    const previous = cells[address] ?? '';
+    if (previous === formula) continue;
+    changedCount += 1;
+    if (previous !== '') overwrittenCount += 1;
+    nextCells[address] = formula;
   }
   return {
     cells: changedCount ? nextCells : cells,
