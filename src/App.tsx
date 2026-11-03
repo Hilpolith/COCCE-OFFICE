@@ -12,6 +12,7 @@ import {
   updateDocument, writePreviewState,
 } from './lib/localStore';
 import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
+import { deleteDocsReviewCommentsForDocument } from './lib/docsReviewComments';
 import { createDocxBlob, DOCX_IMPORT_LIMITS_COPY, importDocxFile, safeDocxFilename } from './lib/docxInterchange';
 import SheetsWorkspace from './SheetsWorkspace';
 import DriveWorkspace from './DriveWorkspace';
@@ -215,6 +216,13 @@ function App() {
   const confirmDeleteDocument = () => {
     if (!selectedDocument) return;
     if (!persist(removeDocument(state, selectedDocument.id))) return;
+    let deletionFeedback = 'Document deleted from this device.';
+    try {
+      deleteDocsReviewCommentsForDocument(window.localStorage, selectedDocument.workspaceId, selectedDocument.id);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'The review-comment sidecar could not be updated.';
+      deletionFeedback = `Document deleted from this device, but its local review comments could not be cleaned up: ${detail}`;
+    }
     setUnsavedDocuments((current) => {
       const buffer = { ...current };
       delete buffer[selectedDocument.id];
@@ -222,7 +230,7 @@ function App() {
     });
     setSelectedDocumentId(null);
     setDialog(null);
-    setFeedback('Document deleted from this device.');
+    setFeedback(deletionFeedback);
     window.setTimeout(() => setFeedback(''), 2800);
   };
 
@@ -412,7 +420,7 @@ function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx }: { d
     setImporting(true);
     try { await onImportDocx(file); } finally { setImporting(false); }
   };
-  return <div className="page subpage"><div className="page-title-row docs-page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Format local drafts with headings, text styles, lists, quotes, and simple tables. DOCX import/export supports bounded rectangular tables; comments, cloud sync, and collaboration are not connected.</p></div><div className="docs-page-actions"><input ref={inputRef} className="visually-hidden" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFile} aria-label="Choose a DOCX file" /><button className="button-secondary" disabled={importing} onClick={() => inputRef.current?.click()}><FileText size={16} /> {importing ? 'Importing…' : 'Import DOCX'}</button><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div></div><p className="docs-import-copy">{DOCX_IMPORT_LIMITS_COPY}</p><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
+  return <div className="page subpage"><div className="page-title-row docs-page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Format local drafts with headings, text styles, lists, quotes, and simple tables. Add review comments to selected text; comment notes stay in this browser. DOCX import/export supports bounded rectangular tables. Cloud sync and shared collaboration are not connected.</p></div><div className="docs-page-actions"><input ref={inputRef} className="visually-hidden" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFile} aria-label="Choose a DOCX file" /><button className="button-secondary" disabled={importing} onClick={() => inputRef.current?.click()}><FileText size={16} /> {importing ? 'Importing…' : 'Import DOCX'}</button><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div></div><p className="docs-import-copy">{DOCX_IMPORT_LIMITS_COPY}</p><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
 }
 
 function SettingsPage({ state, onTheme, onAccent }: { state: PreviewState; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
