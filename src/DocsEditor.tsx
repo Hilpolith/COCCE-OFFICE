@@ -27,12 +27,13 @@ function FormattingButton({ label, icon, active, disabled, onClick }: {
     aria-pressed={active} disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={onClick}>{icon}</button>;
 }
 
-export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBack, onExport, onDelete, onGoToTeam }: {
+export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBack, onExport, onExportDocx, onDelete, onGoToTeam }: {
   document: OfficeDocument;
   hasUnsavedChanges: boolean;
   onPatch: (patch: DocumentPatch) => boolean;
   onBack: () => void;
   onExport: (richText: string) => void;
+  onExportDocx: (richText: string) => void | Promise<void>;
   onDelete: () => void;
   onGoToTeam: () => void;
 }) {
@@ -105,6 +106,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         </span>
         {hasUnsavedChanges && <button type="button" className="button-secondary small-button" onClick={() => { if (editor) saveEditor(editor); }}>Retry save</button>}
         <button type="button" className="button-secondary small-button" onClick={() => onExport(editor?.getHTML() ?? document.richText ?? '')}><ArrowUpRight size={14} /> Export .md</button>
+        <button type="button" className="button-secondary small-button" onClick={() => { void onExportDocx(editor?.getHTML() ?? document.richText ?? ''); }}><FileText size={14} /> Export .docx</button>
         <button type="button" className="icon-button danger-button" onClick={onDelete} aria-label="Delete document" title="Delete local document"><X size={16} /></button>
       </div>
     </div>
@@ -151,6 +153,6 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </div>
       <div className="document-editor-bottom"><span>{hasUnsavedChanges ? <X size={13} /> : <Check size={13} />}{hasUnsavedChanges ? 'Export or retry before closing this tab' : 'Formatting saves locally as you type'}</span><span>{document.content.length.toLocaleString()} characters</span></div>
     </article>
-    <p className="editor-footnote"><LockKeyhole size={13} /> Drafts and formatting stay in this browser. DOCX, cloud sync, comments, sharing, and collaboration are not connected; avoid sensitive or shared work.</p>
+    <p className="editor-footnote"><LockKeyhole size={13} /> Drafts stay in this browser. DOCX import/export supports a limited text-and-formatting subset; other Word structures may be omitted. Files are not uploaded, and cloud sync, comments, sharing, and collaboration are not connected.</p>
   </div>;
 }

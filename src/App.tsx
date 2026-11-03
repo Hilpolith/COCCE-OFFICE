@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 import {
   Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness,
   Check, ChevronDown, ChevronLeft, CircleHelp, CloudOff, Command,
@@ -12,6 +12,7 @@ import {
   updateDocument, writePreviewState,
 } from './lib/localStore';
 import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
+import { createDocxBlob, DOCX_IMPORT_LIMITS_COPY, importDocxFile, safeDocxFilename } from './lib/docxInterchange';
 import SheetsWorkspace from './SheetsWorkspace';
 import DriveWorkspace from './DriveWorkspace';
 import SlidesWorkspace from './SlidesWorkspace';
@@ -162,6 +163,50 @@ function App() {
     window.setTimeout(() => setFeedback(''), 2800);
   };
 
+  const exportDocumentDocx = async (richText?: string) => {
+    if (!selectedDocument) return;
+    try {
+      const blob = await createDocxBlob({ title: selectedDocument.title, content: selectedDocument.content, richText: richText ?? selectedDocument.richText });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = safeDocxFilename(selectedDocument.title);
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setFeedback('DOCX file downloaded on this device.');
+      window.setTimeout(() => setFeedback(''), 2800);
+    } catch (error) {
+      setFeedback(`DOCX export failed: ${error instanceof Error ? error.message : 'The file could not be generated.'}`);
+    }
+  };
+
+  const importDocumentDocx = async (file: File): Promise<boolean> => {
+    try {
+      const imported = await importDocxFile(file);
+      const created = addDocument(state);
+      const next = updateDocument(created.state, created.document.id, {
+        title: imported.title, content: imported.content, richText: imported.richText,
+      });
+      const draft = next.documents.find((document) => document.id === created.document.id);
+      if (!draft) throw new Error('The imported draft could not be created.');
+      const saved = persist(next);
+      if (!saved) {
+        setState(next);
+        setUnsavedDocuments((current) => ({ ...current, [draft.id]: draft }));
+      }
+      setPage('docs');
+      setSelectedDocumentId(draft.id);
+      const warning = imported.warnings.length ? ` ${imported.warnings.join(' ')}` : '';
+      setFeedback(saved
+        ? `Imported “${draft.title}” as a new document on this device.${warning}`
+        : `Import completed, but storage is full. The new draft is kept in this tab; retry save or export it before closing.${warning}`);
+      return true;
+    } catch (error) {
+      setFeedback(`DOCX import failed: ${error instanceof Error ? error.message : 'The file could not be imported.'}`);
+      return false;
+    }
+  };
+
   const deleteDocument = () => {
     if (!selectedDocument) return;
     setDialog('delete');
@@ -258,12 +303,12 @@ function App() {
           </div>
         </header>
 
-        {Object.keys(unsavedDocuments).length > 0 && <div className="unsaved-drafts-banner" role="alert"><ShieldCheck size={15} /><span>{Object.keys(unsavedDocuments).length} unsaved {Object.keys(unsavedDocuments).length === 1 ? 'draft is' : 'drafts are'} kept in this tab only. Reopen the draft and retry save or export Markdown before closing this tab.</span></div>}
+        {Object.keys(unsavedDocuments).length > 0 && <div className="unsaved-drafts-banner" role="alert"><ShieldCheck size={15} /><span>{Object.keys(unsavedDocuments).length} unsaved {Object.keys(unsavedDocuments).length === 1 ? 'draft is' : 'drafts are'} kept in this tab only. Reopen the draft and retry save or export Markdown or DOCX before closing this tab.</span></div>}
         <div className="content-scroll">
           {page === 'home' && <Dashboard greeting={clockLabel} activeWorkspace={activeWorkspace?.name ?? 'Personal space'} workspaceCount={state.workspaces.length} documentCount={workspaceDocuments.length} lastEdited={lastEdited} documents={visibleDocuments.slice(0, 5)} onCreateDocument={createDocument} onOpenDocument={openDocument} onCreateWorkspace={() => setDialog('workspace')} onNavigate={goTo} />}
           {page === 'docs' && (selectedDocument
-            ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onDelete={deleteDocument} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} /></Suspense>
-            : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} />)}
+            ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onExportDocx={exportDocumentDocx} onDelete={deleteDocument} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} /></Suspense>
+            : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} onImportDocx={importDocumentDocx} />)}
           {page === 'drive' && <DriveWorkspace workspaceId={activeWorkspace?.id ?? null} documents={visibleDocuments} query={query} onOpenDocument={openDocument} onCreateDocument={createDocument} />}
           {page === 'pdf' && <Suspense fallback={<div className="page" role="status">Opening local PDF tools…</div>}><PdfWorkspace workspaceId={activeWorkspace?.id ?? null} /></Suspense>}
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} />}
@@ -357,8 +402,17 @@ function DocumentRows({ documents, onOpen }: { documents: OfficeDocument[]; onOp
   return <div className="document-list">{documents.map((document) => <button className="document-row" key={document.id} onClick={() => onOpen(document)}><span className="document-type-icon"><FileText size={17} /></span><span className="document-row-main"><strong>{document.title || 'Untitled document'}</strong><small>{document.content.trim().slice(0, 84) || 'No text yet · stored in this browser'}</small></span><span className="document-date">{friendlyDate(document.updatedAt)}</span><ArrowUpRight size={15} className="row-arrow" /></button>)}</div>;
 }
 
-function DocumentsPage({ documents, query, onCreate, onOpen }: { documents: OfficeDocument[]; query: string; onCreate: () => void; onOpen: (document: OfficeDocument) => void }) {
-  return <div className="page subpage"><div className="page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Format local drafts with headings, text styles, lists, and quotes. DOCX, comments, cloud sync, and collaboration are not connected.</p></div><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
+function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx }: { documents: OfficeDocument[]; query: string; onCreate: () => void; onOpen: (document: OfficeDocument) => void; onImportDocx: (file: File) => Promise<boolean> }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file || !window.confirm(DOCX_IMPORT_LIMITS_COPY)) return;
+    setImporting(true);
+    try { await onImportDocx(file); } finally { setImporting(false); }
+  };
+  return <div className="page subpage"><div className="page-title-row docs-page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Format local drafts with headings, text styles, lists, and quotes. Import or export a limited DOCX subset; comments, cloud sync, and collaboration are not connected.</p></div><div className="docs-page-actions"><input ref={inputRef} className="visually-hidden" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFile} aria-label="Choose a DOCX file" /><button className="button-secondary" disabled={importing} onClick={() => inputRef.current?.click()}><FileText size={16} /> {importing ? 'Importing…' : 'Import DOCX'}</button><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div></div><p className="docs-import-copy">{DOCX_IMPORT_LIMITS_COPY}</p><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
 }
 
 function SettingsPage({ state, onTheme, onAccent }: { state: PreviewState; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
