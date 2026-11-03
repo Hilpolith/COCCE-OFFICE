@@ -19,6 +19,8 @@ import DriveWorkspace from './DriveWorkspace';
 import SlidesWorkspace from './SlidesWorkspace';
 import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './lib/documentEditor';
 import VaultWorkspace from './VaultWorkspace';
+import { readSurfaceStyle, writeSurfaceStyle } from './lib/appearancePreferences';
+import type { SurfaceStyle } from './lib/appearancePreferences';
 
 const DocumentEditor = lazy(() => import('./DocsEditor'));
 const PdfWorkspace = lazy(() => import('./PdfWorkspace'));
@@ -52,8 +54,19 @@ const friendlyDate = (iso: string | undefined) => {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(iso));
 };
 
+const unavailableBrowserStorage = {
+  getItem(): never { throw new Error('Browser storage is unavailable.'); },
+  setItem(): never { throw new Error('Browser storage is unavailable.'); },
+};
+function getBrowserStorage(): Pick<Storage, 'getItem' | 'setItem'> {
+  try { return window.localStorage; } catch { return unavailableBrowserStorage; }
+}
+
 function App() {
-  const [state, setState] = useState<PreviewState>(() => readPreviewState(window.localStorage));
+  const [browserStorage] = useState(getBrowserStorage);
+  const [state, setState] = useState<PreviewState>(() => readPreviewState(browserStorage));
+  const [surfaceStyle, setSurfaceStyle] = useState<SurfaceStyle>(() => readSurfaceStyle(browserStorage));
+  const searchRef = useRef<HTMLInputElement>(null);
   const [unsavedDocuments, setUnsavedDocuments] = useState<Record<string, OfficeDocument>>({});
   const [page, setPage] = useState<PageId>('home');
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
@@ -61,7 +74,7 @@ function App() {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [feedback, setFeedback] = useState('');
+  const [feedback, setFeedback] = useState(browserStorage === unavailableBrowserStorage ? 'Could not save or read browser storage. Existing local data has not been changed; allow browser storage before editing.' : '');
   const [clockLabel] = useState(() => {
     const hour = new Date().getHours();
     return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -71,6 +84,35 @@ function App() {
     document.documentElement.dataset.theme = state.theme;
     document.documentElement.style.setProperty('--accent', state.accent);
   }, [state.theme, state.accent]);
+
+  useEffect(() => {
+    document.documentElement.dataset.surface = surfaceStyle;
+    return () => { delete document.documentElement.dataset.surface; };
+  }, [surfaceStyle]);
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (event.defaultPrevented || event.isComposing || (target instanceof Element && target !== searchRef.current && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]'))) return;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', focusSearch);
+    return () => window.removeEventListener('keydown', focusSearch);
+  }, []);
+
+  const chooseSurfaceStyle = (surface: SurfaceStyle) => {
+    try {
+      writeSurfaceStyle(browserStorage, surface);
+      setSurfaceStyle(surface);
+      setFeedback('');
+    } catch {
+      setFeedback('Could not save the appearance preference in this browser. The previous surface choice and your documents were kept.');
+    }
+  };
 
   useEffect(() => {
     if (Object.keys(unsavedDocuments).length === 0) return;
@@ -84,7 +126,7 @@ function App() {
 
   const persist = (next: PreviewState): boolean => {
     try {
-      writePreviewState(window.localStorage, next);
+      writePreviewState(browserStorage, next);
       setState(next);
       setFeedback('');
       return true;
@@ -305,7 +347,7 @@ function App() {
             <div className="breadcrumb"><span>COCCE Office</span><ChevronLeft size={13} className="breadcrumb-sep" /><strong>{pageTitle(page, Boolean(selectedDocument))}</strong></div>
           </div>
           <div className="topbar-actions">
-            <label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-label={page === 'team' ? 'Search local planner items' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
+            <label className="search-box"><Search size={16} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-keyshortcuts="Control+k Meta+k" aria-label={page === 'team' ? 'Search local planner items' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
             <span className="local-status"><span className="status-dot" /> Office workspace</span>
             <button className="icon-button help-button" title="Workspace information" aria-label="Workspace information" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
           </div>
@@ -323,7 +365,7 @@ function App() {
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} />}
           {page === 'vault' && <VaultWorkspace />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} /></Suspense>}
-          {page === 'settings' && <SettingsPage state={state} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
+          {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
           {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'pdf' && page !== 'sheets' && page !== 'slides' && page !== 'vault' && page !== 'team' && page !== 'settings' && <UnavailablePage page={page} />}
         </div>
 
@@ -423,9 +465,17 @@ function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx }: { d
   return <div className="page subpage"><div className="page-title-row docs-page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Format local drafts with headings, text styles, lists, quotes, and simple tables. Add review comments to selected text; comment notes stay in this browser. DOCX import/export supports bounded rectangular tables. Cloud sync and shared collaboration are not connected.</p></div><div className="docs-page-actions"><input ref={inputRef} className="visually-hidden" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFile} aria-label="Choose a DOCX file" /><button className="button-secondary" disabled={importing} onClick={() => inputRef.current?.click()}><FileText size={16} /> {importing ? 'Importing…' : 'Import DOCX'}</button><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div></div><p className="docs-import-copy">{DOCX_IMPORT_LIMITS_COPY}</p><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
 }
 
-function SettingsPage({ state, onTheme, onAccent }: { state: PreviewState; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
+function SettingsPage({ state, surfaceStyle, onSurfaceStyle, onTheme, onAccent }: { state: PreviewState; surfaceStyle: SurfaceStyle; onSurfaceStyle: (surface: SurfaceStyle) => void; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
   return <div className="page subpage settings-page">
     <div className="page-title-row"><div><span className="eyebrow">PREFERENCES</span><h1>Make it yours</h1><p className="page-lede">Theme and accent choices are saved in this browser.</p></div><span className="local-only-chip"><LockKeyhole size={13} /> Local settings</span></div>
+    <section className="settings-panel glass-card" aria-labelledby="surface-heading">
+      <div className="settings-heading"><div className="settings-icon"><Grid2X2 size={19} /></div><div><h2 id="surface-heading">Surface appearance</h2><p>A softer workspace, with a clear alternative when you need it.</p></div></div>
+      <div className="surface-options" role="group" aria-label="Surface appearance">
+        <button className="surface-option" aria-label="Frosted glass" aria-pressed={surfaceStyle === 'glass'} onClick={() => onSurfaceStyle('glass')}><span className="surface-preview surface-preview-glass" aria-hidden="true"><i /><i /></span><span><strong>Frosted glass</strong><small>Depth, blur and soft reflections</small></span>{surfaceStyle === 'glass' && <Check size={17} aria-hidden="true" />}</button>
+        <button className="surface-option" aria-label="Solid surfaces" aria-pressed={surfaceStyle === 'solid'} onClick={() => onSurfaceStyle('solid')}><span className="surface-preview surface-preview-solid" aria-hidden="true"><i /><i /></span><span><strong>Solid surfaces</strong><small>Opaque panels without backdrop blur</small></span>{surfaceStyle === 'solid' && <Check size={17} aria-hidden="true" />}</button>
+      </div>
+      <p className="surface-help">Saved on this device only, separately from your documents. Supported system settings for reduced transparency or increased contrast take priority. Browsers without backdrop blur use solid panels. Document pages, slide content and printed output keep their own rendering.</p>
+    </section>
     <section className="settings-panel glass-card">
       <div className="settings-heading"><div className="settings-icon"><Sun size={19} /></div><div><h2>Liquid Glass themes</h2><p>Choose a surface style for this workspace.</p></div></div>
       <div className="theme-grid">{themeOptions.map((theme) => <button key={theme.id} className={`theme-option theme-preview-${theme.id} ${state.theme === theme.id ? 'theme-selected' : ''}`} onClick={() => onTheme(theme.id)} aria-pressed={state.theme === theme.id}><span className="theme-swatch"><i style={{ background: theme.color }} /><i /><i /></span><span className="theme-name">{theme.name}</span>{state.theme === theme.id && <Check size={15} className="theme-check" />}</button>)}</div>
