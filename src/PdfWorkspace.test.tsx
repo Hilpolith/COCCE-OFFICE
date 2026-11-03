@@ -49,14 +49,22 @@ const pageItems = [
 ];
 const pages = pageItems.map((items) => ({
   view: [0, 0, 600, 800],
-  getViewport: ({ scale, rotation }: { scale: number; rotation: number }) => ({
-    width: 600 * scale,
-    height: 800 * scale,
-    scale,
-    rotation,
-    convertToPdfPoint: (x: number, y: number) => [x / scale, y / scale],
-    convertToViewportPoint: (x: number, y: number) => [x * scale, y * scale],
-  }),
+  getViewport: ({ scale, rotation }: { scale: number; rotation: number }) => {
+    const normalizedRotation = ((rotation % 360) + 360) % 360;
+    const rotated = normalizedRotation === 90 || normalizedRotation === 270;
+    return {
+      width: (rotated ? 800 : 600) * scale,
+      height: (rotated ? 600 : 800) * scale,
+      scale,
+      rotation: normalizedRotation,
+      convertToPdfPoint: (x: number, y: number) => normalizedRotation === 90
+        ? [y / scale, 800 - x / scale]
+        : [x / scale, y / scale],
+      convertToViewportPoint: (x: number, y: number) => normalizedRotation === 90
+        ? [(800 - y) * scale, x * scale]
+        : [x * scale, y * scale],
+    };
+  },
   getTextContent: vi.fn(async () => ({ items, styles: {} })),
   render: vi.fn(() => ({ promise: Promise.resolve(), cancel: vi.fn() })),
 }));
@@ -74,6 +82,7 @@ const rangeRectsDescriptor = Object.getOwnPropertyDescriptor(Range.prototype, 'g
 const scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
 const boundsDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
 const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+const confirmDescriptor = Object.getOwnPropertyDescriptor(window, 'confirm');
 
 function restoreDescriptor(target: object, key: PropertyKey, descriptor: PropertyDescriptor | undefined) {
   if (descriptor) Object.defineProperty(target, key, descriptor);
@@ -144,6 +153,7 @@ afterEach(() => {
   restoreDescriptor(HTMLElement.prototype, 'scrollIntoView', scrollDescriptor);
   restoreDescriptor(HTMLElement.prototype, 'getBoundingClientRect', boundsDescriptor);
   restoreDescriptor(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor);
+  restoreDescriptor(window, 'confirm', confirmDescriptor);
   window.localStorage.clear();
 });
 
@@ -156,6 +166,20 @@ async function openSyntheticPdf() {
 async function searchFor(query: string) {
   fireEvent.change(screen.getByRole('textbox', { name: 'Search text in PDF' }), { target: { value: query } });
   fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+}
+
+async function selectFirstPdfText() {
+  const firstSpan = screen.getByTestId('pdf-text-layer').querySelector('span');
+  const textNode = firstSpan?.firstChild;
+  if (!textNode) throw new Error('Synthetic PDF text layer is empty.');
+  const range = document.createRange();
+  range.setStart(textNode, 0);
+  range.setEnd(textNode, textNode.textContent?.length ?? 0);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  fireEvent.mouseUp(screen.getByRole('group', { name: /PDF page \d+/ }));
+  await waitFor(() => expect(screen.getByRole('group', { name: 'Actions for selected PDF text' })).toBeTruthy());
 }
 
 describe('PDF search overlays and navigation', () => {
@@ -271,5 +295,101 @@ describe('PDF search overlays and navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View rotation' }));
     await waitFor(() => expect(container.querySelectorAll('.pdf-search-mark-rect')).toHaveLength(1));
     expect(container.querySelector('.pdf-search-mark-current')).toBeTruthy();
+  });
+});
+
+describe('local selected-text PDF marks', () => {
+  it('saves underline and strike-through overlays, reprojects through rotation/resize, and reloads from the sidecar', async () => {
+    const { container, unmount } = await openSyntheticPdf();
+    await selectFirstPdfText();
+    fireEvent.click(screen.getByRole('button', { name: 'Underline selected PDF text' }));
+    await waitFor(() => expect(screen.getByText('Underline · page 1')).toBeTruthy());
+    const initial = JSON.parse(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY) ?? 'null');
+    const savedUnderline = initial.annotations.find((annotation: { kind: string }) => annotation.kind === 'underline');
+    expect(savedUnderline.quote).toBe('alpha');
+    const originalRects = savedUnderline.rects;
+    expect(container.querySelectorAll('[data-testid="pdf-text-mark-line"]')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View rotation' }));
+    await waitFor(() => expect(container.querySelectorAll('[data-testid="pdf-text-mark-line"]')).toHaveLength(1));
+    const rotatedLine = container.querySelector('[data-testid="pdf-text-mark-line"]') as SVGLineElement;
+    expect(rotatedLine.getAttribute('x1')).toBe(rotatedLine.getAttribute('x2'));
+    stageWidth = 400;
+    window.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect((container.querySelector('.pdf-page-stage') as HTMLElement).clientWidth).toBe(400));
+    expect(JSON.parse(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY) ?? 'null').annotations
+      .find((annotation: { kind: string }) => annotation.kind === 'underline').rects).toEqual(originalRects);
+
+    await selectFirstPdfText();
+    fireEvent.click(screen.getByRole('button', { name: 'Strike through selected PDF text' }));
+    await waitFor(() => expect(screen.getByText('Strikethrough · page 1')).toBeTruthy());
+    const kinds = JSON.parse(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY) ?? 'null').annotations.map((annotation: { kind: string }) => annotation.kind);
+    expect(kinds).toEqual(expect.arrayContaining(['highlight', 'underline', 'strike-through']));
+    expect(repository.saveFile).not.toHaveBeenCalled();
+
+    unmount();
+    await openSyntheticPdf();
+    await waitFor(() => expect(screen.getAllByTestId('pdf-text-mark-line')).toHaveLength(2));
+    expect(screen.getByText('Underline · page 1')).toBeTruthy();
+    expect(screen.getByText('Strikethrough · page 1')).toBeTruthy();
+  });
+
+  it('keeps page marks separate and supports atomic clear, per-item delete, and session undo', async () => {
+    const { container } = await openSyntheticPdf();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Rendered PDF page 2' })).toBeTruthy());
+    await selectFirstPdfText();
+    fireEvent.click(screen.getByRole('button', { name: 'Underline selected PDF text' }));
+    await waitFor(() => expect(screen.getByText('Underline · page 2')).toBeTruthy());
+    await selectFirstPdfText();
+    fireEvent.click(screen.getByRole('button', { name: 'Strike through selected PDF text' }));
+    await waitFor(() => expect(screen.getByText('Strikethrough · page 2')).toBeTruthy());
+    expect(container.querySelectorAll('[data-testid="pdf-text-mark-line"]')).toHaveLength(2);
+
+    const annotationsBeforeCancel = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const cancelConfirmation = vi.fn().mockReturnValue(false);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: cancelConfirmation });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear annotations on this page' }));
+    expect(cancelConfirmation).toHaveBeenCalledOnce();
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(annotationsBeforeCancel);
+    expect(container.querySelectorAll('[data-testid="pdf-text-mark-line"]')).toHaveLength(2);
+
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => true });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear annotations on this page' }));
+    await waitFor(() => expect(screen.getByText('No saved marks on page 2. Select text above to add one.')).toBeTruthy());
+    expect(JSON.parse(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY) ?? 'null').annotations
+      .some((annotation: { page: number }) => annotation.page === 2)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last annotation change' }));
+    await waitFor(() => expect(screen.getByText('Underline · page 2')).toBeTruthy());
+    expect(screen.getByText('Strikethrough · page 2')).toBeTruthy();
+    expect(container.querySelectorAll('[data-testid="pdf-text-mark-line"]')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete PDF underline' }));
+    await waitFor(() => expect(screen.queryByText('Underline · page 2')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last annotation change' }));
+    await waitFor(() => expect(screen.getByText('Underline · page 2')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Rendered PDF page 1' })).toBeTruthy());
+    expect(screen.getByText('Highlight · page 1')).toBeTruthy();
+    expect(container.querySelectorAll('[data-testid="pdf-text-mark-line"]')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(container.querySelectorAll('[data-testid="pdf-text-mark-line"]')).toHaveLength(2));
+  });
+
+  it('does not change UI state or sidecar data when local storage refuses a new text mark', async () => {
+    await openSyntheticPdf();
+    await selectFirstPdfText();
+    const before = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation((key: string, value: string) => {
+      if (key === PDF_ANNOTATION_STORAGE_KEY) throw new Error('QuotaExceededError');
+      return originalSetItem(key, value);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Strike through selected PDF text' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('QuotaExceededError'));
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(before);
+    expect(screen.queryByText('Strikethrough · page 1')).toBeNull();
+    expect(repository.saveFile).not.toHaveBeenCalled();
   });
 });

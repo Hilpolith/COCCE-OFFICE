@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PDF_ANNOTATION_STORAGE_KEY, createPdfAnnotation, deletePdfAnnotation,
-  listPdfAnnotations, savePdfAnnotation,
+  PDF_ANNOTATION_STORAGE_KEY, createPdfAnnotation, deletePdfAnnotation, deletePdfAnnotations,
+  listPdfAnnotations, savePdfAnnotation, savePdfAnnotations,
 } from './pdfAnnotationStore';
 import type { PdfAnnotationStorage } from './pdfAnnotationStore';
 
@@ -27,16 +27,32 @@ describe('browser-local PDF annotation store', () => {
   it('round-trips annotations by workspace and PDF file without mixing scopes', () => {
     const { storage, read } = memoryStorage();
     const first = mark();
+    const underline = mark({ kind: 'underline', color: 'cyan' });
+    const strikeThrough = mark({ kind: 'strike-through', color: 'rose' });
     const otherFile = mark({ fileId: 'pdf-b', quote: 'Other document text' });
     const otherWorkspace = mark({ workspaceId: 'office-b', quote: 'Other workspace text' });
-    savePdfAnnotation(storage, first);
-    savePdfAnnotation(storage, otherFile);
-    savePdfAnnotation(storage, otherWorkspace);
-    expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([first]);
+    savePdfAnnotations(storage, [first, underline, strikeThrough, otherFile, otherWorkspace]);
+    expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([first, underline, strikeThrough]);
     expect(listPdfAnnotations(storage, 'office-a', 'pdf-b')).toEqual([otherFile]);
     expect(listPdfAnnotations(storage, 'office-b', 'pdf-a')).toEqual([otherWorkspace]);
-    expect(JSON.parse(read() ?? 'null')).toMatchObject({ version: 1, annotations: expect.arrayContaining([first, otherFile, otherWorkspace]) });
+    expect(JSON.parse(read() ?? 'null')).toMatchObject({ version: 1, annotations: expect.arrayContaining([first, underline, strikeThrough, otherFile, otherWorkspace]) });
     expect(PDF_ANNOTATION_STORAGE_KEY).toBe('cocce-office-pdf-annotations-v1');
+  });
+
+  it('replaces matching IDs only inside the same workspace and PDF scope', () => {
+    const { storage } = memoryStorage();
+    const sharedId = 'synthetic-duplicate-id';
+    const otherScope = { ...mark({ workspaceId: 'office-b', fileId: 'pdf-b' }), id: sharedId };
+    const target = { ...mark(), id: sharedId };
+    savePdfAnnotation(storage, otherScope);
+    savePdfAnnotation(storage, target);
+    expect(listPdfAnnotations(storage, 'office-b', 'pdf-b')).toEqual([otherScope]);
+    expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([target]);
+
+    const updatedTarget = { ...target, quote: 'Updated synthetic selection' };
+    savePdfAnnotation(storage, updatedTarget);
+    expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([updatedTarget]);
+    expect(listPdfAnnotations(storage, 'office-b', 'pdf-b')).toEqual([otherScope]);
   });
 
   it('persists comments anchored to selected text and supports deletion', () => {
@@ -48,6 +64,19 @@ describe('browser-local PDF annotation store', () => {
     });
     deletePdfAnnotation(storage, 'office-a', 'pdf-a', comment.id);
     expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([]);
+  });
+
+  it('clears and restores multiple page annotations atomically without crossing file scopes', () => {
+    const { storage } = memoryStorage();
+    const highlight = mark();
+    const underline = mark({ kind: 'underline', color: 'cyan' });
+    const otherFile = mark({ fileId: 'pdf-b' });
+    savePdfAnnotations(storage, [highlight, underline, otherFile]);
+    deletePdfAnnotations(storage, 'office-a', 'pdf-a', [highlight.id, underline.id]);
+    expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([]);
+    expect(listPdfAnnotations(storage, 'office-a', 'pdf-b')).toEqual([otherFile]);
+    savePdfAnnotations(storage, [highlight, underline]);
+    expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([highlight, underline]);
   });
 
   it('rejects invalid annotations and preserves unreadable or future store data', () => {
@@ -66,5 +95,10 @@ describe('browser-local PDF annotation store', () => {
   it('surfaces browser storage quota failures', () => {
     const blocked: PdfAnnotationStorage = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError'); } };
     expect(() => savePdfAnnotation(blocked, mark())).toThrow('QuotaExceededError');
+    const existingAnnotation = mark();
+    const existing = JSON.stringify({ version: 1, annotations: [existingAnnotation] });
+    const blockedDelete: PdfAnnotationStorage = { getItem: () => existing, setItem: () => { throw new Error('QuotaExceededError'); } };
+    expect(() => deletePdfAnnotations(blockedDelete, 'office-a', 'pdf-a', [existingAnnotation.id])).toThrow('QuotaExceededError');
+    expect(blockedDelete.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(existing);
   });
 });

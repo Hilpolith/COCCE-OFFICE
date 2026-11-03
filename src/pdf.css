@@ -16,3 +16,21 @@
 .pdf-search-row{flex-wrap:wrap}
 .pdf-search-row>.pdf-search-clear{min-height:34px;padding:0 9px;gap:5px;font-size:9px;white-space:nowrap}
 @media(max-width:700px){.pdf-search-row{gap:6px}.pdf-search-row>.pdf-search-clear{padding:0 8px}}
+
+
+/* Selected-text underline and strike-through sidecar overlays; never embedded into PDF bytes. */
+.pdf-page-stage .pdf-text-mark-layer{position:absolute;inset:0;z-index:3;width:100%;height:100%;overflow:visible;pointer-events:none}
+.pdf-text-mark-line{fill:none;stroke-width:2.2;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.pdf-text-mark-color-yellow{stroke:#a67905}
+.pdf-text-mark-color-cyan{stroke:#167f96}
+.pdf-text-mark-color-rose{stroke:#b33d5e}
+.pdf-page-stage .pdf-search-mark-layer{z-index:4}
+.pdf-page-stage .pdf-comment-markers{z-index:5}
+.pdf-annotation-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap}
+.pdf-annotations-heading>.pdf-annotation-actions{flex-direction:row;gap:5px}
+.pdf-annotation-actions>button{min-height:28px;padding:0 8px;font-size:8px}
+.pdf-annotation-actions>button:disabled{opacity:.45;cursor:not-allowed}
+.pdf-annotation-actions>span{padding:4px 7px;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:8px;white-space:nowrap}
+.pdf-annotation-icon-underline{color:#38c2dc}
+.pdf-annotation-icon-strike-through{color:#ee829d}
+@media(max-width:700px){.pdf-annotations-heading{align-items:flex-start;flex-direction:column}.pdf-annotations-heading>.pdf-annotation-actions{width:100%;justify-content:flex-start}.pdf-annotation-actions>button{min-height:30px;padding:0 9px;font-size:9px}}

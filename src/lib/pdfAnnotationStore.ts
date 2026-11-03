@@ -4,7 +4,7 @@ export const MAX_PDF_MARK_RECTS = 100;
 export const MAX_PDF_QUOTE_LENGTH = 1_800;
 export const MAX_PDF_COMMENT_LENGTH = 4_000;
 
-export type PdfAnnotationKind = 'highlight' | 'comment';
+export type PdfAnnotationKind = 'highlight' | 'comment' | 'underline' | 'strike-through';
 export type PdfAnnotationColor = 'yellow' | 'cyan' | 'rose';
 
 export interface PdfPageRect {
@@ -49,7 +49,7 @@ export function isPdfAnnotation(value: unknown): value is PdfAnnotation {
     && (value.workspaceId === null || (typeof value.workspaceId === 'string' && value.workspaceId.length <= 128))
     && typeof value.fileId === 'string' && value.fileId.length > 0 && value.fileId.length <= 128
     && Number.isInteger(value.page) && (value.page as number) > 0 && (value.page as number) <= 100_000
-    && (value.kind === 'highlight' || value.kind === 'comment')
+    && (value.kind === 'highlight' || value.kind === 'comment' || value.kind === 'underline' || value.kind === 'strike-through')
     && typeof value.quote === 'string' && value.quote.length > 0 && value.quote.length <= MAX_PDF_QUOTE_LENGTH
     && typeof value.note === 'string' && value.note.length <= MAX_PDF_COMMENT_LENGTH
     && (value.kind !== 'comment' || value.note.trim().length > 0)
@@ -87,11 +87,21 @@ export function listPdfAnnotations(
 }
 
 export function savePdfAnnotation(storage: PdfAnnotationStorage, annotation: PdfAnnotation): void {
-  if (!isPdfAnnotation(annotation)) throw new Error('This PDF annotation is invalid or too large to save.');
+  savePdfAnnotations(storage, [annotation]);
+}
+
+export function savePdfAnnotations(storage: PdfAnnotationStorage, annotations: PdfAnnotation[]): void {
+  if (!annotations.length) return;
+  if (!annotations.every(isPdfAnnotation)) throw new Error('This PDF annotation is invalid or too large to save.');
   const state = readState(storage);
-  const next = state.annotations.filter((item) => item.id !== annotation.id);
-  if (next.length >= MAX_PDF_ANNOTATIONS) throw new Error('The local PDF annotation store is full; remove some annotations before adding more.');
-  next.push(annotation);
+  const next = [...state.annotations];
+  for (const annotation of annotations) {
+    const existingIndex = next.findIndex((item) => item.id === annotation.id
+      && item.workspaceId === annotation.workspaceId && item.fileId === annotation.fileId);
+    if (existingIndex < 0) next.push(annotation);
+    else next[existingIndex] = annotation;
+  }
+  if (next.length > MAX_PDF_ANNOTATIONS) throw new Error('The local PDF annotation store is full; remove some annotations before adding more.');
   storage.setItem(PDF_ANNOTATION_STORAGE_KEY, JSON.stringify({ version: 1, annotations: next } satisfies PdfAnnotationState));
 }
 
@@ -101,8 +111,19 @@ export function deletePdfAnnotation(
   fileId: string,
   annotationId: string,
 ): void {
+  deletePdfAnnotations(storage, workspaceId, fileId, [annotationId]);
+}
+
+export function deletePdfAnnotations(
+  storage: PdfAnnotationStorage,
+  workspaceId: string | null,
+  fileId: string,
+  annotationIds: string[],
+): void {
+  if (!annotationIds.length) return;
   const state = readState(storage);
-  const annotations = state.annotations.filter((item) => !(item.workspaceId === workspaceId && item.fileId === fileId && item.id === annotationId));
+  const ids = new Set(annotationIds);
+  const annotations = state.annotations.filter((item) => !(item.workspaceId === workspaceId && item.fileId === fileId && ids.has(item.id)));
   if (annotations.length !== state.annotations.length) {
     storage.setItem(PDF_ANNOTATION_STORAGE_KEY, JSON.stringify({ version: 1, annotations } satisfies PdfAnnotationState));
   }

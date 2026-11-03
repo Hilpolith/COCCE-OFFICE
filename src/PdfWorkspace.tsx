@@ -6,12 +6,13 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, BookOpenText, Check, FilePlus2,
   FileText, Files, Highlighter, LoaderCircle, MessageSquare, RotateCw, Search,
-  Trash2, Upload, X,
+  Strikethrough, Trash2, Underline, Undo2, Upload, X,
 } from 'lucide-react';
 import { localDriveRepository } from './lib/driveStore';
 import type { DriveFile, DriveRepository } from './lib/driveStore';
 import {
-  createPdfAnnotation, deletePdfAnnotation, listPdfAnnotations, savePdfAnnotation,
+  createPdfAnnotation, deletePdfAnnotation, deletePdfAnnotations, listPdfAnnotations,
+  savePdfAnnotation, savePdfAnnotations,
 } from './lib/pdfAnnotationStore';
 import type { PdfAnnotation } from './lib/pdfAnnotationStore';
 import { capturePdfTextSelection } from './lib/pdfSelection';
@@ -20,6 +21,7 @@ import type { PdfCapturedSelection, PdfViewportLike } from './lib/pdfSelection';
 import { findPdfTextMatches } from './lib/pdfSearch';
 import { mapPdfSearchTextRangeToItems, measurePdfSearchHitRects } from './lib/pdfSearchHighlights';
 import type { PdfSearchOverlayRect } from './lib/pdfSearchHighlights';
+import { pdfTextMarkToViewportLine } from './lib/pdfTextMarks';
 import { extractPdfPages, mergePdfFiles, parsePageRange, reorderPdfPages, rotatePdfPage } from './lib/pdfTools';
 import './pdf.css';
 
@@ -38,6 +40,8 @@ interface PageDimensions {
   viewport: PdfViewportLike;
   viewBox: readonly [number, number, number, number];
 }
+interface PdfAnnotationHistoryEntry { scope: string; added: PdfAnnotation[]; removed: PdfAnnotation[] }
+const MAX_PDF_ANNOTATION_HISTORY = 50;
 
 const isPdf = (file: DriveFile) => file.mimeType === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 const toArrayBuffer = (bytes: Uint8Array) => {
@@ -71,6 +75,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const [previewError, setPreviewError] = useState('');
   const [canvasReady, setCanvasReady] = useState(false);
   const [annotations, setAnnotations] = useState<PdfAnnotation[]>([]);
+  const [annotationHistory, setAnnotationHistory] = useState<PdfAnnotationHistoryEntry[]>([]);
   const [selectionState, setSelectionState] = useState<{ scope: string; page: number; value: PdfCapturedSelection } | null>(null);
   const [commentEditorOpen, setCommentEditorOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
@@ -90,6 +95,10 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     () => annotations.filter((annotation) => annotation.page === currentPage),
     [annotations, currentPage],
   );
+  const canUndoAnnotation = annotationHistory.at(-1)?.scope === annotationScope;
+  const recordAnnotationHistory = (entry: Omit<PdfAnnotationHistoryEntry, 'scope'>) => {
+    setAnnotationHistory((current) => [...current, { ...entry, scope: annotationScope }].slice(-MAX_PDF_ANNOTATION_HISTORY));
+  };
 
   const refreshFiles = useCallback(async () => {
     setListLoading(true);
@@ -118,6 +127,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
         setCommentEditorOpen(false);
         setCommentDraft('');
         setActiveAnnotationId('');
+        setAnnotationHistory([]);
         setPreviewError('');
         setSearchTerm('');
         setSearchHits([]);
@@ -247,6 +257,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     setCanvasReady(false);
     setPageDimensions(null);
     setSelectionState(null);
+    setAnnotationHistory([]);
     setCommentEditorOpen(false);
     setCommentDraft('');
     setActiveAnnotationId('');
@@ -464,22 +475,25 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     if (!captured) setCommentEditorOpen(false);
   };
 
-  const saveSelectedAnnotation = (kind: 'highlight' | 'comment', note = '') => {
+  const saveSelectedAnnotation = (kind: PdfAnnotation['kind'], note = '') => {
     if (!selection || !selectedFileId) return;
     try {
+      const color = kind === 'highlight' ? 'yellow' : kind === 'strike-through' ? 'rose' : 'cyan';
       const annotation = createPdfAnnotation({
         workspaceId, fileId: selectedFileId, page: currentPage, kind,
-        quote: selection.text, note: note.trim(), color: kind === 'highlight' ? 'yellow' : 'cyan',
+        quote: selection.text, note: note.trim(), color,
         rects: selection.rects,
       });
       savePdfAnnotation(window.localStorage, annotation);
       setAnnotations((current) => [...current, annotation].sort((left, right) => left.page - right.page || left.createdAt.localeCompare(right.createdAt)));
+      recordAnnotationHistory({ added: [annotation], removed: [] });
       setSelection(null);
       setCommentEditorOpen(false);
       setCommentDraft('');
       window.getSelection()?.removeAllRanges();
       setError('');
-      setNotice(kind === 'highlight' ? 'Highlight saved in this browser for this PDF.' : 'Comment saved in this browser for this PDF.');
+      const label = kind === 'strike-through' ? 'Strikethrough' : kind[0].toUpperCase() + kind.slice(1);
+      setNotice(`${label} saved in this browser as a local PDF overlay; the source file was not changed.`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save this local PDF annotation.'); }
   };
 
@@ -494,17 +508,49 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     try {
       deletePdfAnnotation(window.localStorage, workspaceId, selectedFileId, annotation.id);
       setAnnotations((current) => current.filter((item) => item.id !== annotation.id));
+      recordAnnotationHistory({ added: [], removed: [annotation] });
       setActiveAnnotationId((current) => current === annotation.id ? '' : current);
       setError('');
       setNotice('Annotation removed from this browser.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not remove this local annotation.'); }
   };
 
+  const clearCurrentPageAnnotations = () => {
+    if (!selectedFileId || !currentPageAnnotations.length) return;
+    const count = currentPageAnnotations.length;
+    if (!window.confirm(`Remove all ${count} local annotation${count === 1 ? '' : 's'} from page ${currentPage}? The original PDF will not change.`)) return;
+    try {
+      deletePdfAnnotations(window.localStorage, workspaceId, selectedFileId, currentPageAnnotations.map((annotation) => annotation.id));
+      setAnnotations((current) => current.filter((annotation) => annotation.page !== currentPage));
+      recordAnnotationHistory({ added: [], removed: currentPageAnnotations });
+      setActiveAnnotationId('');
+      setError('');
+      setNotice(`Cleared ${count} local annotation${count === 1 ? '' : 's'} from page ${currentPage}. The source PDF was not changed.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not clear local PDF annotations.'); }
+  };
+
+  const undoLastAnnotationChange = () => {
+    const entry = annotationHistory.at(-1);
+    if (!entry || entry.scope !== annotationScope || !selectedFileId) return;
+    try {
+      if (entry.added.length) deletePdfAnnotations(window.localStorage, workspaceId, selectedFileId, entry.added.map((annotation) => annotation.id));
+      if (entry.removed.length) savePdfAnnotations(window.localStorage, entry.removed);
+      const removedIds = new Set(entry.added.map((annotation) => annotation.id));
+      const restoredIds = new Set(entry.removed.map((annotation) => annotation.id));
+      setAnnotations((current) => [...current.filter((annotation) => !removedIds.has(annotation.id) && !restoredIds.has(annotation.id)), ...entry.removed]
+        .sort((left, right) => left.page - right.page || left.createdAt.localeCompare(right.createdAt)));
+      setAnnotationHistory((current) => current.slice(0, -1));
+      setActiveAnnotationId('');
+      setError('');
+      setNotice('Undid the last local annotation change. The source PDF was not changed.');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not undo the local PDF annotation change.'); }
+  };
+
   return (
     <div className="page subpage pdf-page">
-      <div className="page-title-row pdf-title-row"><div><span className="eyebrow">COCCE PDF · BROWSER-LOCAL MODE</span><h1>PDF workspace</h1><p className="page-lede">View, search, select text, and add local highlights or comments to PDFs stored in this browser. Originals remain unchanged; nothing is sent to a server.</p></div><div className="pdf-title-actions"><button className="button-primary" onClick={() => inputRef.current?.click()} disabled={busy}><Upload size={15} /> Add PDF</button><input ref={inputRef} type="file" accept="application/pdf,.pdf" multiple className="visually-hidden" aria-label="Choose PDF files to save locally" onChange={onFileInput} /></div></div>
+      <div className="page-title-row pdf-title-row"><div><span className="eyebrow">COCCE PDF · BROWSER-LOCAL MODE</span><h1>PDF workspace</h1><p className="page-lede">View, search, select text, and add local highlights, comments, underlines, or strike-through marks to PDFs stored in this browser. Originals remain unchanged; nothing is sent to a server.</p></div><div className="pdf-title-actions"><button className="button-primary" onClick={() => inputRef.current?.click()} disabled={busy}><Upload size={15} /> Add PDF</button><input ref={inputRef} type="file" accept="application/pdf,.pdf" multiple className="visually-hidden" aria-label="Choose PDF files to save locally" onChange={onFileInput} /></div></div>
 
-      <div className="pdf-local-note glass-card"><span className="pdf-note-icon"><BookOpenText size={18} /></span><div><strong>Local PDF tools</strong><small>Files are held in this browser’s COCCE Drive store. Highlights and comments are saved separately in this browser; they are not embedded in the PDF, shared, or backed up on a server. Per-file storage is limited to 25 MB.</small></div></div>
+      <div className="pdf-local-note glass-card"><span className="pdf-note-icon"><BookOpenText size={18} /></span><div><strong>Local PDF tools</strong><small>Files are held in this browser’s COCCE Drive store. Highlights, comments, underlines, and strike-through marks are saved separately as local overlays; they are not embedded in PDFs, shared, or backed up on a server. Per-file storage is limited to 25 MB.</small></div></div>
       {notice && <div className="pdf-feedback" role="status"><Check size={15} />{notice}</div>}
       {error && <div className="pdf-feedback pdf-error" role="alert">{error}</div>}
 
@@ -521,17 +567,18 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
               <div className="pdf-page-toolbar"><button className="icon-button" onClick={() => navigateToPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1} aria-label="Previous page"><ArrowLeft size={15} /></button><label>Page <input aria-label="PDF page number" type="number" min={1} max={pdfDocument.numPages} value={currentPage} onChange={(event) => { const parsed = Number(event.target.value); if (Number.isInteger(parsed)) navigateToPage(Math.min(pdfDocument.numPages, Math.max(1, parsed))); }} /> of {pdfDocument.numPages}</label><button className="icon-button" onClick={() => navigateToPage(Math.min(pdfDocument.numPages, currentPage + 1))} disabled={currentPage >= pdfDocument.numPages} aria-label="Next page"><ArrowRight size={15} /></button><span className="pdf-page-toolbar-spacer" /><button className="button-tertiary" onClick={rotateView}><RotateCw size={14} /> View rotation</button></div>
               <div className="pdf-canvas-wrap"><div ref={pageStageRef} className="pdf-page-stage" onMouseUp={() => window.requestAnimationFrame(captureSelection)} onKeyUp={() => window.requestAnimationFrame(captureSelection)} role="group" aria-label={`PDF page ${currentPage}`}>
                 <canvas ref={canvasRef} className={`pdf-canvas ${canvasReady ? 'pdf-canvas-ready' : ''}`} aria-label={`Rendered PDF page ${currentPage}`} role="img" />
-                <div className="pdf-mark-layer" aria-hidden="true">{currentPageAnnotations.map((annotation) => annotation.rects.map((pdfRect, index) => { const rect = pageDimensions ? pdfRectToViewportRect(pdfRect, pageDimensions.viewport, pageDimensions.viewBox) : pdfRect; return <span key={`${annotation.id}-${index}`} className={`pdf-mark-rect pdf-mark-${annotation.kind} pdf-mark-${annotation.color}`} style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%` }} />; }))}</div>
+                <div className="pdf-mark-layer" aria-hidden="true">{currentPageAnnotations.filter((annotation) => annotation.kind === 'highlight' || annotation.kind === 'comment').flatMap((annotation) => annotation.rects.map((pdfRect, index) => { const rect = pageDimensions ? pdfRectToViewportRect(pdfRect, pageDimensions.viewport, pageDimensions.viewBox) : pdfRect; return <span key={`${annotation.id}-${index}`} className={`pdf-mark-rect pdf-mark-${annotation.kind} pdf-mark-${annotation.color}`} style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%` }} />; }))}</div>
                 <div ref={textLayerRef} className="pdf-text-layer" data-testid="pdf-text-layer" style={{ transform: `scale(${displayScale})` }} />
+                <svg className="pdf-text-mark-layer" data-testid="pdf-text-mark-layer" viewBox={pageDimensions ? `0 0 ${pageDimensions.width} ${pageDimensions.height}` : '0 0 1 1'} preserveAspectRatio="none" aria-hidden="true">{currentPageAnnotations.flatMap((annotation) => { if (annotation.kind !== 'underline' && annotation.kind !== 'strike-through') return []; return annotation.rects.map((rect, index) => { const line = pageDimensions ? pdfTextMarkToViewportLine(rect, annotation.kind, pageDimensions.viewport, pageDimensions.viewBox) : null; return line ? <line key={`${annotation.id}-${index}`} className={`pdf-text-mark-line pdf-text-mark-${annotation.kind} pdf-text-mark-color-${annotation.color}`} data-testid="pdf-text-mark-line" x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} /> : null; }); })}{/* Page-space geometry is reprojected after responsive scaling and rotation. */}</svg>
                 <div className="pdf-search-mark-layer" data-testid="pdf-search-highlight-layer" aria-hidden="true">{searchRects.map((rect, rectIndex) => <span key={`${rect.hitIndex}-${rectIndex}`} className={`pdf-search-mark-rect${rect.hitIndex === currentSearchIndex ? ' pdf-search-mark-current' : ''}`} data-testid="pdf-search-hit-mark" data-pdf-search-hit={rect.hitIndex} data-current={rect.hitIndex === currentSearchIndex} style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%` }} />)}</div>
                 <div className="pdf-comment-markers">{currentPageAnnotations.filter((annotation) => annotation.kind === 'comment' && annotation.rects[0]).map((annotation) => { const storedRect = annotation.rects[0]; const rect = pageDimensions ? pdfRectToViewportRect(storedRect, pageDimensions.viewport, pageDimensions.viewBox) : storedRect; return <button key={annotation.id} className="pdf-comment-marker" aria-label={`Show comment: ${annotation.note}`} title={annotation.note} style={{ left: `${Math.min(98, (rect.x + rect.width) * 100)}%`, top: `${rect.y * 100}%` }} onClick={() => setActiveAnnotationId(annotation.id)}><MessageSquare size={12} /></button>; })}</div>
                 {!canvasReady && !previewError && <div className="pdf-canvas-overlay" role="status"><LoaderCircle size={17} className="pdf-spinner" /> Rendering page…</div>}
               </div></div>
-              <p className="pdf-viewer-footnote">PDF.js text on this page is selectable. Search matches are temporary overlays and disappear when the search is cleared; saved highlights and comments remain separate local notes and are not written into the PDF.</p>
-              {selection && <div className="pdf-selection-toolbar" role="group" aria-label="Actions for selected PDF text"><div><strong>Selected text</strong><small title={selection.text}>“{selection.text.slice(0, 160)}{selection.text.length > 160 ? '…' : ''}”</small></div><button className="button-tertiary" onClick={() => saveSelectedAnnotation('highlight')}><Highlighter size={14} /> Highlight</button><button className="button-secondary" onClick={() => { setCommentEditorOpen(true); setCommentDraft(''); }}><MessageSquare size={14} /> Comment</button><button className="icon-button" aria-label="Dismiss text selection" onClick={() => { setSelection(null); setCommentEditorOpen(false); }}><X size={14} /></button></div>}
+              <p className="pdf-viewer-footnote">PDF.js text on this page is selectable. Search matches are temporary and disappear when cleared. Saved highlights, comments, underlines, and strike-through marks are separate browser-local overlays; downloads and page-operation copies do not include them.</p>
+              {selection && <div className="pdf-selection-toolbar" role="group" aria-label="Actions for selected PDF text"><div><strong>Selected text</strong><small title={selection.text}>“{selection.text.slice(0, 160)}{selection.text.length > 160 ? '…' : ''}”</small></div><button className="button-tertiary" onClick={() => saveSelectedAnnotation('highlight')}><Highlighter size={14} /> Highlight</button><button className="button-tertiary" aria-label="Underline selected PDF text" onClick={() => saveSelectedAnnotation('underline')}><Underline size={14} /> Underline</button><button className="button-tertiary" aria-label="Strike through selected PDF text" onClick={() => saveSelectedAnnotation('strike-through')}><Strikethrough size={14} /> Strike through</button><button className="button-secondary" onClick={() => { setCommentEditorOpen(true); setCommentDraft(''); }}><MessageSquare size={14} /> Comment</button><button className="icon-button" aria-label="Dismiss text selection" onClick={() => { setSelection(null); setCommentEditorOpen(false); }}><X size={14} /></button></div>}
               {commentEditorOpen && selection && <form className="pdf-comment-form" onSubmit={saveComment}><label htmlFor="pdf-comment-draft">Comment on selected text</label><textarea id="pdf-comment-draft" rows={3} maxLength={4_000} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Write a note about this passage" /><div><small>{selection.text.slice(0, 120)}{selection.text.length > 120 ? '…' : ''}</small><button className="button-primary" type="submit" disabled={!commentDraft.trim()}>Save comment locally</button><button className="button-tertiary" type="button" onClick={() => { setCommentEditorOpen(false); setCommentDraft(''); }}>Cancel</button></div></form>}
-              <section className="pdf-annotations" aria-label="Local PDF annotations"><div className="pdf-annotations-heading"><div><span className="eyebrow">THIS BROWSER ONLY</span><h2>Highlights &amp; comments</h2></div><span>{annotations.length} saved</span></div><p className="pdf-annotations-note">Select text on the page to highlight it or attach a comment. These notes are private to this browser and current local workspace.</p>
-                {currentPageAnnotations.length ? <ul className="pdf-annotation-list">{currentPageAnnotations.map((annotation) => <li key={annotation.id} id={`pdf-annotation-${annotation.id}`} className={`pdf-annotation-item ${activeAnnotationId === annotation.id ? 'pdf-annotation-item-active' : ''}`}><div className={`pdf-annotation-icon pdf-annotation-icon-${annotation.kind}`} aria-hidden="true">{annotation.kind === 'highlight' ? <Highlighter size={14} /> : <MessageSquare size={14} />}</div><div className="pdf-annotation-copy"><strong>{annotation.kind === 'highlight' ? 'Highlight' : 'Comment'} · page {annotation.page}</strong><blockquote>“{annotation.quote}”</blockquote>{annotation.note && <p>{annotation.note}</p>}</div><button className="icon-button pdf-delete-annotation" aria-label={`Delete PDF ${annotation.kind}`} title="Remove this local annotation" onClick={() => removeAnnotation(annotation)}><Trash2 size={14} /></button></li>)}</ul> : <div className="pdf-annotations-empty">No saved marks on page {currentPage}. Select text above to add one.</div>}
+              <section className="pdf-annotations" aria-label="Local PDF annotations"><div className="pdf-annotations-heading"><div><span className="eyebrow">THIS BROWSER ONLY</span><h2>Highlights, comments &amp; text marks</h2></div><div className="pdf-annotation-actions"><button className="button-tertiary" aria-label="Undo last annotation change" title="Undo the last local annotation edit" onClick={undoLastAnnotationChange} disabled={!canUndoAnnotation}><Undo2 size={13} /> Undo</button><button className="button-tertiary" aria-label="Clear annotations on this page" onClick={clearCurrentPageAnnotations} disabled={!currentPageAnnotations.length}><Trash2 size={13} /> Clear page</button><span>{annotations.length} saved</span></div></div><p className="pdf-annotations-note">Select text to add a highlight, underline, strike-through, or comment. These overlays are private to this browser and workspace; they are not embedded in the source PDF.</p>
+                {currentPageAnnotations.length ? <ul className="pdf-annotation-list">{currentPageAnnotations.map((annotation) => <li key={annotation.id} id={`pdf-annotation-${annotation.id}`} className={`pdf-annotation-item ${activeAnnotationId === annotation.id ? 'pdf-annotation-item-active' : ''}`}><div className={`pdf-annotation-icon pdf-annotation-icon-${annotation.kind}`} aria-hidden="true">{annotation.kind === 'highlight' ? <Highlighter size={14} /> : annotation.kind === 'comment' ? <MessageSquare size={14} /> : annotation.kind === 'underline' ? <Underline size={14} /> : <Strikethrough size={14} />}</div><div className="pdf-annotation-copy"><strong>{annotation.kind === 'strike-through' ? 'Strikethrough' : annotation.kind[0].toUpperCase() + annotation.kind.slice(1)} · page {annotation.page}</strong><blockquote>“{annotation.quote}”</blockquote>{annotation.note && <p>{annotation.note}</p>}</div><button className="icon-button pdf-delete-annotation" aria-label={`Delete PDF ${annotation.kind}`} title="Remove this local annotation" onClick={() => removeAnnotation(annotation)}><Trash2 size={14} /></button></li>)}</ul> : <div className="pdf-annotations-empty">No saved marks on page {currentPage}. Select text above to add one.</div>}
               </section>
               <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => changeSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button>{searchTerm && <button className="button-tertiary pdf-search-clear" onClick={clearSearch} aria-label="Clear PDF search" title="Clear search"><X size={14} /> Clear</button>}</div>
               {(searchHits.length > 0 || searchTruncated) && <div className="pdf-search-results" aria-label="PDF search results"><div className="pdf-search-heading"><strong>{searchHits.length} match{searchHits.length === 1 ? '' : 'es'}{searchTruncated ? ' (first 2,000 shown)' : ''}</strong>{searchHits.length > 0 && <div className="pdf-search-navigation"><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex - 1)} aria-label="Previous search match" title="Previous match"><ArrowLeft size={14} /></button><span aria-live="polite" aria-atomic="true">{currentSearchIndex + 1} / {searchHits.length} · Page {searchHits[currentSearchIndex]?.page ?? currentPage}</span><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex + 1)} aria-label="Next search match" title="Next match"><ArrowRight size={14} /></button></div>}</div>{searchHits.map((hit, index) => <button key={`${hit.page}-${hit.offset}`} className={index === currentSearchIndex ? 'pdf-search-result-active' : ''} aria-current={index === currentSearchIndex ? 'true' : undefined} onClick={() => navigateToSearchHit(index)}><span>Match {index + 1} · Page {hit.page}</span><small>{hit.excerpt}</small></button>)}{searchTruncated && <small className="pdf-search-truncated">Search stopped at 2,000 matches.</small>}</div>}
