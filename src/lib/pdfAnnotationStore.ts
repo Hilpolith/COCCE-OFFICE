@@ -26,6 +26,8 @@ export interface PdfAnnotation {
   rects: PdfPageRect[];
   createdAt: string;
   updatedAt: string;
+  /** Optional for backward compatibility; set on annotations created against a known source PDF. */
+  sourceFingerprint?: string;
 }
 
 export type PdfAnnotationStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -57,7 +59,8 @@ export function isPdfAnnotation(value: unknown): value is PdfAnnotation {
     && Array.isArray(value.rects) && value.rects.length > 0 && value.rects.length <= MAX_PDF_MARK_RECTS
     && value.rects.every(isRect)
     && typeof value.createdAt === 'string' && Number.isFinite(Date.parse(value.createdAt))
-    && typeof value.updatedAt === 'string' && Number.isFinite(Date.parse(value.updatedAt));
+    && typeof value.updatedAt === 'string' && Number.isFinite(Date.parse(value.updatedAt))
+    && (value.sourceFingerprint === undefined || (typeof value.sourceFingerprint === 'string' && /^[0-9a-f]{64}$/.test(value.sourceFingerprint)));
 }
 
 function readState(storage: PdfAnnotationStorage): PdfAnnotationState {

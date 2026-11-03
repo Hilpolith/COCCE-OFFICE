@@ -34,3 +34,5 @@
 .pdf-annotation-icon-underline{color:#38c2dc}
 .pdf-annotation-icon-strike-through{color:#ee829d}
 @media(max-width:700px){.pdf-annotations-heading{align-items:flex-start;flex-direction:column}.pdf-annotations-heading>.pdf-annotation-actions{width:100%;justify-content:flex-start}.pdf-annotation-actions>button{min-height:30px;padding:0 9px;font-size:9px}}
+
+.pdf-annotated-copy-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 12px;border-color:color-mix(in srgb,var(--accent) 28%,var(--border))}.pdf-annotated-copy-card>div{display:grid;gap:5px;min-width:0}.pdf-annotated-copy-card>button{white-space:nowrap}.pdf-annotated-copy-card .pdf-annotated-copy-status{color:var(--muted);font-size:9px;line-height:1.45}.pdf-annotated-copy-card .pdf-annotated-copy-warning{grid-column:1/-1;color:var(--muted);font-size:8px;line-height:1.4}@media(max-width:680px){.pdf-annotated-copy-card{grid-template-columns:1fr}.pdf-annotated-copy-card>button{width:100%}}

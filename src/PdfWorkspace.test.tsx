@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { PDFDocument } from 'pdf-lib';
 import type { DriveFile, DriveRepository } from './lib/driveStore';
 import {
   createPdfAnnotation, PDF_ANNOTATION_STORAGE_KEY, savePdfAnnotation,
 } from './lib/pdfAnnotationStore';
+import { fingerprintPdfBytes } from './lib/pdfAnnotatedCopy';
 import PdfWorkspace from './PdfWorkspace';
 
 const pdfjsMock = vi.hoisted(() => ({ getDocument: vi.fn() }));
@@ -49,6 +51,8 @@ const pageItems = [
 ];
 const pages = pageItems.map((items) => ({
   view: [0, 0, 600, 800],
+  rotate: 0,
+  userUnit: 1,
   getViewport: ({ scale, rotation }: { scale: number; rotation: number }) => {
     const normalizedRotation = ((rotation % 360) + 360) % 360;
     const rotated = normalizedRotation === 90 || normalizedRotation === 270;
@@ -83,13 +87,20 @@ const scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 
 const boundsDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
 const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
 const confirmDescriptor = Object.getOwnPropertyDescriptor(window, 'confirm');
+const storageSetItemDescriptor = Object.getOwnPropertyDescriptor(Storage.prototype, 'setItem');
 
 function restoreDescriptor(target: object, key: PropertyKey, descriptor: PropertyDescriptor | undefined) {
   if (descriptor) Object.defineProperty(target, key, descriptor);
   else Reflect.deleteProperty(target, key);
 }
 
+function restoreStorageSetItem() {
+  Reflect.deleteProperty(window.localStorage, 'setItem');
+  if (storageSetItemDescriptor) Object.defineProperty(Storage.prototype, 'setItem', storageSetItemDescriptor);
+}
+
 beforeEach(() => {
+  restoreStorageSetItem();
   window.localStorage.clear();
   stageWidth = 200;
   stageHeight = 260;
@@ -149,6 +160,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  restoreStorageSetItem();
   restoreDescriptor(Range.prototype, 'getClientRects', rangeRectsDescriptor);
   restoreDescriptor(HTMLElement.prototype, 'scrollIntoView', scrollDescriptor);
   restoreDescriptor(HTMLElement.prototype, 'getBoundingClientRect', boundsDescriptor);
@@ -161,6 +173,42 @@ async function openSyntheticPdf() {
   const rendered = render(<PdfWorkspace workspaceId={null} repository={repository} />);
   await waitFor(() => expect(screen.getByTestId('pdf-text-layer').querySelectorAll('span')).toHaveLength(2));
   return rendered;
+}
+
+async function configureBoundPdfForCopy() {
+  const sourceDocument = await PDFDocument.create();
+  for (let page = 0; page < pages.length; page += 1) sourceDocument.addPage([600, 800]);
+  const sourceBytes = new Uint8Array(await sourceDocument.save({ useObjectStreams: false }));
+  const fingerprint = await fingerprintPdfBytes(sourceBytes);
+  const sourceFile = { ...driveFile, size: sourceBytes.byteLength };
+  const outputRecord = { ...driveFile, id: 'synthetic-annotated-copy', name: 'synthetic-annotated.pdf' };
+  const records: DriveFile[] = [sourceFile];
+  const blobs = new Map<string, Blob>([[sourceFile.id, new Blob([sourceBytes.slice().buffer as ArrayBuffer], { type: 'application/pdf' })]]);
+  window.localStorage.removeItem(PDF_ANNOTATION_STORAGE_KEY);
+  savePdfAnnotation(window.localStorage, createPdfAnnotation({
+    workspaceId: null, fileId: sourceFile.id, page: 1, kind: 'highlight', quote: 'synthetic selected text', note: '', color: 'yellow',
+    rects: [{ x: 0.1, y: 0.2, width: 0.25, height: 0.05 }], sourceFingerprint: fingerprint,
+  }, new Date('2026-11-03T00:00:00.000Z')));
+  savePdfAnnotation(window.localStorage, createPdfAnnotation({
+    workspaceId: null, fileId: sourceFile.id, page: 1, kind: 'comment', quote: 'synthetic selected text', note: 'PRIVATE synthetic note excluded', color: 'cyan',
+    rects: [{ x: 0.4, y: 0.3, width: 0.2, height: 0.05 }], sourceFingerprint: fingerprint,
+  }, new Date('2026-11-03T00:00:01.000Z')));
+  repository.listFiles = vi.fn(async () => [...records]);
+  repository.readFile = vi.fn(async (id: string) => {
+    const file = records.find((candidate) => candidate.id === id);
+    const blob = blobs.get(id);
+    if (!file || !blob) throw new Error('Synthetic local file not found.');
+    return { file, blob };
+  });
+  repository.saveFile = vi.fn(async (file: File, targetWorkspaceId: string | null) => {
+    const record = { ...outputRecord, workspaceId: targetWorkspaceId, name: file.name, size: file.size };
+    const existing = records.findIndex((candidate) => candidate.id === record.id);
+    if (existing >= 0) records.splice(existing, 1);
+    records.push(record);
+    blobs.set(record.id, file);
+    return record;
+  });
+  return { sourceBytes, sourceFile, records, blobs };
 }
 
 async function searchFor(query: string) {
@@ -307,6 +355,7 @@ describe('local selected-text PDF marks', () => {
     const initial = JSON.parse(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY) ?? 'null');
     const savedUnderline = initial.annotations.find((annotation: { kind: string }) => annotation.kind === 'underline');
     expect(savedUnderline.quote).toBe('alpha');
+    expect(savedUnderline.sourceFingerprint).toMatch(/^[0-9a-f]{64}$/);
     const originalRects = savedUnderline.rects;
     expect(container.querySelectorAll('[data-testid="pdf-text-mark-line"]')).toHaveLength(1);
 
@@ -382,14 +431,78 @@ describe('local selected-text PDF marks', () => {
     await selectFirstPdfText();
     const before = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
     const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
-    vi.spyOn(window.localStorage, 'setItem').mockImplementation((key: string, value: string) => {
+    const quotaSpy = vi.spyOn(window.localStorage, 'setItem').mockImplementation((key: string, value: string) => {
       if (key === PDF_ANNOTATION_STORAGE_KEY) throw new Error('QuotaExceededError');
       return originalSetItem(key, value);
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Strike through selected PDF text' }));
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('QuotaExceededError'));
-    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(before);
-    expect(screen.queryByText('Strikethrough · page 1')).toBeNull();
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Strike through selected PDF text' }));
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('QuotaExceededError'));
+      expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(before);
+      expect(screen.queryByText('Strikethrough · page 1')).toBeNull();
+      expect(repository.saveFile).not.toHaveBeenCalled();
+    } finally { quotaSpy.mockRestore(); }
+  });
+});
+
+describe('local flattened PDF annotated-copy export', () => {
+  it('keeps legacy overlays viewable but disables copy export until marks are source-verified', async () => {
+    await openSyntheticPdf();
+    expect(screen.getByText('Highlight · page 1')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Create annotated copy' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/older or unverified mark/)).toBeTruthy();
     expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+
+  it('requires affirmative confirmation before reading/saving the copy and leaves the sidecar unchanged on cancel', async () => {
+    await configureBoundPdfForCopy();
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    await openSyntheticPdf();
+    const readCallsBeforeConfirmation = (repository.readFile as ReturnType<typeof vi.fn>).mock.calls.length;
+    const cancel = vi.fn().mockReturnValue(false);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: cancel });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create annotated copy' }));
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(cancel.mock.calls[0][0]).toContain('not editable PDF annotation objects');
+    expect(cancel.mock.calls[0][0]).toContain('comment');
+    expect(cancel.mock.calls[0][0]).toContain('original file and local sidecar will remain unchanged');
+    expect((repository.readFile as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(readCallsBeforeConfirmation);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarBefore);
+  });
+
+  it('creates a separate local flattened copy after confirmation without altering source bytes or comments', async () => {
+    const { sourceBytes, sourceFile, blobs } = await configureBoundPdfForCopy();
+    const sourceSnapshot = sourceBytes.slice();
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const confirm = vi.fn().mockReturnValue(true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await openSyntheticPdf();
+    fireEvent.click(screen.getByRole('button', { name: 'View rotation' }));
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Rendered PDF page 1' })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create annotated copy' }));
+    await waitFor(() => expect(repository.saveFile).toHaveBeenCalledOnce());
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm.mock.calls[0][0]).toContain('comment');
+    expect(confirm.mock.calls[0][0]).not.toContain('PRIVATE synthetic note');
+    expect(confirm.mock.calls[0][0]).toContain('flattened into page content');
+    expect(repository.saveFile).toHaveBeenCalledOnce();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(sourceBytes).toEqual(sourceSnapshot);
+    expect(new Uint8Array(await blobs.get(sourceFile.id)!.arrayBuffer())).toEqual(sourceSnapshot);
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarBefore);
+
+    const savedFile = (repository.saveFile as ReturnType<typeof vi.fn>).mock.calls[0][0] as File;
+    expect(savedFile.name).toBe('synthetic-annotated.pdf');
+    const copiedBytes = new Uint8Array(await savedFile.arrayBuffer());
+    expect(copiedBytes).not.toEqual(sourceSnapshot);
+    expect(Buffer.from(copiedBytes).includes(Buffer.from('PRIVATE synthetic note excluded'))).toBe(false);
+    const outputDocument = await PDFDocument.load(copiedBytes);
+    expect(outputDocument.getPageCount()).toBe(3);
+    expect(outputDocument.getPage(0).getRotation().angle).toBe(0);
+    expect(screen.getByText(/Created a separate local copy with/).textContent).toContain('flattened visual marks');
   });
 });

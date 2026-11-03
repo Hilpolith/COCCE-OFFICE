@@ -55,6 +55,16 @@ describe('browser-local PDF annotation store', () => {
     expect(listPdfAnnotations(storage, 'office-b', 'pdf-b')).toEqual([otherScope]);
   });
 
+  it('persists valid source fingerprints while keeping legacy rows readable', () => {
+    const { storage } = memoryStorage();
+    const legacy = mark();
+    const bound = mark({ sourceFingerprint: 'a'.repeat(64), quote: 'Fingerprint-bound mark' });
+    savePdfAnnotations(storage, [legacy, bound]);
+    expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([legacy, bound]);
+    expect(() => savePdfAnnotation(storage, mark({ sourceFingerprint: 'not-a-sha256' }))).toThrow('invalid');
+    expect(listPdfAnnotations(storage, 'office-a', 'pdf-a')).toEqual([legacy, bound]);
+  });
+
   it('persists comments anchored to selected text and supports deletion', () => {
     const { storage } = memoryStorage();
     const comment = mark({ kind: 'comment', note: 'Check this figure', color: 'cyan' });
