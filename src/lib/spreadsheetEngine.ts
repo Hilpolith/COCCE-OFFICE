@@ -322,7 +322,12 @@ export function displayCellValue(cells: Record<string, string>, address: string)
   return value && typeof value === 'object' && 'error' in value ? value.error : value === null ? '' : String(value);
 }
 
-export function parseCsv(text: string): string[][] {
+export const SHEET_VISIBLE_ROWS = 24;
+export const SHEET_VISIBLE_COLUMNS = 12;
+export const MAX_SHEETS_CLIPBOARD_CHARS = 64 * 1024;
+export const MAX_SHEETS_CLIPBOARD_CELL_CHARS = 16 * 1024;
+
+function parseDelimitedText(text: string, delimiter: string, label: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -335,23 +340,92 @@ export function parseCsv(text: string): string[][] {
       else if (char === '"') { quoted = false; justClosedQuote = true; }
       else field += char;
     } else if (justClosedQuote) {
-      if (char === ',') { row.push(field); field = ''; justClosedQuote = false; }
+      if (char === delimiter) { row.push(field); field = ''; justClosedQuote = false; }
       else if (char === '\n' || char === '\r') {
         if (char === '\r' && text[index + 1] === '\n') index += 1;
         row.push(field); rows.push(row); row = []; field = ''; justClosedQuote = false;
-      } else throw new Error('CSV contains characters after a quoted field.');
+      } else throw new Error(`${label} contains characters after a quoted field.`);
     } else if (char === '"') {
-      if (field.length !== 0) throw new Error('CSV contains a quote inside an unquoted field.');
+      if (field.length !== 0) throw new Error(`${label} contains a quote inside an unquoted field.`);
       quoted = true;
-    } else if (char === ',') { row.push(field); field = ''; }
+    } else if (char === delimiter) { row.push(field); field = ''; }
     else if (char === '\n' || char === '\r') {
       if (char === '\r' && text[index + 1] === '\n') index += 1;
       row.push(field); rows.push(row); row = []; field = '';
     } else field += char;
   }
-  if (quoted) throw new Error('CSV contains an unterminated quoted field.');
+  if (quoted) throw new Error(`${label} contains an unterminated quoted field.`);
   if (field.length || row.length || justClosedQuote) { row.push(field); rows.push(row); }
   return rows;
+}
+
+export function parseCsv(text: string): string[][] {
+  return parseDelimitedText(text, ',', 'CSV');
+}
+
+export function parseTsv(text: string): string[][] {
+  return parseDelimitedText(text, '\t', 'Clipboard table');
+}
+
+export function parseTsvMatrix(
+  text: string,
+  maxRows = SHEET_VISIBLE_ROWS,
+  maxColumns = SHEET_VISIBLE_COLUMNS,
+): string[][] {
+  if (text.length > MAX_SHEETS_CLIPBOARD_CHARS) {
+    throw new RangeError(`Clipboard paste is limited to ${MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters in this preview.`);
+  }
+  const rows = parseTsv(text);
+  if (!rows.length) return [];
+  if (rows.length > maxRows || rows.some((row) => row.length > maxColumns)) {
+    throw new RangeError(`Clipboard data must fit within the visible ${maxRows}-row by ${maxColumns}-column grid.`);
+  }
+  const columnCount = rows[0].length;
+  if (rows.some((row) => row.length !== columnCount)) {
+    throw new Error('Clipboard data must form a rectangular range.');
+  }
+  if (rows.some((row) => row.some((value) => value.length > MAX_SHEETS_CLIPBOARD_CELL_CHARS))) {
+    throw new RangeError(`Clipboard cells are limited to ${MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} characters each.`);
+  }
+  return rows;
+}
+
+export type SheetClipboardRange = {
+  startRow: number;
+  startColumn: number;
+  endRow: number;
+  endColumn: number;
+};
+
+export function serializeTsvRange(
+  cells: Record<string, string>,
+  range: SheetClipboardRange,
+  maxRows = SHEET_VISIBLE_ROWS,
+  maxColumns = SHEET_VISIBLE_COLUMNS,
+): string {
+  const { startRow, startColumn, endRow, endColumn } = range;
+  if (![startRow, startColumn, endRow, endColumn].every(Number.isSafeInteger)
+    || startRow < 1 || startColumn < 1 || endRow < startRow || endColumn < startColumn
+    || endRow > maxRows || endColumn > maxColumns) {
+    throw new RangeError('The selected range is outside the visible spreadsheet grid.');
+  }
+  const rows: string[] = [];
+  for (let row = startRow; row <= endRow; row += 1) {
+    const values: string[] = [];
+    for (let column = startColumn; column <= endColumn; column += 1) {
+      const value = cells[cellAddress(row, column)] ?? '';
+      if (value.length > MAX_SHEETS_CLIPBOARD_CELL_CHARS) {
+        throw new RangeError(`Clipboard cells are limited to ${MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} characters each.`);
+      }
+      values.push(/["\t\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value);
+    }
+    rows.push(values.join('\t'));
+  }
+  const text = rows.join('\r\n');
+  if (text.length > MAX_SHEETS_CLIPBOARD_CHARS) {
+    throw new RangeError(`Clipboard copy is limited to ${MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters in this preview.`);
+  }
+  return text;
 }
 
 export function csvRowsToCells(rows: string[][], maxCells = 10000): Record<string, string> {

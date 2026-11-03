@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellAddress, columnLabel, csvRowsToCells, displayCellValue, evaluateCellValue, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, parseCsv, serializeCsv } from './spreadsheetEngine';
+import { cellAddress, columnLabel, csvRowsToCells, displayCellValue, evaluateCellValue, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, parseCsv, parseTsv, parseTsvMatrix, serializeCsv, serializeTsvRange } from './spreadsheetEngine';
 
 describe('spreadsheet formula engine', () => {
   it('evaluates arithmetic with operator precedence and parentheses', () => {
@@ -82,5 +82,29 @@ describe('CSV import/export', () => {
     expect(isCsvFileSizeAllowed(MAX_CSV_FILE_BYTES)).toBe(true);
     expect(isCsvFileSizeAllowed(MAX_CSV_FILE_BYTES + 1)).toBe(false);
     expect(isCsvFileSizeAllowed(Number.NaN)).toBe(false);
+  });
+});
+
+describe('bounded Sheets clipboard ranges', () => {
+  it('parses quoted tabs, escaped quotes, and multiline values from clipboard TSV', () => {
+    expect(parseTsv('Name\tNote\r\n"Doe, Jane"\t"said ""hello"""\r\n"line 1\nline 2"\t=SUM(A1:A2)'))
+      .toEqual([['Name', 'Note'], ['Doe, Jane', 'said "hello"'], ['line 1\nline 2', '=SUM(A1:A2)']]);
+  });
+
+  it('serializes rectangular raw cells including formula text and blank interior cells', () => {
+    const cells = { A1: '=SUM(A2:A3)', B1: 'A\tB', A2: '2', A3: '3' };
+    const copied = serializeTsvRange(cells, { startRow: 1, startColumn: 1, endRow: 2, endColumn: 2 });
+    expect(copied).toBe('=SUM(A2:A3)\t"A\tB"\r\n2\t');
+    expect(parseTsv(copied)).toEqual([['=SUM(A2:A3)', 'A\tB'], ['2', '']]);
+  });
+
+  it('rejects malformed, ragged, oversized, and out-of-grid pasted ranges without clipping', () => {
+    expect(() => parseTsvMatrix('a\tb\nc')).toThrow('rectangular range');
+    expect(() => parseTsvMatrix('a\tb', 1, 1)).toThrow('visible 1-row by 1-column grid');
+    expect(() => parseTsvMatrix('a\n'.repeat(24) + 'a')).toThrow('visible 24-row by 12-column grid');
+    expect(() => parseTsvMatrix('x'.repeat(MAX_SHEETS_CLIPBOARD_CHARS + 1))).toThrow('limited to 65,536 characters');
+    expect(() => parseTsvMatrix('x'.repeat(MAX_SHEETS_CLIPBOARD_CELL_CHARS + 1))).toThrow('characters each');
+    expect(() => serializeTsvRange({}, { startRow: 24, startColumn: 12, endRow: 24, endColumn: 13 }))
+      .toThrow('outside the visible spreadsheet grid');
   });
 });

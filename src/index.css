@@ -40,3 +40,7 @@
   .page :is(.slides-editor-toolbar,.slides-page-controls,.pdf-viewer-toolbar,.pdf-page-toolbar,.pdf-search-row,.pdf-selection-toolbar){flex-wrap:wrap}
   .page :is(.docs-format-toolbar,.sheet-toolbar,.slides-editor-toolbar,.slides-page-controls,.pdf-viewer-toolbar,.pdf-page-toolbar,.pdf-search-row,.pdf-selection-toolbar) :is(.icon-button,.button-primary,.button-secondary,.button-tertiary,.button-present,.docs-format-button){min-height:42px}
 }
+
+/* Sheets range selection: keep the active cell outline while tinting the rest of the rectangle. */
+.sheet-grid td.cell-range-selected:not(.cell-selected){background:color-mix(in srgb,var(--accent) 12%,var(--surface-strong))}
+.sheet-grid td.cell-range-selected:not(.cell-selected) .cell-display{background:transparent}

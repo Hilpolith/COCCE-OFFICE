@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent } from 'react';
 import {
   ArrowLeft, ArrowUpRight, Check, Download, FileSpreadsheet,
   LockKeyhole, Plus, Table2, Upload,
@@ -9,10 +9,10 @@ import {
   updateWorksheetCell, updateWorksheetCells,
 } from './lib/localStore';
 import type { OfficeWorkbook, PreviewState } from './lib/localStore';
-import { cellAddress, csvRowsToCells, displayCellValue, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, parseCsv, serializeCsv } from './lib/spreadsheetEngine';
+import { cellAddress, csvRowsToCells, displayCellValue, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange, SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS } from './lib/spreadsheetEngine';
 
-const GRID_ROWS = 24;
-const GRID_COLUMNS = 12;
+const GRID_ROWS = SHEET_VISIBLE_ROWS;
+const GRID_COLUMNS = SHEET_VISIBLE_COLUMNS;
 function shortDate(iso: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(iso));
 }
@@ -39,6 +39,18 @@ function cellPosition(address: string) {
   let column = 0;
   for (const character of match[1]) column = column * 26 + character.charCodeAt(0) - 64;
   return { row: Number(match[2]), column };
+}
+
+function cellRange(anchorAddress: string, focusAddress: string) {
+  const anchor = cellPosition(anchorAddress);
+  const focus = cellPosition(focusAddress);
+  if (!anchor || !focus) return null;
+  return {
+    startRow: Math.min(anchor.row, focus.row),
+    startColumn: Math.min(anchor.column, focus.column),
+    endRow: Math.max(anchor.row, focus.row),
+    endColumn: Math.max(anchor.column, focus.column),
+  };
 }
 
 function nextCellAddress(address: string, direction: CellDirection | 'next' | 'previous') {
@@ -155,6 +167,8 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
 }) {
   const worksheet = workbook.worksheets.find((item) => item.id === workbook.activeWorksheetId) ?? workbook.worksheets[0];
   const [selectedAddress, setSelectedAddress] = useState('A1');
+  const [rangeAnchor, setRangeAnchor] = useState('A1');
+  const selectedRange = cellRange(rangeAnchor, selectedAddress) ?? { startRow: 1, startColumn: 1, endRow: 1, endColumn: 1 };
   const [editingAddress, setEditingAddress] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState(notice);
@@ -189,19 +203,77 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
   const beginEdit = (address: string) => {
     cancelledEditAddress.current = null;
     setSelectedAddress(address);
+    setRangeAnchor(address);
     setDraft(worksheet.cells[address] ?? '');
     setEditingAddress(address);
   };
   const addNewWorksheet = () => {
     const added = addWorksheet(state, workbook.id);
     if (!saveState(added.state)) return;
-    if (added.worksheet) { setSelectedAddress('A1'); setMessage(`${added.worksheet.name} created.`); }
+    if (added.worksheet) { setSelectedAddress('A1'); setRangeAnchor('A1'); setMessage(`${added.worksheet.name} created.`); }
   };
   const exportCurrent = () => {
     try {
       downloadCsv(`${safeFileName(workbook.title)}-${safeFileName(worksheet.name)}.csv`, serializeCsv(worksheet.cells));
       setMessage('CSV downloaded from this device.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'CSV export failed.'); }
+  };
+  const copyRange = (event: ReactClipboardEvent<HTMLDivElement>) => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLButtonElement) || !active.classList.contains('cell-display')) return;
+    const clipboard = event.clipboardData;
+    if (!clipboard) { setMessage('Clipboard access is unavailable in this browser.'); return; }
+    event.preventDefault();
+    try {
+      const text = serializeTsvRange(worksheet.cells, selectedRange, GRID_ROWS, GRID_COLUMNS);
+      clipboard.setData('text/plain', text);
+      const height = selectedRange.endRow - selectedRange.startRow + 1;
+      const width = selectedRange.endColumn - selectedRange.startColumn + 1;
+      setMessage(text ? `Copied ${height} × ${width} cell range as plain text; formulas are preserved.` : 'Copied a blank cell; pasting an empty clipboard is a no-op in this preview.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'The selected range could not be copied.'); }
+  };
+  const pasteRange = (event: ReactClipboardEvent<HTMLDivElement>) => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLButtonElement) || !active.classList.contains('cell-display')) return;
+    const clipboard = event.clipboardData;
+    if (!clipboard) { setMessage('Clipboard access is unavailable in this browser.'); return; }
+    event.preventDefault();
+    try {
+      const matrix = parseTsvMatrix(clipboard.getData('text/plain'), GRID_ROWS, GRID_COLUMNS);
+      if (!matrix.length) { setMessage('Clipboard is empty; no cells were changed.'); return; }
+      const start = cellPosition(selectedAddress);
+      if (!start) { setMessage('The selected cell address is invalid.'); return; }
+      const height = matrix.length;
+      const width = matrix[0].length;
+      if (start.row + height - 1 > GRID_ROWS || start.column + width - 1 > GRID_COLUMNS) {
+        setMessage(`Paste would extend beyond the visible ${GRID_ROWS} × ${GRID_COLUMNS} grid. Nothing was changed.`);
+        return;
+      }
+
+      const nextCells = { ...worksheet.cells };
+      let overwritten = 0;
+      let changed = 0;
+      matrix.forEach((row, rowOffset) => row.forEach((value, columnOffset) => {
+        const address = cellAddress(start.row + rowOffset, start.column + columnOffset);
+        const previous = worksheet.cells[address] ?? '';
+        if (previous === value) return;
+        changed += 1;
+        if (previous !== '') overwritten += 1;
+        if (value === '') delete nextCells[address];
+        else nextCells[address] = value;
+      }));
+      if (!changed) { setMessage('Paste matches the current cells; no changes were made.'); return; }
+      if (overwritten && !window.confirm(`Paste ${height} × ${width} cells at ${selectedAddress} and replace ${overwritten} existing cell${overwritten === 1 ? '' : 's'}?`)) {
+        setMessage('Paste cancelled; no cells were changed.');
+        return;
+      }
+      if (!saveState(updateWorksheetCells(state, workbook.id, worksheet.id, nextCells))) return;
+      const firstAddress = cellAddress(start.row, start.column);
+      setSelectedAddress(firstAddress);
+      setRangeAnchor(firstAddress);
+      cellRefs.current[firstAddress]?.focus();
+      setMessage(`Pasted ${height} × ${width} cells at ${firstAddress}; formulas remain local.`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Clipboard data could not be pasted.'); }
   };
   const handleEditKeyDown = (event: KeyboardEvent<HTMLInputElement>, address: string) => {
     if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
@@ -215,6 +287,17 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
   };
   const cellKeyDown = (event: KeyboardEvent<HTMLButtonElement>, address: string) => {
     if (event.key === 'F2') { event.preventDefault(); beginEdit(address); return; }
+    const extendDirection = event.key === 'ArrowUp' ? 'up'
+      : event.key === 'ArrowDown' ? 'down'
+        : event.key === 'ArrowLeft' ? 'left'
+          : event.key === 'ArrowRight' ? 'right' : null;
+    if (event.shiftKey && extendDirection) {
+      event.preventDefault();
+      const nextAddress = nextCellAddress(address, extendDirection);
+      setSelectedAddress(nextAddress);
+      cellRefs.current[nextAddress]?.focus();
+      return;
+    }
     const direction = event.key === 'ArrowUp' ? 'up'
       : event.key === 'ArrowDown' ? 'down'
         : event.key === 'ArrowLeft' ? 'left'
@@ -226,6 +309,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
     event.preventDefault();
     const nextAddress = nextCellAddress(address, direction);
     setSelectedAddress(nextAddress);
+    setRangeAnchor(nextAddress);
     cellRefs.current[nextAddress]?.focus();
   };
   const formulaKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -233,7 +317,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
   };
 
   return (
-    <div className="page subpage sheet-editor-page">
+    <div className="page subpage sheet-editor-page" onCopy={copyRange} onPaste={pasteRange}>
       <div className="sheet-editor-topline">
         <button className="back-button" onClick={onBack}><ArrowLeft size={15} /> All spreadsheets</button>
         <span className="local-only-chip" role={persistenceError ? 'alert' : undefined}><LockKeyhole size={13} /> {persistenceError ? 'Not saved' : 'Saved on this device'}</span>
@@ -256,19 +340,21 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
             return <tr key={row}><th className="row-number">{row}</th>{Array.from({ length: GRID_COLUMNS }, (_, columnIndex) => {
               const address = cellAddress(row, columnIndex + 1);
               const isSelected = address === selectedAddress;
+              const isInRange = row >= selectedRange.startRow && row <= selectedRange.endRow
+                && columnIndex + 1 >= selectedRange.startColumn && columnIndex + 1 <= selectedRange.endColumn;
               const value = displayedCells[address] ?? '';
               const isError = value.startsWith('#');
-              return <td key={address} className={`${isSelected ? 'cell-selected' : ''} ${isError ? 'cell-error' : ''}`}>
+              return <td key={address} className={`${isSelected ? 'cell-selected' : ''} ${isInRange ? 'cell-range-selected' : ''} ${isError ? 'cell-error' : ''}`}>
                 {editingAddress === address
                   ? <input autoFocus className="cell-edit-input" value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => commitEdit(address, draft)} onKeyDown={(event) => handleEditKeyDown(event, address)} aria-label={`Edit cell ${address}`} />
-                  : <button ref={(element) => { cellRefs.current[address] = element; }} className="cell-display" onClick={() => { setSelectedAddress(address); setEditingAddress(null); }} onDoubleClick={() => beginEdit(address)} onKeyDown={(event) => cellKeyDown(event, address)} aria-label={`${address}${value ? `, ${value}` : ', blank'}`} title="Double-click, press F2, or use the formula bar to edit">{value}</button>}
+                  : <button ref={(element) => { cellRefs.current[address] = element; }} className="cell-display" onClick={(event) => { setSelectedAddress(address); if (!event.shiftKey) setRangeAnchor(address); setEditingAddress(null); }} onDoubleClick={() => beginEdit(address)} onKeyDown={(event) => cellKeyDown(event, address)} aria-label={`${address}${value ? `, ${value}` : ', blank'}${isSelected ? ', active cell' : isInRange ? ', selected range cell' : ''}`} title="Click to select; Shift+arrows extend a range. Double-click or press F2 to edit">{value}</button>}
               </td>;
             })}</tr>;
           })}</tbody>
         </table>
       </div>
-      <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status">{message || 'Formulas: arithmetic · cell references · SUM · AVERAGE · IF'}</span></div>
-      <p className="sheet-editor-note"><LockKeyhole size={13} /> CSV editing is local-only. This build does not provide XLSX, charting, collaboration, or cloud backup.</p>
+      <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · cell references · SUM · AVERAGE · IF'}</span></div>
+      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Clipboard paste is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell, stays inside the visible 12 × 24 grid, and asks before replacing populated cells. XLSX, charting, collaboration, and cloud backup are not included.</p>
     </div>
   );
 }
