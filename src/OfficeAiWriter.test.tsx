@@ -72,7 +72,7 @@ describe('Docs AI writing studio', () => {
     const { editor, chain } = makeEditor();
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
-    await waitFor(() => expect(screen.getByText('Cloud AI ready')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
     expect(await screen.findByText('A preview edit.')).toBeTruthy();
@@ -96,7 +96,7 @@ describe('Docs AI writing studio', () => {
     const { editor } = makeEditor();
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
-    await waitFor(() => expect(screen.getByText('Cloud AI ready')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
 
     fireEvent.change(screen.getByPlaceholderText(/Describe what you want drafted/), {
       target: { value: 'Draft a memo from only the facts in this brief.' },
@@ -108,5 +108,32 @@ describe('Docs AI writing studio', () => {
       action: 'draft',
       prompt: 'Draft a memo from only the facts in this brief.',
     });
+  });
+
+  it('shows the no-paid-fallback message for a temporarily unavailable free model and allows retry', async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({
+            error: 'FREE_MODEL_UNAVAILABLE',
+            message: 'The fixed OpenRouter free model is temporarily unavailable or rate-limited. No paid model or alternate-provider fallback will be used; please try again later.',
+          }),
+        } as Response;
+      }
+      return { ok: true, json: async () => ({ configured: true }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const { editor, chain } = makeEditor();
+    render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
+    expect(await screen.findByText(/fixed OpenRouter free model is temporarily unavailable/i)).toBeTruthy();
+    expect(screen.getByText(/No paid model or alternate provider will be used/i)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(chain.insertContentAt).not.toHaveBeenCalled();
   });
 });

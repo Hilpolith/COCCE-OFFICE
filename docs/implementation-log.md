@@ -30,9 +30,16 @@
 - Production smoke verified the app and Team existing-account sign-in panel load. Post-login browser flows were not rerun during this smoke check.
 
 
-## 2026-11-02 — Selection-aware Office Docs AI writing studio
+## 2026-11-02 — Selection-aware Office Docs AI writing studio (initial provider wiring superseded)
 
-- Added a server-side Vercel route that verifies a bearer session against the existing COCCE Auth project, enforces a strict allowlist and request-size/output limits, uses a short-window per-user in-memory cap, and keeps `OPENAI_API_KEY` on the server. Provider calls use `store: false`; no request or response content is logged or persisted by the route.
+- Added a server-side Vercel route that verifies a bearer session against the existing COCCE Auth project, enforces a strict allowlist and request-size/output limits, uses a short-window in-memory request cap, and keeps the provider key on the server. The first provider wiring targeted OpenAI; the later live synthetic smoke returned OpenAI `401 invalid_api_key` because the supplied credential was for OpenRouter. That provider wiring was replaced on 2026-11-03; see below. No real document content was used in the provider checks.
 - Added explicit Docs actions for summaries, proofreading, quality checks, clarity/concision, expansion, key points, action lists, outlines, email rewrites, prompt-only draft templates, custom instructions, and up to 12 browser-local reusable workflows. Drafts send only the typed brief; editing/review actions send only the current selection.
 - AI results are previews and are never inserted automatically. The user must choose to replace the selected text or insert a new draft; the editor checks that the document has not changed while the preview was open and keeps normal Undo/redo history.
-- Added client and server contract tests with mocked Auth and OpenAI responses, plus docs on privacy and scope. No provider key or document content is written into source or local workflow storage. GenOffice source remains unused; `ee/` is not copied.
+- Added client and server contract tests with mocked Auth and provider responses, plus docs on privacy and scope. No provider key or document content is written into source or local workflow storage. GenOffice source remains unused; `ee/` is not copied.
+
+## 2026-11-03 — OpenRouter fixed free endpoint and provider-retention disclosure
+
+- Replaced the initial OpenAI adapter with the OpenRouter Chat Completions endpoint, a server-only `OPENROUTER_API_KEY`, and one fixed model, `google/gemma-4-31b-it:free`. OpenRouter's public endpoint catalog identifies the selected endpoint as Google AI Studio (`google-ai-studio`) and lists zero prompt/completion prices, text output, 262,144-token context, and support for `max_tokens` and `temperature`.
+- Pinned routing to `provider.only: ['google-ai-studio']`, disabled provider fallbacks, provided no model list, and added server checks for the exact returned `:free` model ID and non-positive reported cost. Missing/rate-limited/free-endpoint failures return a temporary-unavailable response that explicitly rules out paid-model and alternate-provider fallback.
+- The owner explicitly accepted user-triggered selected-text/draft processing under the current Google AI Studio policy listed by OpenRouter: 55-day prompt retention and no training. The Docs UI and Settings disclose this. The route does not claim ZDR or request `zdr`/`data_collection: deny`; synthetic preflights with those controls did not yield a successful response.
+- Expanded API/UI contract tests cover provider pinning, no paid/alternate-provider fallback, free-model error messaging, selected-text-only requests, prompt-only drafting, and preview-before-apply. Current direct synthetic endpoint preflights returned HTTP 429, so successful model generation is not yet verified; this must be checked again after the production key/environment and deployment are confirmed.
