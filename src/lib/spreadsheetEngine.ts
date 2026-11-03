@@ -324,8 +324,43 @@ export function displayCellValue(cells: Record<string, string>, address: string)
 
 export const SHEET_VISIBLE_ROWS = 24;
 export const SHEET_VISIBLE_COLUMNS = 12;
+export const MAX_SHEETS_FORMULA_CHARS = 512;
 export const MAX_SHEETS_CLIPBOARD_CHARS = 64 * 1024;
 export const MAX_SHEETS_CLIPBOARD_CELL_CHARS = 16 * 1024;
+
+/** Validate imported formulas against the evaluator and visible single-sheet bounds. */
+export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
+  if (typeof formula !== 'string' || formula.length > MAX_SHEETS_FORMULA_CHARS || !formula.trimStart().startsWith('=')) return false;
+  try {
+    const ast = new Parser(tokenize(formula)).parse();
+    const supportedFunctions = new Set(['IF', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'ABS', 'ROUND', 'AND', 'OR', 'NOT', 'CONCAT']);
+    const addressIsVisible = (address: string) => {
+      const position = parseAddress(address);
+      return position.row <= SHEET_VISIBLE_ROWS && position.column <= SHEET_VISIBLE_COLUMNS;
+    };
+    const visit = (node: Node, depth = 0): boolean => {
+      if (depth > 64) return false;
+      switch (node.kind) {
+        case 'number': case 'string': case 'boolean': return true;
+        case 'reference': return addressIsVisible(node.address);
+        case 'range': return addressIsVisible(node.start) && addressIsVisible(node.end);
+        case 'name': return false;
+        case 'unary': return visit(node.operand, depth + 1);
+        case 'binary': return visit(node.left, depth + 1) && visit(node.right, depth + 1);
+        case 'call': {
+          if (!supportedFunctions.has(node.name)) return false;
+          if ((node.name === 'IF' && (node.args.length < 2 || node.args.length > 3))
+            || (['ABS', 'NOT'].includes(node.name) && node.args.length !== 1)
+            || (node.name === 'ROUND' && (node.args.length < 1 || node.args.length > 2))) return false;
+          return node.args.every((argument) => visit(argument, depth + 1));
+        }
+      }
+    };
+    return visit(ast);
+  } catch {
+    return false;
+  }
+}
 
 function parseDelimitedText(text: string, delimiter: string, label: string): string[][] {
   const rows: string[][] = [];

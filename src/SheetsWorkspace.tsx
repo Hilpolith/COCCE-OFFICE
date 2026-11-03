@@ -10,6 +10,7 @@ import {
 } from './lib/localStore';
 import type { OfficeWorkbook, PreviewState } from './lib/localStore';
 import { cellAddress, csvRowsToCells, displayCellValue, fillNumericSeries, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange, SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS } from './lib/spreadsheetEngine';
+import { createXlsxBlob, importXlsxFile, MAX_XLSX_FILE_BYTES, safeXlsxFilename, XLSX_EXPORT_WARNING, XLSX_IMPORT_WARNING } from './lib/xlsxInterchange';
 
 const GRID_ROWS = SHEET_VISIBLE_ROWS;
 const GRID_COLUMNS = SHEET_VISIBLE_COLUMNS;
@@ -19,6 +20,15 @@ function shortDate(iso: string) {
 
 function downloadCsv(filename: string, content: string) {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = window.document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const anchor = window.document.createElement('a');
   anchor.href = url;
@@ -79,6 +89,7 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
   const [selectedWorkbookId, setSelectedWorkbookId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const importInput = useRef<HTMLInputElement>(null);
+  const xlsxInput = useRef<HTMLInputElement>(null);
   const workbooks = useMemo(() => state.workbooks
     .filter((workbook) => workbook.workspaceId === state.activeWorkspaceId)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [state.workbooks, state.activeWorkspaceId]);
@@ -113,6 +124,38 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
     }
   };
 
+  const importXlsx = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!/\.xlsx$/i.test(file.name)) { setNotice('Choose a standard .xlsx workbook. XLS and macro-enabled XLSM files are not accepted.'); return; }
+    if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_XLSX_FILE_BYTES) {
+      setNotice(`XLSX import is limited to ${Math.floor(MAX_XLSX_FILE_BYTES / 1024 / 1024)} MB per file in this browser.`);
+      return;
+    }
+    if (!window.confirm(XLSX_IMPORT_WARNING)) { setNotice('XLSX import cancelled; no workbook was changed.'); return; }
+    try {
+      const imported = await importXlsxFile(file);
+      const created = addWorkbook(state, imported.title);
+      const worksheetId = created.workbook.activeWorksheetId;
+      const populated = updateWorksheetCells(created.state, created.workbook.id, worksheetId, imported.cells);
+      const candidate: PreviewState = {
+        ...populated,
+        workbooks: populated.workbooks.map((item) => item.id === created.workbook.id
+          ? { ...item, worksheets: item.worksheets.map((sheet) => sheet.id === worksheetId ? { ...sheet, name: imported.sheetName } : sheet) }
+          : item),
+      };
+      if (!onState(candidate)) {
+        setNotice('The XLSX was validated but could not be saved. No new workbook was added and your previous browser data is untouched. Free storage and select the file again to retry.');
+        return;
+      }
+      setSelectedWorkbookId(created.workbook.id);
+      setNotice(`Imported one worksheet locally. ${imported.warnings.join(' ')} No file was uploaded.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The XLSX could not be imported. No workbook was changed.');
+    }
+  };
+
   if (workbook) {
     return <SpreadsheetEditor
       key={workbook.id}
@@ -130,19 +173,21 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
         <div>
           <span className="eyebrow">COCCE SHEETS · LOCAL ENGINE</span>
           <h1>Your spreadsheets</h1>
-          <p className="page-lede">Create browser-local workbooks, calculate formulas, and import or export CSV. Data stays in this browser and is not shared or backed up.</p>
+          <p className="page-lede">Create browser-local workbooks, calculate formulas, and import or export CSV or a bounded XLSX subset. Data stays in this browser and is not shared or backed up.</p>
         </div>
         <div className="sheet-page-actions">
           <button className="button-secondary" onClick={() => importInput.current?.click()}><Upload size={16} /> Import CSV</button>
+          <button className="button-secondary" onClick={() => xlsxInput.current?.click()}><Upload size={16} /> Import XLSX</button>
           <button className="button-primary" onClick={createWorkbook}><Plus size={17} /> New spreadsheet</button>
           <input ref={importInput} className="visually-hidden" type="file" accept=".csv,text/csv" onChange={importCsv} aria-label="Choose a CSV file to import" />
+          <input ref={xlsxInput} className="visually-hidden" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={importXlsx} aria-label="Choose an XLSX file to import" />
         </div>
       </div>
 
       {notice && <div className="sheet-notice" role="status"><Check size={15} />{notice}</div>}
       <section className="sheet-limit-card glass-card">
         <div className="sheet-limit-icon"><Table2 size={19} /></div>
-        <div><strong>A useful local spreadsheet foundation</strong><p>Cell references, ranges, arithmetic, comparisons, and common functions are evaluated locally. CSV is supported; XLSX compatibility, cloud sync, charts, and collaboration are not connected in this build.</p></div>
+        <div><strong>A useful local spreadsheet foundation</strong><p>Cell references, ranges, arithmetic, comparisons, and common functions are evaluated locally. CSV is supported, along with a bounded one-sheet XLSX subset; Excel formatting, dates, charts, merged cells, macros, and cloud sync are not included.</p></div>
         <span className="local-only-chip"><LockKeyhole size={13} /> This device</span>
       </section>
 
@@ -152,7 +197,7 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
           <span className="workbook-icon"><FileSpreadsheet size={19} /></span>
           <span className="workbook-copy"><strong>{item.title || 'Untitled spreadsheet'}</strong><small>{item.worksheets.length} {item.worksheets.length === 1 ? 'worksheet' : 'worksheets'} · Edited {shortDate(item.updatedAt)}</small></span>
           <span className="workbook-local">Device only</span><ArrowUpRight size={15} className="workbook-arrow" />
-        </button>) : <div className="workbook-empty"><div className="empty-sheet"><Table2 size={22} /></div><h3>Start with a blank grid</h3><p>Your formulas and data will be saved in this browser only. You can also import a CSV file.</p><button className="button-tertiary" onClick={createWorkbook}><Plus size={15} /> Create spreadsheet</button></div>}
+        </button>) : <div className="workbook-empty"><div className="empty-sheet"><Table2 size={22} /></div><h3>Start with a blank grid</h3><p>Your formulas and data will be saved in this browser only. You can also import a CSV or supported XLSX file.</p><button className="button-tertiary" onClick={createWorkbook}><Plus size={15} /> Create spreadsheet</button></div>}
       </section>
     </div>
   );
@@ -173,6 +218,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState(notice);
   const [persistenceError, setPersistenceError] = useState(false);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
   const cancelledEditAddress = useRef<string | null>(null);
   const cellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const displayedCells = useMemo(() => {
@@ -217,6 +263,26 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
       downloadCsv(`${safeFileName(workbook.title)}-${safeFileName(worksheet.name)}.csv`, serializeCsv(worksheet.cells));
       setMessage('CSV downloaded from this device.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'CSV export failed.'); }
+  };
+  const exportXlsx = async () => {
+    if (workbook.worksheets.length !== 1) {
+      setMessage('XLSX export requires exactly one worksheet. Export this active sheet as CSV, or use a single-sheet workbook.');
+      return;
+    }
+    if (!window.confirm(`Export “${workbook.title || 'Untitled spreadsheet'}” as XLSX?\n\n${XLSX_EXPORT_WARNING}`)) {
+      setMessage('XLSX export cancelled; no file was created.');
+      return;
+    }
+    setExportingXlsx(true);
+    try {
+      const blob = await createXlsxBlob({ title: workbook.title, sheetName: worksheet.name, cells: worksheet.cells });
+      downloadBlob(safeXlsxFilename(workbook.title), blob);
+      setMessage('Single-sheet XLSX downloaded locally. No file was uploaded.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'XLSX export failed. No file was created.');
+    } finally {
+      setExportingXlsx(false);
+    }
   };
   const copyRange = (event: ReactClipboardEvent<HTMLDivElement>) => {
     const active = document.activeElement;
@@ -349,7 +415,10 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
       {persistenceError && <div className="sheet-notice sheet-save-error" role="alert">Changes were not saved. Your previous browser copy was preserved; free storage or update the app before trying again.</div>}
       <div className="sheet-editor-heading">
         <div className="sheet-title-area"><span className="sheet-heading-icon"><FileSpreadsheet size={18} /></span><div><label className="eyebrow" htmlFor="workbook-title">WORKBOOK NAME</label><input id="workbook-title" className="workbook-title-input" value={workbook.title} onChange={(event) => saveState(updateWorkbook(state, workbook.id, { title: event.target.value }))} aria-label="Spreadsheet name" /></div></div>
-        <button className="button-secondary" onClick={exportCurrent}><Download size={15} /> Export CSV</button>
+        <div className="sheet-export-actions">
+          <button className="button-secondary" onClick={exportCurrent}><Download size={15} /> Export CSV</button>
+          <button className="button-secondary" onClick={() => void exportXlsx()} disabled={exportingXlsx} title={workbook.worksheets.length === 1 ? 'Export this bounded local worksheet as XLSX' : 'XLSX export is limited to single-sheet workbooks'}><Download size={15} /> {exportingXlsx ? 'Preparing XLSX…' : 'Export XLSX'}</button>
+        </div>
       </div>
       <div className="sheet-toolbar">
         <span className="name-box" aria-label="Selected cell">{selectedAddress}</span>
@@ -382,7 +451,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
         </table>
       </div>
       <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · cell references · SUM · AVERAGE · IF'}</span></div>
-      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Fill series uses the first two finite numeric seeds in a single row or column, rejects formulas/text/dates, and asks before replacing populated targets. Clipboard paste is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell, stays inside the visible 12 × 24 grid, and asks before replacing populated cells. XLSX, charting, formatting, collaboration, and cloud backup are not included.</p>
+      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Fill series uses two finite numeric seeds in one row or column and asks before overwriting. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
     </div>
   );
 }

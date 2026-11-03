@@ -49,3 +49,6 @@
 /* Sheets local numeric series action */
 .sheet-range-tools{display:flex;align-items:center;gap:10px;min-height:42px;margin:-1px 0 8px;padding:0 2px}.sheet-range-tools .button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:0 12px;border-radius:10px}.sheet-range-tools>span{color:var(--faint);font-size:9px;line-height:1.5}
 @media(max-width:700px){.sheet-range-tools{align-items:stretch;flex-direction:column;gap:5px}.sheet-range-tools .button-secondary{min-height:42px}.sheet-range-tools>span{line-height:1.45}}
+
+.sheet-export-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+@media(max-width:700px){.sheet-editor-heading{flex-wrap:wrap}.sheet-export-actions{width:100%}.sheet-export-actions button{flex:1;min-height:34px;padding-inline:9px;font-size:9px}}

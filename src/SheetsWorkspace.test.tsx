@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SheetsWorkspace from './SheetsWorkspace';
 import type { PreviewState } from './lib/localStore';
+import { createXlsxBlob, importXlsxFile, XLSX_IMPORT_WARNING, XLSX_MIME } from './lib/xlsxInterchange';
+import { readPreviewState, writePreviewState } from './lib/localStore';
 
 const worksheet = { id: 'sheet-1', name: 'Sheet 1', cells: { A1: 'one', B2: 'two' } };
 const workbook = {
@@ -360,5 +362,142 @@ describe('Sheets local numeric series fill', () => {
     expect(screen.getAllByRole('alert').some((element) => element.textContent?.includes('Changes were not saved'))).toBe(true);
     expect(cell('A3').getAttribute('aria-label')).toContain('old');
     expect(screen.getByRole('status').textContent).not.toContain('Filled 1 cell down');
+  });
+});
+
+
+describe('Sheets bounded XLSX import and export', () => {
+  function setConfirm(value: boolean) {
+    originalConfirm = window.confirm;
+    confirmOverridden = true;
+    const confirm = vi.fn(() => value);
+    Object.defineProperty(window, 'confirm', { configurable: true, writable: true, value: confirm });
+    return confirm;
+  }
+
+  async function syntheticXlsxFile() {
+    const blob = await createXlsxBlob({
+      title: 'Synthetic budget',
+      sheetName: 'Imported data',
+      cells: { A1: 'Label', A2: 'Synthetic row', B2: '4', C2: '=SUM(B2:B2)' },
+    });
+    return new File([blob], 'Synthetic budget.xlsx', { type: XLSX_MIME });
+  }
+
+  it('confirms import, validates before one atomic save, and creates a new local worksheet', async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+    };
+    const onState = vi.fn((next: PreviewState) => { writePreviewState(storage, next); return true; });
+    const view = render(<SheetsWorkspace state={state} onState={onState} />);
+    const confirm = setConfirm(true);
+    const file = await syntheticXlsxFile();
+    fireEvent.change(screen.getByLabelText('Choose an XLSX file to import'), { target: { files: [file] } });
+
+    await waitFor(() => expect(onState).toHaveBeenCalledTimes(1));
+    expect(confirm).toHaveBeenCalledWith(XLSX_IMPORT_WARNING);
+    const candidate = onState.mock.calls[0][0];
+    expect(candidate.workbooks).toHaveLength(2);
+    expect(candidate.workbooks.find((item) => item.id === workbook.id)?.worksheets[0]?.cells).toEqual(worksheet.cells);
+    const importedWorkbook = candidate.workbooks.find((item) => item.title === 'Synthetic budget')!;
+    expect(importedWorkbook.worksheets[0]).toMatchObject({ name: 'Imported data', cells: { A1: 'Label', A2: 'Synthetic row', B2: '4', C2: '=SUM(B2:B2)' } });
+    expect(readPreviewState(storage).workbooks).toEqual(candidate.workbooks);
+
+    view.rerender(<SheetsWorkspace state={candidate} onState={onState} />);
+    expect(await screen.findByRole('tab', { name: 'Imported data' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^A2, Synthetic row/ })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('No file was uploaded');
+  });
+
+  it('does not parse or save an XLSX when the user cancels confirmation', async () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    render(<SheetsWorkspace state={state} onState={onState} />);
+    const confirm = setConfirm(false);
+    const file = new File([new Uint8Array([1, 2, 3])], 'cancelled.xlsx', { type: XLSX_MIME });
+    fireEvent.change(screen.getByLabelText('Choose an XLSX file to import'), { target: { files: [file] } });
+
+    expect(confirm).toHaveBeenCalledWith(XLSX_IMPORT_WARNING);
+    expect(onState).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('XLSX import cancelled'));
+  });
+
+  it('rejects a malformed confirmed XLSX without changing the existing workbook', async () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    render(<SheetsWorkspace state={state} onState={onState} />);
+    setConfirm(true);
+    const file = new File([new Uint8Array([1, 2, 3])], 'broken.xlsx', { type: XLSX_MIME });
+    fireEvent.change(screen.getByLabelText('Choose an XLSX file to import'), { target: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('not a valid XLSX ZIP package'));
+    expect(onState).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Keyboard workbook/ })).toBeTruthy();
+  });
+
+  it('keeps the existing workbook unchanged and offers retry after an atomic storage failure', async () => {
+    const onState = vi.fn((_next: PreviewState) => false);
+    render(<SheetsWorkspace state={state} onState={onState} />);
+    setConfirm(true);
+    const file = await syntheticXlsxFile();
+    fireEvent.change(screen.getByLabelText('Choose an XLSX file to import'), { target: { files: [file] } });
+
+    await waitFor(() => expect(onState).toHaveBeenCalledTimes(1));
+    expect(onState.mock.calls[0][0].workbooks).toHaveLength(2);
+    expect(state.workbooks).toHaveLength(1);
+    expect(state.workbooks[0].worksheets[0].cells).toEqual(worksheet.cells);
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('No new workbook was added'));
+    expect(screen.queryByRole('tab', { name: 'Imported data' })).toBeNull();
+  });
+
+  it('cancels XLSX export before creating a download or changing the workbook', () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    openGrid(onState);
+    setConfirm(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Export XLSX' }));
+    expect(screen.getByRole('status').textContent).toContain('XLSX export cancelled');
+    expect(onState).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('Sheets XLSX export download', () => {
+  it('asks before export and produces a real local workbook containing the active worksheet cells', async () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    openGrid(onState);
+    originalConfirm = window.confirm;
+    confirmOverridden = true;
+    const confirm = vi.fn(() => true);
+    Object.defineProperty(window, 'confirm', { configurable: true, writable: true, value: confirm });
+
+    const createDescriptor = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+    const revokeDescriptor = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+    const capture: { blob?: Blob } = {};
+    const createObjectURL = vi.fn((blob: Blob) => { capture.blob = blob; return 'blob:synthetic-xlsx'; });
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Export XLSX' }));
+      await waitFor(() => expect(screen.getByRole('status').textContent).toContain('downloaded locally'));
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining('formula results may differ from Excel'));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      expect(click).toHaveBeenCalledTimes(1);
+      expect(capture.blob).toBeInstanceOf(Blob);
+      if (!capture.blob) throw new Error('The XLSX export did not create a Blob.');
+      expect(capture.blob.type).toBe(XLSX_MIME);
+      const reopened = await importXlsxFile(new File([capture.blob], 'reopened.xlsx', { type: XLSX_MIME }));
+      expect(reopened.cells).toEqual({ A1: 'one', B2: 'two' });
+      expect(onState).not.toHaveBeenCalled();
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 1_050));
+      expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+    } finally {
+      if (createDescriptor) Object.defineProperty(URL, 'createObjectURL', createDescriptor);
+      else Reflect.deleteProperty(URL, 'createObjectURL');
+      if (revokeDescriptor) Object.defineProperty(URL, 'revokeObjectURL', revokeDescriptor);
+      else Reflect.deleteProperty(URL, 'revokeObjectURL');
+    }
   });
 });
