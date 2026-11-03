@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_STATE, STORAGE_KEY, addDocument, addWorkbook, addWorksheet, addWorkspace,
   readPreviewState, removeDocument, selectWorksheet, selectWorkspace, updateDocument,
-  updateWorksheetCell, writePreviewState,
+  updateWorksheetCell, updateWorksheetCells, writePreviewState,
 } from './localStore';
 import type { StorageReader, StorageWriter } from './localStore';
+import { displayCellValue } from './spreadsheetEngine';
 
 function memoryStorage(initial?: string) {
   let value = initial ?? null;
@@ -116,6 +117,27 @@ describe('local preview storage', () => {
     expect(selectWorksheet(edited, created.workbook.id, 'unknown')).toBe(edited);
     const other = addWorkbook(edited, 'Other', at);
     expect(other.state.workbooks.find((workbook) => workbook.id === other.workbook.id)?.worksheets[0].cells).toEqual({});
+  });
+
+  it('keeps conditional formulas local and recalculates them after a storage reload', () => {
+    const created = addWorkbook(DEFAULT_STATE, 'Local formulas', new Date('2026-11-01T10:00:00.000Z'));
+    const worksheetId = created.workbook.activeWorksheetId;
+    const cells = {
+      A1: 'target', A2: 'other', B1: '6', B2: '9',
+      C1: '=SUMIF(A1:A2,"target",B1:B2)',
+      C2: '=COUNTIF(A1:A2,"other")',
+      C3: '=IFERROR(1/0,"safe")',
+    };
+    const updated = updateWorksheetCells(created.state, created.workbook.id, worksheetId, cells);
+    const { storage } = memoryStorage();
+    writePreviewState(storage, updated);
+    const reloaded = readPreviewState(storage);
+    const reloadedCells = reloaded.workbooks[0].worksheets[0].cells;
+
+    expect(reloadedCells.C1).toBe(cells.C1);
+    expect(displayCellValue(reloadedCells, 'C1')).toBe('6');
+    expect(displayCellValue(reloadedCells, 'C2')).toBe('1');
+    expect(displayCellValue(reloadedCells, 'C3')).toBe('safe');
   });
 
   it('does not switch to an unknown workspace id', () => {

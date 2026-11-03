@@ -15,7 +15,7 @@ import {
   XLSX_IMPORT_WARNING,
   XLSX_MIME,
 } from './xlsxInterchange';
-import { isSupportedFormulaWithinVisibleGrid } from './spreadsheetEngine';
+import { displayCellValue, isSupportedFormulaWithinVisibleGrid } from './spreadsheetEngine';
 
 const MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const OFFICE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -170,7 +170,8 @@ describe('bounded local XLSX interchange', () => {
   it('round-trips a real generated XLSX with text, finite numbers, booleans, and a supported formula', async () => {
     const source = {
       A1: 'Description', B1: 'Amount', A2: 'Local stationery', B2: '3.5', C2: 'TRUE',
-      D2: '=ROUND(B2*2,0)', E2: '=IF(C2,10,0)',
+      D2: '=ROUND(B2*2,0)', E2: '=IF(C2,10,0)', F2: '=IFERROR(1/0,"n/a")',
+      G2: '=COUNTIF(B2:B3,">3")', H2: '=SUMIF(A2:A3,"Local stationery",B2:B3)', I2: '=COUNTIF(B2:B3,"<5")', J2: '=IFERROR(J2,"cycle")',
     };
     const blob = await createXlsxBlob({ title: 'Quarter Budget', sheetName: 'Data', cells: source });
     const imported = await importXlsxFile(fileFromBlob(blob, 'Quarter Budget.xlsx'));
@@ -179,6 +180,8 @@ describe('bounded local XLSX interchange', () => {
       sheetName: 'Data',
       cells: source,
     });
+    expect(displayCellValue(imported.cells, 'F2')).toBe('n/a');
+    expect(displayCellValue(imported.cells, 'J2')).toBe('#CYCLE!');
     expect(imported.warnings[0]).toContain('Cell styles/themes');
     expect(blob.type).toBe(XLSX_MIME);
   });
@@ -193,12 +196,54 @@ describe('bounded local XLSX interchange', () => {
   it('accepts only local formula syntax and references within the visible sheet', () => {
     expect(isSupportedFormulaWithinVisibleGrid('=SUM(A1:L24)')).toBe(true);
     expect(isSupportedFormulaWithinVisibleGrid('=IF(A1>0,ROUND(A1,2),0)')).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid('=IFERROR(A1/0,"safe")')).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid('=COUNTIF(A1:A10,">5")')).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid('=COUNTIF(A1:A2,B1)')).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid('=SUMIF(A1:A10,"yes",B1:B10)')).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid('=SUMIF(A1:A2,"yes",B1:B3)')).toBe(false);
+    expect(isSupportedFormulaWithinVisibleGrid('=COUNTIF(A1:A10)')).toBe(false);
+    expect(isSupportedFormulaWithinVisibleGrid('=COUNTIF(A1:A10,"x",B1:B10)')).toBe(false);
+    expect(isSupportedFormulaWithinVisibleGrid('=COUNTIF(A1:A10,A1:A2)')).toBe(false);
+    expect(isSupportedFormulaWithinVisibleGrid(`=COUNTIF(A1:A2,"${'x'.repeat(257)}")`)).toBe(false);
     expect(isSupportedFormulaWithinVisibleGrid('=M1+1')).toBe(false);
     expect(isSupportedFormulaWithinVisibleGrid('=A25+1')).toBe(false);
     expect(isSupportedFormulaWithinVisibleGrid('=OtherSheet!A1')).toBe(false);
     expect(isSupportedFormulaWithinVisibleGrid('=HYPERLINK("https://example.test")')).toBe(false);
+    const exactFormulaLimit = `=SUM(${Array(253).fill('1').join(',')} )`;
+    expect(exactFormulaLimit).toHaveLength(512);
+    expect(isSupportedFormulaWithinVisibleGrid(exactFormulaLimit)).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid(`${exactFormulaLimit} `)).toBe(false);
     expect(isSupportedFormulaWithinVisibleGrid(`=${'1+'.repeat(260)}1`)).toBe(false);
     expect(isSupportedFormulaWithinVisibleGrid('=1+')).toBe(false);
+    expect(isSupportedFormulaWithinVisibleGrid('  =SUM(A1:L24)')).toBe(false);
+  });
+
+  it('recalculates supported formula cells with cached error types but refuses literal error cells', async () => {
+    const formulaError = await importXlsxFile(makeXlsxFile({
+      rows: '<row r="1"><c r="A1" t="e"><f>1/0</f><v>#DIV/0!</v></c></row>',
+    }));
+    expect(formulaError.cells).toEqual({ A1: '=1/0' });
+    expect(displayCellValue(formulaError.cells, 'A1')).toBe('#DIV/0!');
+
+    const staleCachedError = await importXlsxFile(makeXlsxFile({
+      rows: '<row r="1"><c r="A1" t="e"><f>1+1</f><v>#DIV/0!</v></c></row>',
+    }));
+    expect(staleCachedError.cells).toEqual({ A1: '=1+1' });
+    expect(displayCellValue(staleCachedError.cells, 'A1')).toBe('2');
+
+    await expect(importXlsxFile(makeXlsxFile({
+      rows: '<row r="1"><c r="A1" t="e"><v>#DIV/0!</v></c></row>',
+    }))).rejects.toThrow('Date and error cells are not supported');
+  });
+
+  it('accepts referenced criteria during XLSX parsing but applies the text cap at local evaluation', async () => {
+    const longCriterion = 'x'.repeat(257);
+    const imported = await importXlsxFile(makeXlsxFile({
+      dimension: 'A1:B2',
+      rows: `<row r="1"><c r="A1" t="inlineStr"><is><t>${longCriterion}</t></is></c><c r="B1"><f>COUNTIF(A2:A2,A1)</f><v>0</v></c></row><row r="2"><c r="A2"><v>6</v></c></row>`,
+    }));
+    expect(imported.cells.B1).toBe('=COUNTIF(A2:A2,A1)');
+    expect(displayCellValue(imported.cells, 'B1')).toBe('#VALUE!');
   });
 
   it('rejects multiple, hidden, or otherwise unsupported workbook structures before returning cells', async () => {
@@ -382,6 +427,7 @@ describe('bounded local XLSX interchange', () => {
 
   it('refuses unsupported formulas and out-of-grid cells during export', async () => {
     await expect(createXlsxBlob({ title: 'Unsafe', sheetName: 'Data', cells: { A1: '=HYPERLINK("https://example.test")' } })).rejects.toThrow('formula outside the local XLSX-supported subset');
+    await expect(createXlsxBlob({ title: 'Shape mismatch', sheetName: 'Data', cells: { A1: '=SUMIF(A1:A2,"yes",B1:B3)' } })).rejects.toThrow('formula outside the local XLSX-supported subset');
     await expect(createXlsxBlob({ title: 'Out of range', sheetName: 'Data', cells: { M1: '1' } })).rejects.toThrow('outside the visible');
     await expect(createXlsxBlob({ title: 'Name', sheetName: 'Bad/Name', cells: {} })).rejects.toThrow('worksheet name is invalid');
   });

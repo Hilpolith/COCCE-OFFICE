@@ -1,6 +1,14 @@
 export type FormulaError = { error: string };
 export type FormulaResult = string | number | boolean | null | FormulaError;
 export const MAX_CSV_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_SHEETS_CRITERIA_CHARS = 256;
+export const MAX_SHEETS_FORMULA_CHARS = 512;
+export function isFormulaCellValue(value: string): boolean {
+  return value.startsWith('=');
+}
+export function isFormulaTextWithinLimit(value: string): boolean {
+  return !isFormulaCellValue(value) || value.length <= MAX_SHEETS_FORMULA_CHARS;
+}
 export function isCsvFileSizeAllowed(bytes: number): boolean {
   return Number.isSafeInteger(bytes) && bytes >= 0 && bytes <= MAX_CSV_FILE_BYTES;
 }
@@ -25,7 +33,7 @@ class FormulaFault extends Error {
 }
 
 function tokenize(input: string): Token[] {
-  const text = input.trim().startsWith('=') ? input.trim().slice(1) : input.trim();
+  const text = isFormulaCellValue(input) ? input.slice(1).trim() : input.trim();
   const tokens: Token[] = [];
   let index = 0;
   while (index < text.length) {
@@ -247,6 +255,116 @@ function evaluateNode(node: Node, cells: Record<string, string>, visiting: Set<s
   }
 }
 
+type CriteriaOperator = '=' | '<>' | '<' | '>' | '<=' | '>=';
+type CriteriaValue = Exclude<FormulaResult, FormulaError>;
+interface ParsedCriteria { operator: CriteriaOperator; value: CriteriaValue }
+
+function rangeArgumentShape(node: Node): { rows: number; columns: number } | null {
+  if (node.kind === 'reference') return { rows: 1, columns: 1 };
+  if (node.kind !== 'range') return null;
+  const start = parseAddress(node.start);
+  const end = parseAddress(node.end);
+  const rows = Math.abs(end.row - start.row) + 1;
+  const columns = Math.abs(end.column - start.column) + 1;
+  const count = rows * columns;
+  if (!Number.isSafeInteger(count) || count > 10000) throw new FormulaFault('#NUM!');
+  return { rows, columns };
+}
+
+function rangeArgumentAddresses(node: Node): string[] {
+  const shape = rangeArgumentShape(node);
+  if (!shape) throw new FormulaFault('#VALUE!');
+  if (node.kind === 'reference') return [node.address];
+  if (node.kind !== 'range') throw new FormulaFault('#VALUE!');
+  const start = parseAddress(node.start);
+  const end = parseAddress(node.end);
+  const firstRow = Math.min(start.row, end.row), lastRow = Math.max(start.row, end.row);
+  const firstColumn = Math.min(start.column, end.column), lastColumn = Math.max(start.column, end.column);
+  const addresses: string[] = [];
+  for (let row = firstRow; row <= lastRow; row += 1) {
+    for (let column = firstColumn; column <= lastColumn; column += 1) addresses.push(cellAddress(row, column));
+  }
+  return addresses;
+}
+
+function evaluateRangeArgument(node: Node, cells: Record<string, string>, visiting: Set<string>, cache: Map<string, FormulaResult>) {
+  const shape = rangeArgumentShape(node);
+  if (!shape) throw new FormulaFault('#VALUE!');
+  const evaluated = evaluateNode(node, cells, visiting, cache);
+  const values = Array.isArray(evaluated) ? flatten([evaluated]) : [asScalar(evaluated)];
+  const error = values.find(isFormulaError);
+  if (error) throw new FormulaFault(error.error);
+  if (values.length !== shape.rows * shape.columns) throw new FormulaFault('#VALUE!');
+  return { shape, values: values as CriteriaValue[] };
+}
+
+function parseCriteria(value: CriteriaValue): ParsedCriteria {
+  if (typeof value !== 'string') return { operator: '=', value };
+  if (value.length > MAX_SHEETS_CRITERIA_CHARS) throw new FormulaFault('#VALUE!');
+  const match = value.match(/^(<=|>=|<>|=|<|>)([\s\S]*)$/);
+  const operator = (match?.[1] ?? '=') as CriteriaOperator;
+  const raw = match ? match[2] : value;
+  const trimmed = raw.trim();
+  if (/^true$/i.test(trimmed)) return { operator, value: true };
+  if (/^false$/i.test(trimmed)) return { operator, value: false };
+  const numeric = Number(trimmed);
+  if (trimmed !== '' && Number.isFinite(numeric)) return { operator, value: numeric };
+  return { operator, value: raw };
+}
+
+function compareCriteriaValues(left: CriteriaValue, right: CriteriaValue): number {
+  if (typeof left === 'number' && typeof right === 'number') return left < right ? -1 : left > right ? 1 : 0;
+  if (typeof left === 'boolean' && typeof right === 'boolean') return Number(left) - Number(right);
+  return String(left ?? '').localeCompare(String(right ?? ''), undefined, { sensitivity: 'base' });
+}
+
+function matchesCriteria(value: CriteriaValue, criteria: ParsedCriteria): boolean {
+  const candidateIsText = typeof value === 'string' || value === null;
+  const criteriaIsText = typeof criteria.value === 'string' || criteria.value === null;
+  const matchingTypes = candidateIsText === criteriaIsText
+    && (candidateIsText || typeof value === typeof criteria.value);
+  if (!matchingTypes) return criteria.operator === '<>';
+  const comparison = compareCriteriaValues(value, criteria.value);
+  switch (criteria.operator) {
+    case '=': return comparison === 0;
+    case '<>': return comparison !== 0;
+    case '<': return comparison < 0;
+    case '>': return comparison > 0;
+    case '<=': return comparison <= 0;
+    case '>=': return comparison >= 0;
+  }
+}
+
+function evaluateConditionalAggregate(node: Extract<Node, { kind: 'call' }>, cells: Record<string, string>, visiting: Set<string>, cache: Map<string, FormulaResult>): number {
+  const isCount = node.name === 'COUNTIF';
+  if ((isCount && node.args.length !== 2) || (!isCount && (node.args.length < 2 || node.args.length > 3))) {
+    throw new FormulaFault('#VALUE!');
+  }
+  const criteriaRange = evaluateRangeArgument(node.args[0], cells, visiting, cache);
+  const criteria = parseCriteria(asScalar(evaluateNode(node.args[1], cells, visiting, cache)));
+  const sumRangeNode = !isCount ? node.args[2] : undefined;
+  const sumRangeShape = sumRangeNode ? rangeArgumentShape(sumRangeNode) : criteriaRange.shape;
+  if (!sumRangeShape) throw new FormulaFault('#VALUE!');
+  if (criteriaRange.shape.rows !== sumRangeShape.rows || criteriaRange.shape.columns !== sumRangeShape.columns) {
+    throw new FormulaFault('#VALUE!');
+  }
+  const sumRangeAddresses = sumRangeNode ? rangeArgumentAddresses(sumRangeNode) : null;
+  let result = 0;
+  for (let index = 0; index < criteriaRange.values.length; index += 1) {
+    if (!matchesCriteria(criteriaRange.values[index], criteria)) continue;
+    if (isCount) result += 1;
+    else {
+      const sumValue = sumRangeAddresses
+        ? evaluateCell(sumRangeAddresses[index], cells, visiting, cache)
+        : criteriaRange.values[index];
+      if (isFormulaError(sumValue)) throw new FormulaFault(sumValue.error);
+      if (typeof sumValue === 'number') result += sumValue;
+    }
+  }
+  if (!Number.isFinite(result)) throw new FormulaFault('#NUM!');
+  return result;
+}
+
 function evaluateCall(node: Extract<Node, { kind: 'call' }>, cells: Record<string, string>, visiting: Set<string>, cache: Map<string, FormulaResult>): Value {
   if (node.name === 'IF') {
     if (node.args.length < 2 || node.args.length > 3) throw new FormulaFault('#VALUE!');
@@ -254,6 +372,15 @@ function evaluateCall(node: Extract<Node, { kind: 'call' }>, cells: Record<strin
       ? evaluateNode(node.args[1], cells, visiting, cache)
       : node.args[2] ? evaluateNode(node.args[2], cells, visiting, cache) : false;
   }
+  if (node.name === 'IFERROR') {
+    if (node.args.length !== 2) throw new FormulaFault('#VALUE!');
+    try { return evaluateNode(node.args[0], cells, visiting, cache); }
+    catch (error) {
+      if (error instanceof FormulaFault && error.code !== '#CYCLE!') return evaluateNode(node.args[1], cells, visiting, cache);
+      throw error;
+    }
+  }
+  if (node.name === 'COUNTIF' || node.name === 'SUMIF') return evaluateConditionalAggregate(node, cells, visiting, cache);
   const args = node.args.map((arg) => evaluateNode(arg, cells, visiting, cache));
   if (args.some(isFormulaError)) throw new FormulaFault(args.find(isFormulaError)!.error);
   const values = flatten(args);
@@ -295,7 +422,8 @@ function evaluateCell(address: string, cells: Record<string, string>, visiting: 
   if (cache.has(normalized)) return cache.get(normalized)!;
   if (visiting.has(normalized)) throw new FormulaFault('#CYCLE!');
   const raw = cells[normalized] ?? '';
-  if (!raw.startsWith('=')) {
+  if (!isFormulaTextWithinLimit(raw)) throw new FormulaFault('#VALUE!');
+  if (!isFormulaCellValue(raw)) {
     const trimmed = raw.trim();
     if (!trimmed) return null;
     if (/^(?:true|false)$/i.test(trimmed)) return trimmed.toLowerCase() === 'true';
@@ -324,16 +452,15 @@ export function displayCellValue(cells: Record<string, string>, address: string)
 
 export const SHEET_VISIBLE_ROWS = 24;
 export const SHEET_VISIBLE_COLUMNS = 12;
-export const MAX_SHEETS_FORMULA_CHARS = 512;
 export const MAX_SHEETS_CLIPBOARD_CHARS = 64 * 1024;
 export const MAX_SHEETS_CLIPBOARD_CELL_CHARS = 16 * 1024;
 
 /** Validate imported formulas against the evaluator and visible single-sheet bounds. */
 export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
-  if (typeof formula !== 'string' || formula.length > MAX_SHEETS_FORMULA_CHARS || !formula.trimStart().startsWith('=')) return false;
+  if (typeof formula !== 'string' || !isFormulaTextWithinLimit(formula) || !isFormulaCellValue(formula)) return false;
   try {
     const ast = new Parser(tokenize(formula)).parse();
-    const supportedFunctions = new Set(['IF', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'ABS', 'ROUND', 'AND', 'OR', 'NOT', 'CONCAT']);
+    const supportedFunctions = new Set(['IF', 'IFERROR', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'ABS', 'ROUND', 'AND', 'OR', 'NOT', 'CONCAT', 'COUNTIF', 'SUMIF']);
     const addressIsVisible = (address: string) => {
       const position = parseAddress(address);
       return position.row <= SHEET_VISIBLE_ROWS && position.column <= SHEET_VISIBLE_COLUMNS;
@@ -350,8 +477,21 @@ export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
         case 'call': {
           if (!supportedFunctions.has(node.name)) return false;
           if ((node.name === 'IF' && (node.args.length < 2 || node.args.length > 3))
+            || (node.name === 'IFERROR' && node.args.length !== 2)
             || (['ABS', 'NOT'].includes(node.name) && node.args.length !== 1)
-            || (node.name === 'ROUND' && (node.args.length < 1 || node.args.length > 2))) return false;
+            || (node.name === 'ROUND' && (node.args.length < 1 || node.args.length > 2))
+            || (node.name === 'COUNTIF' && node.args.length !== 2)
+            || (node.name === 'SUMIF' && (node.args.length < 2 || node.args.length > 3))) return false;
+          if (node.name === 'COUNTIF' || node.name === 'SUMIF') {
+            const criteriaShape = rangeArgumentShape(node.args[0]);
+            if (!criteriaShape) return false;
+            if (node.args[1].kind === 'range'
+              || (node.args[1].kind === 'string' && node.args[1].value.length > MAX_SHEETS_CRITERIA_CHARS)) return false;
+            if (node.name === 'SUMIF' && node.args[2]) {
+              const sumShape = rangeArgumentShape(node.args[2]);
+              if (!sumShape || criteriaShape.rows !== sumShape.rows || criteriaShape.columns !== sumShape.columns) return false;
+            }
+          }
           return node.args.every((argument) => visit(argument, depth + 1));
         }
       }
@@ -399,7 +539,11 @@ export function parseCsv(text: string): string[][] {
 }
 
 export function parseTsv(text: string): string[][] {
-  return parseDelimitedText(text, '\t', 'Clipboard table');
+  const rows = parseDelimitedText(text, '\t', 'Clipboard table');
+  if (rows.some((row) => row.some((value) => !isFormulaTextWithinLimit(value)))) {
+    throw new RangeError(`Clipboard formulas are limited to ${MAX_SHEETS_FORMULA_CHARS} characters each.`);
+  }
+  return rows;
 }
 
 export function parseTsvMatrix(
@@ -537,6 +681,9 @@ export function serializeTsvRange(
       if (value.length > MAX_SHEETS_CLIPBOARD_CELL_CHARS) {
         throw new RangeError(`Clipboard cells are limited to ${MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} characters each.`);
       }
+      if (!isFormulaTextWithinLimit(value)) {
+        throw new RangeError(`Clipboard formulas are limited to ${MAX_SHEETS_FORMULA_CHARS} characters each.`);
+      }
       values.push(/["\t\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value);
     }
     rows.push(values.join('\t'));
@@ -553,6 +700,9 @@ export function csvRowsToCells(rows: string[][], maxCells = 10000): Record<strin
   const cellCount = rows.reduce((total, row) => total + row.length, 0);
   if (cellCount > maxCells) throw new RangeError(`CSV import is limited to ${maxCells.toLocaleString()} cells in this browser preview.`);
   rows.forEach((row, rowIndex) => row.forEach((value, columnIndex) => {
+    if (!isFormulaTextWithinLimit(value)) {
+      throw new RangeError(`CSV contains a formula longer than ${MAX_SHEETS_FORMULA_CHARS} characters. No cells were imported.`);
+    }
     if (value !== '') cells[cellAddress(rowIndex + 1, columnIndex + 1)] = value;
   }));
   return cells;

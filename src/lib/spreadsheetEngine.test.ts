@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellAddress, columnLabel, csvRowsToCells, displayCellValue, evaluateCellValue, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, parseCsv, parseTsv, parseTsvMatrix, serializeCsv, serializeTsvRange } from './spreadsheetEngine';
+import { cellAddress, columnLabel, csvRowsToCells, displayCellValue, evaluateCellValue, isCsvFileSizeAllowed, isFormulaTextWithinLimit, MAX_CSV_FILE_BYTES, MAX_SHEETS_CRITERIA_CHARS, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, MAX_SHEETS_FORMULA_CHARS, parseCsv, parseTsv, parseTsvMatrix, serializeCsv, serializeTsvRange } from './spreadsheetEngine';
 
 describe('spreadsheet formula engine', () => {
   it('evaluates arithmetic with operator precedence and parentheses', () => {
@@ -9,6 +9,24 @@ describe('spreadsheet formula engine', () => {
     expect(evaluateCellValue(cells, 'A2')).toBe(20);
     expect(evaluateCellValue(cells, 'A3')).toBe(-4);
     expect(evaluateCellValue(cells, 'A4')).toBe(512);
+  });
+
+  it('accepts formulas exactly at the 512-character limit and rejects the next character across local boundaries', () => {
+    const exact = `=${Array(256).fill('1').join('+')}`;
+    const over = `${exact} `;
+    const oneCellRange = { startRow: 1, startColumn: 1, endRow: 1, endColumn: 1 };
+    expect(exact).toHaveLength(MAX_SHEETS_FORMULA_CHARS);
+    expect(over).toHaveLength(MAX_SHEETS_FORMULA_CHARS + 1);
+    expect(isFormulaTextWithinLimit(exact)).toBe(true);
+    expect(isFormulaTextWithinLimit(over)).toBe(false);
+    expect(isFormulaTextWithinLimit('x'.repeat(MAX_SHEETS_FORMULA_CHARS + 1))).toBe(true);
+    expect(displayCellValue({ A1: exact }, 'A1')).toBe('256');
+    expect(csvRowsToCells([[exact]])).toEqual({ A1: exact });
+    expect(() => csvRowsToCells([[over]])).toThrow('CSV contains a formula longer than 512 characters');
+    expect(parseTsv(exact)).toEqual([[exact]]);
+    expect(() => parseTsv(over)).toThrow('Clipboard formulas are limited to 512 characters');
+    expect(serializeTsvRange({ A1: exact }, oneCellRange)).toBe(exact);
+    expect(() => serializeTsvRange({ A1: over }, oneCellRange)).toThrow('Clipboard formulas are limited to 512 characters');
   });
 
   it('resolves cell references, ranges, and common aggregate functions', () => {
@@ -27,6 +45,129 @@ describe('spreadsheet formula engine', () => {
     expect(evaluateCellValue(cells, 'A2')).toBe(42);
     expect(evaluateCellValue(cells, 'A3')).toBe(12.35);
     expect(evaluateCellValue(cells, 'A4')).toBe('COCCE Office');
+  });
+
+  it('handles lazy IFERROR without masking circular references', () => {
+    const cells = {
+      A1: '=1/0',
+      A2: '=IFERROR(A1,"temporary")',
+      A3: '=IFERROR(5,1/0)',
+      A4: '=IFERROR(UNKNOWN(),"unknown function")',
+      A5: '=IFERROR(A5,0)',
+    };
+    expect(evaluateCellValue(cells, 'A2')).toBe('temporary');
+    expect(evaluateCellValue(cells, 'A3')).toBe(5);
+    expect(evaluateCellValue(cells, 'A4')).toBe('unknown function');
+    expect(evaluateCellValue(cells, 'A5')).toEqual({ error: '#CYCLE!' });
+    expect(evaluateCellValue({ A1: '=IFERROR(1)' }, 'A1')).toEqual({ error: '#VALUE!' });
+  });
+
+  it('counts exact text case-insensitively and supports bounded numeric, boolean, and blank criteria', () => {
+    const cells = {
+      A1: '5', A2: '6', A3: 'YES', A4: 'yes', A5: '', A6: 'TRUE',
+      A7: '=COUNTIF(A1:A2,">=6")',
+      A8: '=COUNTIF(A3:A4,"yes")',
+      A9: '=COUNTIF(A1:A5,"")',
+      A10: '=COUNTIF(A1:A6,TRUE)',
+      A11: '=COUNTIF(A1:A4,">=6")',
+      A12: '=COUNTIF(A1:A2,"<>6")',
+    };
+    expect(evaluateCellValue(cells, 'A7')).toBe(1);
+    expect(evaluateCellValue(cells, 'A8')).toBe(2);
+    expect(evaluateCellValue(cells, 'A9')).toBe(1);
+    expect(evaluateCellValue(cells, 'A10')).toBe(1);
+    expect(evaluateCellValue(cells, 'A11')).toBe(1);
+    expect(evaluateCellValue(cells, 'A12')).toBe(1);
+    expect(evaluateCellValue({ A1: '*', A2: 'anything', B1: '=COUNTIF(A1:A2,"*")' }, 'B1')).toBe(1);
+  });
+
+  it('sums matching rows with an optional same-shape sum range and rejects invalid shapes', () => {
+    const cells = {
+      A1: 'Apple', A2: 'orange', A3: 'APPLE',
+      B1: '3', B2: '10', B3: '4',
+      C1: '=SUMIF(A1:A3,"apple",B1:B3)',
+      C2: '=SUMIF(B1:B3,">=4")',
+      C3: '=SUMIF(A1:A3,"apple",B1:B2)',
+      C4: '=SUMIF(A1:A10001,"apple")',
+      C5: '=COUNTIF(1,1)',
+      C6: '=COUNTIF(A1:A3)',
+      C7: `=COUNTIF(A1:A3,"${'x'.repeat(MAX_SHEETS_CRITERIA_CHARS + 1)}")`,
+    };
+    expect(evaluateCellValue(cells, 'C1')).toBe(7);
+    expect(evaluateCellValue(cells, 'C2')).toBe(14);
+    expect(evaluateCellValue(cells, 'C3')).toEqual({ error: '#VALUE!' });
+    expect(evaluateCellValue(cells, 'C4')).toEqual({ error: '#NUM!' });
+    expect(evaluateCellValue(cells, 'C5')).toEqual({ error: '#VALUE!' });
+    expect(evaluateCellValue(cells, 'C6')).toEqual({ error: '#VALUE!' });
+    expect(evaluateCellValue(cells, 'C7')).toEqual({ error: '#VALUE!' });
+    const exactLimit = `=COUNTIF(A1:A1,"${'x'.repeat(MAX_SHEETS_CRITERIA_CHARS)}")`;
+    expect(evaluateCellValue({ A1: 'y', B1: exactLimit }, 'B1')).toBe(0);
+    expect(evaluateCellValue({ B1: '=COUNTIF(A1:A10000,"x")' }, 'B1')).toBe(0);
+  });
+
+  it('supports referenced criteria and bounded relational text comparisons', () => {
+    const cells = {
+      A1: '6', A2: '10', A3: 'Apple', A4: 'banana', A5: 'carrot',
+      B1: '>= 6',
+      B2: '=COUNTIF(A1:A2,B1)',
+      B3: '=COUNTIF(A3:A5,">banana")',
+      B4: '=SUMIF(A1:A3,">= 6",A1:A3)',
+    };
+    expect(evaluateCellValue(cells, 'B2')).toBe(2);
+    expect(evaluateCellValue(cells, 'B3')).toBe(1);
+    expect(evaluateCellValue(cells, 'B4')).toBe(16);
+  });
+
+  it('applies the criteria-text limit after evaluating a referenced cell', () => {
+    const cells = {
+      A1: '5',
+      B1: 'x'.repeat(MAX_SHEETS_CRITERIA_CHARS),
+      C1: 'x'.repeat(MAX_SHEETS_CRITERIA_CHARS + 1),
+      D1: '=COUNTIF(A1:A1,B1)',
+      E1: '=COUNTIF(A1:A1,C1)',
+      F1: '<>banana',
+      G1: '=COUNTIF(A1:A1,F1)',
+    };
+    expect(evaluateCellValue(cells, 'D1')).toBe(0);
+    expect(evaluateCellValue(cells, 'E1')).toEqual({ error: '#VALUE!' });
+    expect(evaluateCellValue(cells, 'G1')).toBe(1);
+  });
+
+  it('does not compare relational criteria across unlike types, but keeps cross-type not-equal behavior', () => {
+    const cells = {
+      A1: 'abc', A2: '6', A3: 'TRUE',
+      B1: '=COUNTIF(A1:A1,">5")',
+      B2: '=COUNTIF(A2:A2,"<banana")',
+      B3: '=COUNTIF(A3:A3,">banana")',
+      B4: '=COUNTIF(A2:A2,"<>banana")',
+      B5: '=SUMIF(A2:A2,"<banana",A2:A2)',
+    };
+    expect(evaluateCellValue(cells, 'B1')).toBe(0);
+    expect(evaluateCellValue(cells, 'B2')).toBe(0);
+    expect(evaluateCellValue(cells, 'B3')).toBe(0);
+    expect(evaluateCellValue(cells, 'B4')).toBe(1);
+    expect(evaluateCellValue(cells, 'B5')).toBe(0);
+  });
+
+  it('evaluates only matching SUMIF cells and propagates matched range and criteria errors', () => {
+    const cells = {
+      A1: 'no', A2: 'yes',
+      B1: '=1/0', B2: '4',
+      C1: '=SUMIF(A1:A2,"yes",B1:B2)',
+      C2: '=SUMIF(A1:A2,"no",B1:B2)',
+      D1: '=COUNTIF(D1:D2,"x")', D2: 'x',
+      E1: '=SUMIF(E1:E2,"x",F1:F2)', E2: 'x', F1: '1', F2: '2',
+    };
+    expect(evaluateCellValue(cells, 'C1')).toBe(4);
+    expect(evaluateCellValue(cells, 'C2')).toEqual({ error: '#DIV/0!' });
+    expect(evaluateCellValue(cells, 'D1')).toEqual({ error: '#CYCLE!' });
+    expect(evaluateCellValue(cells, 'E1')).toEqual({ error: '#CYCLE!' });
+  });
+
+  it('does not parse or evaluate formulas longer than the shared 512-character limit', () => {
+    const tooLong = `=${'1+'.repeat(MAX_SHEETS_FORMULA_CHARS)}`;
+    expect(tooLong.length).toBeGreaterThan(MAX_SHEETS_FORMULA_CHARS);
+    expect(evaluateCellValue({ A1: tooLong }, 'A1')).toEqual({ error: '#VALUE!' });
   });
 
   it('returns spreadsheet errors instead of executing unknown expressions', () => {
@@ -77,6 +218,11 @@ describe('CSV import/export', () => {
     expect(() => serializeCsv({ A1: 'first', A10001: 'last' })).toThrow('limited to 10,000 cells');
   });
 
+  it('rejects an over-limit formula in direct CSV cell conversion', () => {
+    const tooLong = `=${'1+'.repeat(MAX_SHEETS_FORMULA_CHARS)}`;
+    expect(() => csvRowsToCells([[tooLong]])).toThrow('CSV contains a formula longer than 512 characters');
+  });
+
   it('enforces the tested CSV upload byte limit', () => {
     expect(isCsvFileSizeAllowed(0)).toBe(true);
     expect(isCsvFileSizeAllowed(MAX_CSV_FILE_BYTES)).toBe(true);
@@ -96,6 +242,9 @@ describe('bounded Sheets clipboard ranges', () => {
     const copied = serializeTsvRange(cells, { startRow: 1, startColumn: 1, endRow: 2, endColumn: 2 });
     expect(copied).toBe('=SUM(A2:A3)\t"A\tB"\r\n2\t');
     expect(parseTsv(copied)).toEqual([['=SUM(A2:A3)', 'A\tB'], ['2', '']]);
+    const tooLong = `=${'1+'.repeat(MAX_SHEETS_FORMULA_CHARS)}`;
+    expect(() => serializeTsvRange({ A1: tooLong }, { startRow: 1, startColumn: 1, endRow: 1, endColumn: 1 }))
+      .toThrow('Clipboard formulas are limited to 512 characters');
   });
 
   it('rejects malformed, ragged, oversized, and out-of-grid pasted ranges without clipping', () => {
@@ -104,6 +253,8 @@ describe('bounded Sheets clipboard ranges', () => {
     expect(() => parseTsvMatrix('a\n'.repeat(24) + 'a')).toThrow('visible 24-row by 12-column grid');
     expect(() => parseTsvMatrix('x'.repeat(MAX_SHEETS_CLIPBOARD_CHARS + 1))).toThrow('limited to 65,536 characters');
     expect(() => parseTsvMatrix('x'.repeat(MAX_SHEETS_CLIPBOARD_CELL_CHARS + 1))).toThrow('characters each');
+    const tooLongFormula = `=${'1+'.repeat(MAX_SHEETS_FORMULA_CHARS)}`;
+    expect(() => parseTsvMatrix(tooLongFormula)).toThrow('Clipboard formulas are limited to 512 characters');
     expect(() => serializeTsvRange({}, { startRow: 24, startColumn: 12, endRow: 24, endColumn: 13 }))
       .toThrow('outside the visible spreadsheet grid');
   });

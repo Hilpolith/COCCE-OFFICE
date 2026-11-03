@@ -5,6 +5,7 @@ import SheetsWorkspace from './SheetsWorkspace';
 import type { PreviewState } from './lib/localStore';
 import { createXlsxBlob, importXlsxFile, XLSX_IMPORT_WARNING, XLSX_MIME } from './lib/xlsxInterchange';
 import { readPreviewState, writePreviewState } from './lib/localStore';
+import { MAX_SHEETS_FORMULA_CHARS } from './lib/spreadsheetEngine';
 
 const worksheet = { id: 'sheet-1', name: 'Sheet 1', cells: { A1: 'one', B2: 'two' } };
 const workbook = {
@@ -127,6 +128,47 @@ describe('Sheets workspace keyboard navigation', () => {
     formula.focus();
     fireEvent.keyDown(formula, { key: 'ArrowDown' });
     expectFocus(formula);
+  });
+
+  it('edits a conditional formula in the formula bar and saves the raw formula locally', () => {
+    const formulaState: PreviewState = {
+      ...state,
+      workbooks: [{ ...workbook, worksheets: [{ ...worksheet, cells: { A1: '5', A2: '8', B1: '=COUNTIF(A1:A2,">5")' } }] }],
+    };
+    const onState = vi.fn((_next: PreviewState) => true);
+    openGrid(onState, formulaState);
+    fireEvent.click(cell('B1'));
+    const formula = screen.getByRole('textbox', { name: 'Formula or value for B1' });
+    expect(formula.getAttribute('placeholder')).toContain('COUNTIF');
+    fireEvent.change(formula, { target: { value: '=SUMIF(A1:A2,">5",A1:A2)' } });
+    expect(onState).toHaveBeenCalledTimes(1);
+    expect(onState.mock.calls[0][0].workbooks[0].worksheets[0].cells.B1).toBe('=SUMIF(A1:A2,">5",A1:A2)');
+  });
+
+  it('rejects oversized formula-bar entries and TSV paste before local save', () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    openGrid(onState);
+    const tooLong = `=${'1+'.repeat(MAX_SHEETS_FORMULA_CHARS)}`;
+    const formula = screen.getByRole('textbox', { name: 'Formula or value for A1' });
+    fireEvent.change(formula, { target: { value: tooLong } });
+    expect(onState).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toContain(`${MAX_SHEETS_FORMULA_CHARS} characters`);
+
+    fireEvent.click(cell('C3'));
+    cell('C3').focus();
+    dispatchClipboard(cell('C3'), 'paste', makeClipboard(tooLong));
+    expect(onState).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toContain('Clipboard formulas are limited to 512 characters');
+  });
+
+  it('rejects a CSV containing an oversized formula before creating a workbook', async () => {
+    const onState = vi.fn((_next: PreviewState) => true);
+    render(<SheetsWorkspace state={state} onState={onState} />);
+    const tooLong = `=${'1+'.repeat(MAX_SHEETS_FORMULA_CHARS)}`;
+    const file = new File([tooLong], 'long-formula.csv', { type: 'text/csv' });
+    fireEvent.change(screen.getByLabelText('Choose a CSV file to import'), { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByText(/CSV contains a formula longer than 512 characters/)).toBeTruthy());
+    expect(onState).not.toHaveBeenCalled();
   });
 
   it('extends a rectangular range with Shift+Arrow while ordinary navigation resets the anchor', () => {

@@ -9,7 +9,7 @@ import {
   updateWorksheetCell, updateWorksheetCells,
 } from './lib/localStore';
 import type { OfficeWorkbook, PreviewState } from './lib/localStore';
-import { cellAddress, csvRowsToCells, displayCellValue, fillNumericSeries, isCsvFileSizeAllowed, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange, SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS } from './lib/spreadsheetEngine';
+import { cellAddress, csvRowsToCells, displayCellValue, fillNumericSeries, isCsvFileSizeAllowed, isFormulaTextWithinLimit, MAX_CSV_FILE_BYTES, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, MAX_SHEETS_FORMULA_CHARS, parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange, SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS } from './lib/spreadsheetEngine';
 import { createXlsxBlob, importXlsxFile, MAX_XLSX_FILE_BYTES, safeXlsxFilename, XLSX_EXPORT_WARNING, XLSX_IMPORT_WARNING } from './lib/xlsxInterchange';
 
 const GRID_ROWS = SHEET_VISIBLE_ROWS;
@@ -239,7 +239,13 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
     if (!saved) setMessage('Changes were not saved; the last saved copy was kept.');
     return saved;
   };
-  const updateCell = (address: string, value: string) => saveState(updateWorksheetCell(state, workbook.id, worksheet.id, address, value));
+  const updateCell = (address: string, value: string) => {
+    if (!isFormulaTextWithinLimit(value)) {
+      setMessage(`Formula text is limited to ${MAX_SHEETS_FORMULA_CHARS} characters in this local evaluator; shorten it before saving.`);
+      return false;
+    }
+    return saveState(updateWorksheetCell(state, workbook.id, worksheet.id, address, value));
+  };
   const commitEdit = (address: string, value: string) => {
     if (cancelledEditAddress.current === address) { cancelledEditAddress.current = null; return; }
     updateCell(address, value);
@@ -423,7 +429,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
       <div className="sheet-toolbar">
         <span className="name-box" aria-label="Selected cell">{selectedAddress}</span>
         <span className="formula-equals">fx</span>
-        <input className="formula-input" value={rawValue} onChange={(event) => updateCell(selectedAddress, event.target.value)} onKeyDown={formulaKeyDown} aria-label={`Formula or value for ${selectedAddress}`} placeholder="Enter a value or formula, e.g. =SUM(A1:A5)" />
+        <input className="formula-input" value={rawValue} onChange={(event) => updateCell(selectedAddress, event.target.value)} onKeyDown={formulaKeyDown} aria-label={`Formula or value for ${selectedAddress}`} placeholder='Try =COUNTIF(A1:A10,">5")' title={`Local formulas are limited to ${MAX_SHEETS_FORMULA_CHARS} characters. IFERROR, COUNTIF and SUMIF support exact or relational criteria; relational comparisons require matching value types, not-equal counts unlike types as different, and wildcards are unsupported.`} />
       </div>
       <div className="sheet-range-tools" role="toolbar" aria-label="Spreadsheet range tools">
         <button type="button" className="button-secondary" aria-label="Fill numeric series" title="Fill a single selected row or column from its first two finite numeric cells" onClick={applyNumericSeries}><TrendingUp size={15} /> Fill series</button>
@@ -450,8 +456,8 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
           })}</tbody>
         </table>
       </div>
-      <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · cell references · SUM · AVERAGE · IF'}</span></div>
-      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Fill series uses two finite numeric seeds in one row or column and asks before overwriting. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
+      <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · references/ranges · IF · IFERROR · COUNTIF · SUMIF'}</span></div>
+      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Local formula text is capped at {MAX_SHEETS_FORMULA_CHARS} characters; IFERROR, COUNTIF and SUMIF support exact and relational criteria, relational comparisons require matching value types, not-equal criteria count unlike types as different, and wildcards are unsupported. Criteria are capped at 256 characters, formula ranges at 10,000 cells. Fill series uses two finite numeric seeds in one row or column and asks before overwriting. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
     </div>
   );
 }
