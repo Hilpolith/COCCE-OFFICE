@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Copy,
   Download, FileText, FileUp, LockKeyhole, Maximize2, Plus, Presentation,
-  Printer, Trash2, X,
+  Printer, Redo2, Trash2, Undo2, X,
 } from 'lucide-react';
+import {
+  createSlidesHistory, hasSameEditableDeckContent, recordSlidesHistory, redoSlidesHistory, undoSlidesHistory,
+} from './lib/slidesHistory';
+import type { SlidesHistory, SlidesHistorySnapshot } from './lib/slidesHistory';
 import {
   addSlide, createDeck, duplicateSlide, importDeck, moveSlide, readSlidesState,
   removeDeck, removeSlide, serializeDeck, SLIDES_STORAGE_KEY, updateDeck, updateSlide, writeSlidesState,
@@ -44,6 +48,8 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
   const [presenting, setPresenting] = useState(false);
   const [presenterNotesVisible, setPresenterNotesVisible] = useState(false);
   const [feedback, setFeedback] = useState(loadResult.recovered ? 'Recovered unsaved edits from this tab. Retry save to keep them in local storage.' : '');
+  const [history, setHistory] = useState<SlidesHistory>(createSlidesHistory);
+  const [historyAnnouncement, setHistoryAnnouncement] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const decks = useMemo(() => state?.decks.filter((deck) => deck.workspaceId === workspaceId) ?? [], [state, workspaceId]);
@@ -65,6 +71,64 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
       setUnsaved(true);
       setFeedback(recovered ? 'Not saved in browser storage — recovered from this tab after navigation. Retry before closing.' : 'Not saved — your latest edits are kept in this tab. Retry before closing.');
       return false;
+    }
+  };
+
+  const commitActiveDeckEdit = (next: SlidesState, nextSlideId = activeSlide?.id ?? null, groupKey: string | null = null): boolean => {
+    if (!state || !activeDeck) return false;
+    const beforeDeck = state.decks.find((deck) => deck.id === activeDeck.id);
+    const afterDeck = next.decks.find((deck) => deck.id === activeDeck.id);
+    if (!beforeDeck || !afterDeck || hasSameEditableDeckContent(beforeDeck, afterDeck)) return false;
+    persist(next);
+    setHistory((current) => recordSlidesHistory(current, beforeDeck, afterDeck, activeSlide?.id ?? null, groupKey));
+    const selectedIndex = afterDeck.slides.findIndex((slide) => slide.id === nextSlideId);
+    setActiveSlideIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    return true;
+  };
+
+  const applyHistorySnapshot = (snapshot: SlidesHistorySnapshot) => {
+    if (!state || !activeDeck || snapshot.deck.id !== activeDeck.id) return;
+    const restoredDeck = { ...snapshot.deck, updatedAt: new Date().toISOString() };
+    const next = { ...state, decks: state.decks.map((deck) => deck.id === restoredDeck.id ? restoredDeck : deck) };
+    const selectedIndex = restoredDeck.slides.findIndex((slide) => slide.id === snapshot.slideId);
+    persist(next);
+    setActiveSlideIndex(selectedIndex >= 0 ? selectedIndex : 0);
+  };
+
+  const canUndo = Boolean(activeDeck && history.deckId === activeDeck.id && history.past.length > 0);
+  const canRedo = Boolean(activeDeck && history.deckId === activeDeck.id && history.future.length > 0);
+
+  const undoEdit = () => {
+    if (!activeDeck || !activeSlide || !canUndo) return;
+    const transition = undoSlidesHistory(history, activeDeck, activeSlide.id);
+    if (!transition.target) return;
+    setHistory(transition.history);
+    applyHistorySnapshot(transition.target);
+    setHistoryAnnouncement('Undid the last Slides edit.');
+  };
+
+  const redoEdit = () => {
+    if (!activeDeck || !activeSlide || !canRedo) return;
+    const transition = redoSlidesHistory(history, activeDeck, activeSlide.id);
+    if (!transition.target) return;
+    setHistory(transition.history);
+    applyHistorySnapshot(transition.target);
+    setHistoryAnnouncement('Redid the last Slides edit.');
+  };
+
+  const handleHistoryShortcut = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!activeDeck || presenting || (!event.ctrlKey && !event.metaKey) || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return;
+    const key = event.key.toLowerCase();
+    const undoRequested = key === 'z' && !event.shiftKey;
+    const redoRequested = (key === 'z' && event.shiftKey) || key === 'y';
+    if (undoRequested && canUndo) {
+      event.preventDefault();
+      undoEdit();
+    } else if (redoRequested && canRedo) {
+      event.preventDefault();
+      redoEdit();
     }
   };
 
@@ -96,6 +160,8 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
     if (!state) return;
     const result = createDeck(state, workspaceId);
     persist(result.state);
+    setHistory(createSlidesHistory());
+    setHistoryAnnouncement('');
     setActiveDeckId(result.deck.id);
     setActiveSlideIndex(0);
   };
@@ -104,30 +170,30 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
     if (!state || !activeDeck) return;
     const result = addSlide(state, activeDeck.id);
     if (!result.slide) { setFeedback('A presentation can contain up to 100 slides.'); return; }
-    persist(result.state);
-    setActiveSlideIndex(activeDeck.slides.length);
+    commitActiveDeckEdit(result.state, result.slide.id);
   };
 
   const duplicateCurrentSlide = () => {
     if (!state || !activeDeck || !activeSlide) return;
     const result = duplicateSlide(state, activeDeck.id, activeSlide.id);
     if (!result.slide) { setFeedback('A presentation can contain up to 100 slides.'); return; }
-    persist(result.state);
-    setActiveSlideIndex(activeDeck.slides.findIndex((slide) => slide.id === activeSlide.id) + 1);
+    commitActiveDeckEdit(result.state, result.slide.id);
   };
 
   const deleteCurrentSlide = () => {
     if (!state || !activeDeck || !activeSlide || activeDeck.slides.length <= 1) return;
-    persist(removeSlide(state, activeDeck.id, activeSlide.id));
-    setActiveSlideIndex((index) => Math.min(index, activeDeck.slides.length - 2));
+    const next = removeSlide(state, activeDeck.id, activeSlide.id);
+    const nextDeck = next.decks.find((deck) => deck.id === activeDeck.id);
+    if (!nextDeck) return;
+    const nextIndex = Math.min(activeSlideIndex, nextDeck.slides.length - 1);
+    commitActiveDeckEdit(next, nextDeck.slides[nextIndex]?.id ?? null);
   };
 
   const shiftSlide = (direction: -1 | 1) => {
     if (!state || !activeDeck || !activeSlide) return;
     const target = activeSlideIndex + direction;
     if (target < 0 || target >= activeDeck.slides.length) return;
-    persist(moveSlide(state, activeDeck.id, activeSlide.id, direction));
-    setActiveSlideIndex(target);
+    commitActiveDeckEdit(moveSlide(state, activeDeck.id, activeSlide.id, direction), activeSlide.id);
   };
 
   const retrySave = () => {
@@ -162,6 +228,8 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
     try {
       const imported = importDeck(await file.text(), workspaceId);
       const saved = persist({ ...state, decks: [imported, ...state.decks] });
+      setHistory(createSlidesHistory());
+      setHistoryAnnouncement('');
       setActiveDeckId(imported.id);
       setActiveSlideIndex(0);
       if (saved) setFeedback('Presentation imported on this device.');
@@ -174,16 +242,24 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
     if (!state || !activeDeck) return;
     if (!window.confirm(`Delete “${activeDeck.title || 'Untitled presentation'}” from this browser?`)) return;
     persist(removeDeck(state, activeDeck.id));
+    setHistory(createSlidesHistory());
+    setHistoryAnnouncement('');
     setActiveDeckId(null);
     setActiveSlideIndex(0);
   };
 
   const patchDeck = (patch: Partial<Pick<PresentationDeck, 'title' | 'theme'>>) => {
-    if (state && activeDeck) persist(updateDeck(state, activeDeck.id, patch));
+    if (state && activeDeck) {
+      const groupKey = patch.title !== undefined ? `deck:${activeDeck.id}:title` : null;
+      commitActiveDeckEdit(updateDeck(state, activeDeck.id, patch), activeSlide?.id ?? null, groupKey);
+    }
   };
 
   const patchSlide = (patch: Partial<Pick<Slide, 'title' | 'body' | 'notes'>>) => {
-    if (state && activeDeck && activeSlide) persist(updateSlide(state, activeDeck.id, activeSlide.id, patch));
+    if (state && activeDeck && activeSlide) {
+      const field = Object.keys(patch)[0] ?? '';
+      commitActiveDeckEdit(updateSlide(state, activeDeck.id, activeSlide.id, patch), activeSlide.id, `slide:${activeSlide.id}:${field}`);
+    }
   };
 
   if (!state) {
@@ -191,7 +267,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
   }
 
   return (
-    <div className="page slides-page">
+    <div className="page slides-page" onKeyDown={handleHistoryShortcut}>
       <div className="slides-page-heading">
         <div>
           <span className="eyebrow">COCCE SLIDES · LOCAL MODE</span>
@@ -199,7 +275,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
           <p className="page-lede">Create and edit simple presentations saved in this browser. PPTX, cloud sync, and co-editing are not connected.</p>
         </div>
         <div className="slides-heading-actions">
-          {activeDeck ? <button className="button-secondary" onClick={() => { setActiveDeckId(null); setActiveSlideIndex(0); }}><ChevronLeft size={16} /> All presentations</button> : <button className="button-primary" onClick={beginDeck}><Plus size={17} /> New presentation</button>}
+          {activeDeck ? <button className="button-secondary" onClick={() => { setActiveDeckId(null); setActiveSlideIndex(0); setHistoryAnnouncement(''); }}><ChevronLeft size={16} /> All presentations</button> : <button className="button-primary" onClick={beginDeck}><Plus size={17} /> New presentation</button>}
         </div>
       </div>
 
@@ -215,7 +291,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
             {decks.length > 0 && <button className="button-primary" onClick={beginDeck}><Plus size={16} /> New presentation</button>}
           </div>
         </div>
-        {decks.length ? <div className="slides-deck-grid">{decks.map((deck) => <button className="slides-deck-card glass-card" key={deck.id} onClick={() => { setActiveDeckId(deck.id); setActiveSlideIndex(0); }}>
+        {decks.length ? <div className="slides-deck-grid">{decks.map((deck) => <button className="slides-deck-card glass-card" key={deck.id} onClick={() => { setHistory((current) => current.deckId === deck.id ? current : createSlidesHistory()); setHistoryAnnouncement(''); setActiveDeckId(deck.id); setActiveSlideIndex(0); }}>
           <span className={`slides-deck-preview theme-${deck.theme}`}><Presentation size={24} /><span>{deck.slides.length} {deck.slides.length === 1 ? 'slide' : 'slides'}</span></span>
           <span className="slides-deck-card-copy"><strong>{deck.title || 'Untitled presentation'}</strong><small>Edited {formatDate(deck.updatedAt)}</small></span><ArrowRight size={16} className="slides-deck-arrow" />
         </button>)}</div> : <div className="slides-empty glass-card"><div className="slides-empty-art"><Presentation size={28} /><span><i /><i /><i /></span></div><h2>Your first presentation starts here</h2><p>Make a small deck, edit each slide, then present it or print/save it as a PDF from your browser.</p><div className="slides-empty-actions"><button className="button-primary" onClick={beginDeck}><Plus size={16} /> Create a presentation</button><button className="button-secondary" onClick={() => inputRef.current?.click()}><FileUp size={15} /> Import a JSON deck</button></div></div>}
@@ -226,6 +302,11 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
           <label className="slides-deck-name"><span className="eyebrow">PRESENTATION TITLE</span><input aria-label="Presentation title" value={activeDeck.title} maxLength={300} onChange={(event) => patchDeck({ title: event.target.value })} /></label>
           <div className="slides-toolbar-actions">
             <label className="slides-theme-picker"><span className="eyebrow">THEME</span><select aria-label="Slide theme" value={activeDeck.theme} onChange={(event) => patchDeck({ theme: event.target.value as SlidesTheme })}>{(Object.keys(themeNames) as SlidesTheme[]).map((theme) => <option key={theme} value={theme}>{themeNames[theme]}</option>)}</select></label>
+            <div className="slides-history-actions" role="group" aria-label="Edit history for this presentation, up to 50 changes in this session">
+              <button type="button" className="button-secondary" aria-label="Undo" aria-keyshortcuts="Control+Z Meta+Z" title="Undo last Slides edit (Ctrl/Cmd+Z)" disabled={!canUndo} onClick={undoEdit}><Undo2 size={15} /><span>Undo</span></button>
+              <button type="button" className="button-secondary" aria-label="Redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Redo last Slides edit (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)" disabled={!canRedo} onClick={redoEdit}><Redo2 size={15} /><span>Redo</span></button>
+              <span className="slides-history-live" role="status" aria-live="polite">{historyAnnouncement}</span>
+            </div>
             <button className="icon-button" title="Download presentation JSON" aria-label="Download presentation JSON" onClick={() => downloadJson(activeDeck)}><Download size={16} /></button>
             <button className="icon-button" title="Print or save as PDF" aria-label="Print or save as PDF" onClick={() => window.print()}><Printer size={16} /></button>
             <button className="button-present" onClick={() => setPresenting(true)}><Maximize2 size={15} /> Present</button>
@@ -252,7 +333,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
             </div>
           </section>
         </div>
-        <div className="slides-editor-footer"><span><Check size={14} />{unsaved ? 'Unsaved · kept in this tab' : 'Saved in this browser'}</span><span>{feedback && !unsaved ? feedback : `${activeDeck.slides.length} slide${activeDeck.slides.length === 1 ? '' : 's'} · JSON export available`}</span></div>
+        <div className="slides-editor-footer"><span><Check size={14} />{unsaved ? 'Unsaved · kept in this tab' : 'Saved in this browser'}</span><span>{feedback && !unsaved ? feedback : `${activeDeck.slides.length} slide${activeDeck.slides.length === 1 ? '' : 's'} · JSON export available`}</span><span className="slides-history-note">Undo/redo: latest 50 edits for this presentation · this session only</span></div>
         <div className="slide-print-stack" aria-hidden="true">{activeDeck.slides.map((slide, index) => <div className={`print-slide theme-${activeDeck.theme}`} key={slide.id}><span className="eyebrow">{activeDeck.title || 'Untitled presentation'}</span><h1>{slide.title || 'Untitled slide'}</h1><SlideBody body={slide.body} cover={index === 0} /><small>{index + 1}</small></div>)}</div>
       </>}
 
