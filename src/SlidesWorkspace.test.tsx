@@ -49,6 +49,40 @@ describe('Slides workspace', () => {
     expect((screen.getByRole('button', { name: 'Delete slide' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('keeps presenter notes hidden by default and toggles an accessible notes region', async () => {
+    await createPresentation();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Speaker notes' }), { target: { value: 'Mention the launch date.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Present' }));
+
+    expect(screen.queryByRole('region', { name: 'Presenter notes' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show speaker notes' }));
+    expect(screen.getByRole('region', { name: 'Presenter notes' }).textContent).toContain('Mention the launch date.');
+    expect(screen.getByRole('button', { name: 'Hide speaker notes' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Hide speaker notes' }));
+    expect(screen.queryByRole('region', { name: 'Presenter notes' })).toBeNull();
+  });
+
+  it('updates the visible presenter notes when navigating between slides', async () => {
+    await createPresentation();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Speaker notes' }), { target: { value: 'First slide note.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add slide' }));
+    await waitFor(() => expect(screen.getByText('Slide 2 of 2')).toBeTruthy());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Speaker notes' }), { target: { value: 'Second slide note.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Present' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show speaker notes' }));
+    expect(screen.getByRole('region', { name: 'Presenter notes' }).textContent).toContain('Second slide note.');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(screen.getByRole('region', { name: 'Presenter notes' }).textContent).toContain('First slide note.');
+  });
+
+  it('does not include speaker notes in the print slide stack', async () => {
+    await createPresentation();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Speaker notes' }), { target: { value: 'Private print-excluded note.' } });
+    const printStack = document.querySelector('.slide-print-stack');
+    expect(printStack).toBeTruthy();
+    expect(printStack?.textContent).not.toContain('Private print-excluded note.');
+  });
+
   it('keeps an in-tab draft and offers retry when browser storage rejects a write', async () => {
     await createPresentation();
     const write = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => { throw new DOMException('Storage is full', 'QuotaExceededError'); });

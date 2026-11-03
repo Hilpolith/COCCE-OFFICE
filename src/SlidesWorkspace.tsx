@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Copy,
-  Download, FileUp, LockKeyhole, Maximize2, Plus, Presentation,
+  Download, FileText, FileUp, LockKeyhole, Maximize2, Plus, Presentation,
   Printer, Trash2, X,
 } from 'lucide-react';
 import {
@@ -42,6 +42,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [unsaved, setUnsaved] = useState(loadResult.recovered);
   const [presenting, setPresenting] = useState(false);
+  const [presenterNotesVisible, setPresenterNotesVisible] = useState(false);
   const [feedback, setFeedback] = useState(loadResult.recovered ? 'Recovered unsaved edits from this tab. Retry save to keep them in local storage.' : '');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -255,7 +256,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
         <div className="slide-print-stack" aria-hidden="true">{activeDeck.slides.map((slide, index) => <div className={`print-slide theme-${activeDeck.theme}`} key={slide.id}><span className="eyebrow">{activeDeck.title || 'Untitled presentation'}</span><h1>{slide.title || 'Untitled slide'}</h1><SlideBody body={slide.body} cover={index === 0} /><small>{index + 1}</small></div>)}</div>
       </>}
 
-      {presenting && activeDeck && activeSlide && <div className="slides-present-overlay" role="dialog" aria-modal="true" aria-label="Presentation mode"><button className="icon-button present-close" aria-label="Exit presentation" onClick={() => setPresenting(false)}><X size={19} /></button><div className="present-counter">{activeSlideIndex + 1} / {activeDeck.slides.length}</div><SlideCanvas deck={activeDeck} slide={activeSlide} index={activeSlideIndex} large /><div className="present-controls"><button className="button-secondary" onClick={() => setActiveSlideIndex((index) => Math.max(0, index - 1))} disabled={activeSlideIndex === 0}><ArrowLeft size={16} /> Previous</button><span>Use arrow keys to navigate · Esc to exit</span><button className="button-primary" onClick={() => setActiveSlideIndex((index) => Math.min(activeDeck.slides.length - 1, index + 1))} disabled={activeSlideIndex === activeDeck.slides.length - 1}>Next <ArrowRight size={16} /></button></div></div>}
+      {presenting && activeDeck && activeSlide && <div className="slides-present-overlay" role="dialog" aria-modal="true" aria-label="Presentation mode"><button className="icon-button present-close" aria-label="Exit presentation" onClick={() => setPresenting(false)}><X size={19} /></button><div className="present-counter">{activeSlideIndex + 1} / {activeDeck.slides.length}</div><div className={`present-stage ${presenterNotesVisible ? 'with-notes' : ''}`}><SlideCanvas deck={activeDeck} slide={activeSlide} index={activeSlideIndex} large />{presenterNotesVisible && <aside id="presenter-notes-panel" className="presenter-notes-panel" aria-label="Presenter notes" role="region"><div className="presenter-notes-heading"><FileText size={15} /><strong>Presenter notes</strong></div><p>{activeSlide.notes || 'No notes for this slide.'}</p></aside>}</div><div className="present-controls"><button className="button-secondary" onClick={() => setActiveSlideIndex((index) => Math.max(0, index - 1))} disabled={activeSlideIndex === 0}><ArrowLeft size={16} /> Previous</button><div className="present-controls-center"><button className="button-secondary presenter-notes-toggle" aria-pressed={presenterNotesVisible} aria-controls="presenter-notes-panel" onClick={() => setPresenterNotesVisible((visible) => !visible)}><FileText size={15} /> {presenterNotesVisible ? 'Hide speaker notes' : 'Show speaker notes'}</button><span>Use arrow keys to navigate · Esc to exit</span></div><button className="button-primary" onClick={() => setActiveSlideIndex((index) => Math.min(activeDeck.slides.length - 1, index + 1))} disabled={activeSlideIndex === activeDeck.slides.length - 1}>Next <ArrowRight size={16} /></button></div></div>}
       {feedback && !activeDeck && <div className="slides-feedback" role="status">{feedback}</div>}
     </div>
   );

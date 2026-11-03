@@ -17,6 +17,7 @@ import type { PdfAnnotation } from './lib/pdfAnnotationStore';
 import { capturePdfTextSelection } from './lib/pdfSelection';
 import { pdfRectToViewportRect } from './lib/pdfSelection';
 import type { PdfCapturedSelection, PdfViewportLike } from './lib/pdfSelection';
+import { findPdfTextMatches } from './lib/pdfSearch';
 import { extractPdfPages, mergePdfFiles, parsePageRange, reorderPdfPages, rotatePdfPage } from './lib/pdfTools';
 import './pdf.css';
 
@@ -28,7 +29,7 @@ const PdfTextLayer = (pdfjsLib as unknown as {
 }).TextLayer;
 
 interface Props { workspaceId: string | null; repository?: DriveRepository }
-interface SearchHit { page: number; excerpt: string }
+interface SearchHit { page: number; offset: number; excerpt: string }
 interface PageDimensions {
   width: number;
   height: number;
@@ -57,6 +58,8 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const [mergeIds, setMergeIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
+  const [searchTruncated, setSearchTruncated] = useState(false);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [listLoading, setListLoading] = useState(true);
@@ -112,6 +115,8 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
         setActiveAnnotationId('');
         setPreviewError('');
         setSearchHits([]);
+        setCurrentSearchIndex(-1);
+        setSearchTruncated(false);
         setError('');
         if (nextSelectedId) {
           try { setAnnotations(listPdfAnnotations(window.localStorage, workspaceId, nextSelectedId)); }
@@ -209,6 +214,9 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     catch (cause) { setAnnotations([]); setError(cause instanceof Error ? cause.message : 'Could not read local PDF annotations.'); }
     setPreviewError('');
     setCurrentPage(1);
+    setSearchHits([]);
+    setCurrentSearchIndex(-1);
+    setSearchTruncated(false);
     setNotice('');
   };
 
@@ -323,23 +331,34 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const toggleMerge = (id: string) => setMergeIds((current) => current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]);
 
   const runSearch = async () => {
-    if (!pdfDocument || !searchTerm.trim()) { setSearchHits([]); return; }
-    setSearching(true); setError(''); setSearchHits([]);
+    const query = searchTerm.trim();
+    if (!pdfDocument || !query) { setSearchHits([]); setCurrentSearchIndex(-1); setSearchTruncated(false); return; }
+    setSearching(true); setError(''); setSearchHits([]); setCurrentSearchIndex(-1); setSearchTruncated(false);
     try {
-      const hits: SearchHit[] = [];
-      const needle = searchTerm.trim().toLocaleLowerCase();
+      const pages: string[] = [];
       for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
         const page = await pdfDocument.getPage(pageNumber);
         const textContent = await page.getTextContent();
-        const text = textContent.items.map((item) => 'str' in item ? item.str : '').join(' ').replace(/\s+/g, ' ').trim();
-        const index = text.toLocaleLowerCase().indexOf(needle);
-        if (index >= 0) hits.push({ page: pageNumber, excerpt: text.slice(Math.max(0, index - 45), Math.min(text.length, index + needle.length + 55)) });
+        pages.push(textContent.items.map((item) => 'str' in item ? item.str : '').join(' '));
       }
+      const result = findPdfTextMatches(pages, query);
+      const hits: SearchHit[] = result.matches.map(({ page, offset }) => {
+        const text = pages[page - 1] ?? '';
+        return { page, offset, excerpt: text.slice(Math.max(0, offset - 45), Math.min(text.length, offset + query.length + 55)) };
+      });
       setSearchHits(hits);
-      if (!hits.length) setNotice(`No matches for “${searchTerm.trim()}” in this PDF.`);
-      else navigateToPage(hits[0].page);
+      setSearchTruncated(result.truncated);
+      if (!hits.length) setNotice(`No matches for “${query}” in this PDF.`);
+      else { setCurrentSearchIndex(0); navigateToPage(hits[0].page); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not search this PDF.'); }
     finally { setSearching(false); }
+  };
+
+  const navigateToSearchHit = (index: number) => {
+    if (!searchHits.length) return;
+    const nextIndex = (index + searchHits.length) % searchHits.length;
+    setCurrentSearchIndex(nextIndex);
+    navigateToPage(searchHits[nextIndex].page);
   };
 
   const downloadOriginal = async () => {
@@ -433,7 +452,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
                 {currentPageAnnotations.length ? <ul className="pdf-annotation-list">{currentPageAnnotations.map((annotation) => <li key={annotation.id} id={`pdf-annotation-${annotation.id}`} className={`pdf-annotation-item ${activeAnnotationId === annotation.id ? 'pdf-annotation-item-active' : ''}`}><div className={`pdf-annotation-icon pdf-annotation-icon-${annotation.kind}`} aria-hidden="true">{annotation.kind === 'highlight' ? <Highlighter size={14} /> : <MessageSquare size={14} />}</div><div className="pdf-annotation-copy"><strong>{annotation.kind === 'highlight' ? 'Highlight' : 'Comment'} · page {annotation.page}</strong><blockquote>“{annotation.quote}”</blockquote>{annotation.note && <p>{annotation.note}</p>}</div><button className="icon-button pdf-delete-annotation" aria-label={`Delete PDF ${annotation.kind}`} title="Remove this local annotation" onClick={() => removeAnnotation(annotation)}><Trash2 size={14} /></button></li>)}</ul> : <div className="pdf-annotations-empty">No saved marks on page {currentPage}. Select text above to add one.</div>}
               </section>
               <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button></div>
-              {searchHits.length > 0 && <div className="pdf-search-results" aria-label="PDF search results"><strong>{searchHits.length} matching page{searchHits.length === 1 ? '' : 's'}</strong>{searchHits.map((hit) => <button key={hit.page} onClick={() => navigateToPage(hit.page)}><span>Page {hit.page}</span><small>{hit.excerpt}</small></button>)}</div>}
+              {(searchHits.length > 0 || searchTruncated) && <div className="pdf-search-results" aria-label="PDF search results"><div className="pdf-search-heading"><strong>{searchHits.length} match{searchHits.length === 1 ? '' : 'es'}{searchTruncated ? ' (first 2,000 shown)' : ''}</strong>{searchHits.length > 0 && <div className="pdf-search-navigation"><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex - 1)} aria-label="Previous search match" title="Previous match"><ArrowLeft size={14} /></button><span>{currentSearchIndex + 1} / {searchHits.length}</span><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex + 1)} aria-label="Next search match" title="Next match"><ArrowRight size={14} /></button></div>}</div>{searchHits.map((hit, index) => <button key={`${hit.page}-${hit.offset}`} className={index === currentSearchIndex ? 'pdf-search-result-active' : ''} onClick={() => navigateToSearchHit(index)}><span>Match {index + 1} · Page {hit.page}</span><small>{hit.excerpt}</small></button>)}{searchTruncated && <small className="pdf-search-truncated">Search stopped at 2,000 matches.</small>}</div>}
               <section className="pdf-edit-tools"><div className="pdf-tools-heading"><div><span className="eyebrow">COPY-BASED PAGE TOOLS</span><h2>Create a new PDF copy</h2></div><span className="pdf-original-badge">Original stays unchanged</span></div>
                 <div className="pdf-tool-card"><div><strong>Rotate current page</strong><small>Apply a 90° rotation to page {currentPage} in a saved copy.</small></div><button className="button-tertiary" onClick={() => void exportRotatedPage()} disabled={busy}><RotateCw size={14} /> Rotate copy</button></div>
                 <div className="pdf-tool-card pdf-tool-range"><div><strong>Extract pages</strong><small>Enter individual page numbers or inclusive ranges, such as 1-3,5.</small></div><div className="pdf-tool-controls"><input aria-label="Pages to extract" value={pageRange} onChange={(event) => setPageRange(event.target.value)} /><button className="button-tertiary" onClick={() => void exportExtract()} disabled={busy}>Extract copy</button></div></div>

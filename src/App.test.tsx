@@ -17,6 +17,17 @@ async function openDraft() {
   await screen.findByRole('textbox', { name: 'Document content' }, { timeout: 5000 });
 }
 
+function selectEditorText() {
+  const editor = screen.getByRole('textbox', { name: 'Document content' });
+  const text = editor.firstElementChild?.firstChild;
+  if (!text) throw new Error('Expected the synthetic draft text node');
+  const selection = window.getSelection();
+  const range = window.document.createRange();
+  range.selectNodeContents(text);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULT_STATE, documents: [draft] }));
@@ -47,6 +58,21 @@ describe('local Docs recovery integration', () => {
       expect(saved.content).toBe('Keep this draft');
       expect(saved.richText).toBe('<p>Keep this draft</p>');
     });
+  });
+
+  it('applies Heading 3 and strikethrough from the Docs toolbar and persists both marks', async () => {
+    await openDraft();
+    selectEditorText();
+    const heading3 = screen.getByRole('button', { name: 'Heading 3' });
+    fireEvent.mouseDown(heading3);
+    fireEvent.click(heading3);
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).documents[0].richText).toBe('<h3>Keep this draft</h3><p></p>'));
+
+    selectEditorText();
+    const strikethrough = screen.getByRole('button', { name: 'Strikethrough' });
+    fireEvent.mouseDown(strikethrough);
+    fireEvent.click(strikethrough);
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).documents[0].richText).toBe('<h3><del>Keep this draft</del></h3><p></p>'));
   });
 
   it('keeps failed edits in this tab across navigation and saves them on retry', async () => {

@@ -56,3 +56,10 @@
 
 
 - Follow-up validation after adding the title-change, preflight-race, and exact 38,000-byte boundary tests passed: 138 Vitest tests across 23 files and 26 Node API/privacy/SQL contract checks. The build and lint pass; Vite continues to warn about the existing large PDF.js chunk.
+
+
+## 2026-11-03 — Local editor capability tranche 1
+
+- Docs now exposes Heading 3 and strikethrough, with Markdown conversion and local-autosave integration tests. Sheets now supports bounded arrow, Tab, Shift+Tab, Enter and Shift+Enter navigation across its visible grid; editing inputs keep their native cursor keys. Slides presenter mode can show or hide an accessible speaker-notes panel; notes remain excluded from print output. PDF text search returns bounded multi-occurrence results across pages (up to 2,000), supports previous/next navigation, and preserves the original PDF and local annotation boundary.
+- Added a shared responsive toolbar treatment for Docs, Sheets, Slides and PDF controls, plus `docs/office-capability-roadmap.md` and a README link. The matrix explicitly marks current modules as partial and lists missing native formats and capabilities; Microsoft and Adobe comparison sources and the public GenOffice README are linked. No GenOffice source, especially restricted `ee/`, was copied.
+- Final validation passed: 152 Vitest tests across 25 files, 26 Node API/privacy/SQL contract checks, TypeScript/Vite production build, lint with zero warnings/errors, `git diff --check`, source/bundle key-shape scan, and frontend provider-key reference scan. Vite still reports the existing large PDF.js chunk warning. No live user documents or provider requests were used for this tranche; the last synthetic production AI smoke remains blocked by the fixed free endpoint's upstream 429 (`503 FREE_MODEL_UNAVAILABLE`).

@@ -17,6 +17,11 @@ describe('local Docs content conversion and safety', () => {
     expect(sanitizeRichTextHtml('<p onclick="bad()">Hi <b style="color:red">safe</b><img src="x" onerror="bad()"></p><script>bad()</script>'))
       .toBe('<p>Hi <strong>safe</strong></p>');
   });
+  it('preserves supported Heading 3 and strikethrough markup while removing attributes', () => {
+    expect(sanitizeRichTextHtml('<h3 data-level="3">Roadmap</h3><p><s title="remove">Done</s> <del>too</del></p>'))
+      .toBe('<h3>Roadmap</h3><p><del>Done</del> <del>too</del></p>');
+    expect(richTextToPlainText('<h3>Roadmap</h3><p><del>Done</del></p>')).toBe('Roadmap\nDone');
+  });
   it('falls back to valid plain text when optional markup sanitizes to empty', () => {
     expect(initialDocumentHtml('Keep this draft', '<script>bad()</script>')).toBe('<p>Keep this draft</p>');
     expect(initialDocumentHtml('Keep this draft', '<p><br></p>')).toBe('<p>Keep this draft</p>');
@@ -38,6 +43,10 @@ describe('local Docs content conversion and safety', () => {
     expect(richTextToMarkdown('<h1>Plan</h1><ul><li><p>First</p><ul><li><p>Nested</p></li></ul></li><li><p>Second</p></li></ul>'))
       .toBe('# Plan\n\n- First\n  - Nested\n- Second');
     expect(richTextToMarkdown('<blockquote><p>One</p><p>Two</p></blockquote>')).toBe('> One\n> \n> Two');
+  });
+  it('exports Heading 3 and strikethrough as Markdown', () => {
+    expect(richTextToMarkdown('<h3>Follow up</h3><p>Keep <del>old text</del></p>'))
+      .toBe('### Follow up\n\nKeep ~~old text~~');
   });
   it('keeps readable text available for document search', () => {
     expect(richTextToPlainText('<h1>Plan</h1><p>A <strong>bold</strong> start</p><ul><li><p>Task</p></li></ul>'))

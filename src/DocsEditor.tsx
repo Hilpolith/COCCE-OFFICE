@@ -10,8 +10,8 @@ import { initialDocumentHtml, plainTextToRichHtml, richTextToPlainText, sanitize
 import OfficeAiWriter from './OfficeAiWriter';
 import './docs.css';
 import {
-  ArrowUpRight, Bold, Check, ChevronLeft, FileText, Heading1, Heading2,
-  Italic, List, ListOrdered, LockKeyhole, Pilcrow, Quote, Redo2, Underline as UnderlineIcon, Undo2, X,
+  ArrowUpRight, Bold, Check, ChevronLeft, FileText, Heading1, Heading2, Heading3,
+  Italic, List, ListOrdered, LockKeyhole, Pilcrow, Quote, Redo2, Strikethrough, Underline as UnderlineIcon, Undo2, X,
 } from 'lucide-react';
 
 type DocumentPatch = Partial<Pick<OfficeDocument, 'title' | 'content' | 'richText'>>;
@@ -48,7 +48,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
   const editor = useEditor({
     extensions: [StarterKit.configure({
-      heading: { levels: [1, 2] }, link: false, underline: false,
+      heading: { levels: [1, 2, 3] }, link: false, underline: false,
       code: false, codeBlock: false, horizontalRule: false,
     }), Underline],
     content: initialHtml,
@@ -83,6 +83,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       underline: activeEditor?.isActive('underline') ?? false,
       heading1: activeEditor?.isActive('heading', { level: 1 }) ?? false,
       heading2: activeEditor?.isActive('heading', { level: 2 }) ?? false,
+      heading3: activeEditor?.isActive('heading', { level: 3 }) ?? false,
+      strike: activeEditor?.isActive('strike') ?? false,
       paragraph: activeEditor?.isActive('paragraph') ?? false,
       bulletList: activeEditor?.isActive('bulletList') ?? false,
       orderedList: activeEditor?.isActive('orderedList') ?? false,
@@ -112,12 +114,14 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Paragraph" icon={<Pilcrow size={16} />} active={editorState.paragraph} onClick={() => editor?.chain().focus().setParagraph().run()} />
         <FormattingButton label="Heading 1" icon={<Heading1 size={16} />} active={editorState.heading1} onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()} />
         <FormattingButton label="Heading 2" icon={<Heading2 size={16} />} active={editorState.heading2} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} />
+        <FormattingButton label="Heading 3" icon={<Heading3 size={16} />} active={editorState.heading3} onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Text style">
         <FormattingButton label="Bold" icon={<Bold size={16} />} active={editorState.bold} onClick={() => editor?.chain().focus().toggleBold().run()} />
         <FormattingButton label="Italic" icon={<Italic size={16} />} active={editorState.italic} onClick={() => editor?.chain().focus().toggleItalic().run()} />
         <FormattingButton label="Underline" icon={<UnderlineIcon size={16} />} active={editorState.underline} onClick={() => editor?.chain().focus().toggleUnderline().run()} />
+        <FormattingButton label="Strikethrough" icon={<Strikethrough size={16} />} active={editorState.strike} onClick={() => editor?.chain().focus().toggleStrike().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Lists and quotes">

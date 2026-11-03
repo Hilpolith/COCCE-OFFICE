@@ -31,6 +31,38 @@ function safeFileName(value: string) {
   return value.trim().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-|-$/g, '').toLowerCase() || 'spreadsheet';
 }
 
+type CellDirection = 'up' | 'down' | 'left' | 'right';
+
+function cellPosition(address: string) {
+  const match = /^([A-Z]+)(\d+)$/.exec(address);
+  if (!match) return null;
+  let column = 0;
+  for (const character of match[1]) column = column * 26 + character.charCodeAt(0) - 64;
+  return { row: Number(match[2]), column };
+}
+
+function nextCellAddress(address: string, direction: CellDirection | 'next' | 'previous') {
+  const position = cellPosition(address);
+  if (!position) return address;
+  let row = position.row;
+  let column = position.column;
+  if (direction === 'up') row -= 1;
+  if (direction === 'down') row += 1;
+  if (direction === 'left') column -= 1;
+  if (direction === 'right') column += 1;
+  if (direction === 'next') {
+    if (column < GRID_COLUMNS) column += 1;
+    else if (row < GRID_ROWS) { column = 1; row += 1; }
+  }
+  if (direction === 'previous') {
+    if (column > 1) column -= 1;
+    else if (row > 1) { column = GRID_COLUMNS; row -= 1; }
+  }
+  row = Math.max(1, Math.min(GRID_ROWS, row));
+  column = Math.max(1, Math.min(GRID_COLUMNS, column));
+  return cellAddress(row, column);
+}
+
 export default function SheetsWorkspace({ state, onState }: { state: PreviewState; onState: (next: PreviewState) => boolean }) {
   const [selectedWorkbookId, setSelectedWorkbookId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
@@ -128,6 +160,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
   const [message, setMessage] = useState(notice);
   const [persistenceError, setPersistenceError] = useState(false);
   const cancelledEditAddress = useRef<string | null>(null);
+  const cellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const displayedCells = useMemo(() => {
     const values: Record<string, string> = {};
     for (let row = 1; row <= GRID_ROWS; row += 1) {
@@ -151,6 +184,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
     if (cancelledEditAddress.current === address) { cancelledEditAddress.current = null; return; }
     updateCell(address, value);
     setEditingAddress(null);
+    window.setTimeout(() => cellRefs.current[address]?.focus(), 0);
   };
   const beginEdit = (address: string) => {
     cancelledEditAddress.current = null;
@@ -180,7 +214,19 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
     }
   };
   const cellKeyDown = (event: KeyboardEvent<HTMLButtonElement>, address: string) => {
-    if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); beginEdit(address); }
+    if (event.key === 'F2') { event.preventDefault(); beginEdit(address); return; }
+    const direction = event.key === 'ArrowUp' ? 'up'
+      : event.key === 'ArrowDown' ? 'down'
+        : event.key === 'ArrowLeft' ? 'left'
+          : event.key === 'ArrowRight' ? 'right'
+            : event.key === 'Tab' ? (event.shiftKey ? 'previous' : 'next')
+              : event.key === 'Enter' ? (event.shiftKey ? 'up' : 'down')
+                : null;
+    if (!direction) return;
+    event.preventDefault();
+    const nextAddress = nextCellAddress(address, direction);
+    setSelectedAddress(nextAddress);
+    cellRefs.current[nextAddress]?.focus();
   };
   const formulaKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
@@ -215,7 +261,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
               return <td key={address} className={`${isSelected ? 'cell-selected' : ''} ${isError ? 'cell-error' : ''}`}>
                 {editingAddress === address
                   ? <input autoFocus className="cell-edit-input" value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => commitEdit(address, draft)} onKeyDown={(event) => handleEditKeyDown(event, address)} aria-label={`Edit cell ${address}`} />
-                  : <button className="cell-display" onClick={() => { setSelectedAddress(address); setEditingAddress(null); }} onDoubleClick={() => beginEdit(address)} onKeyDown={(event) => cellKeyDown(event, address)} aria-label={`${address}${value ? `, ${value}` : ', blank'}`} title="Double-click, press Enter, or press F2 to edit">{value}</button>}
+                  : <button ref={(element) => { cellRefs.current[address] = element; }} className="cell-display" onClick={() => { setSelectedAddress(address); setEditingAddress(null); }} onDoubleClick={() => beginEdit(address)} onKeyDown={(event) => cellKeyDown(event, address)} aria-label={`${address}${value ? `, ${value}` : ', blank'}`} title="Double-click, press F2, or use the formula bar to edit">{value}</button>}
               </td>;
             })}</tr>;
           })}</tbody>

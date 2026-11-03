@@ -47,3 +47,6 @@ Provided open-source dependency license texts are preserved in [third-party noti
 ## Release status
 
 The Office Team collaboration slice is released through the existing `cocce-office` Vercel project using its existing Vercel SSO configuration; aliases, domains, and protection settings are unchanged. This remains a limited collaboration surface, not a full enterprise productivity suite: Docs, Sheets, Slides, Drive, PDF, Vault, and Team Planner remain browser-local, and cloud file storage, external/email invitations, push notifications, attachments, audio/video, reactions, message editing/deletion, and read receipts are not included.
+
+
+The verified [Office capability matrix and roadmap](docs/office-capability-roadmap.md) distinguishes current local-first features from missing Microsoft Office/GenOffice compatibility and future AI work.
