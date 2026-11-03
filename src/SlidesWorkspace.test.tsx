@@ -83,6 +83,74 @@ describe('Slides workspace', () => {
     expect(printStack?.textContent).not.toContain('Private print-excluded note.');
   });
 
+  it('opens saved slides with unknown layouts using the safe default without losing text or notes', () => {
+    window.localStorage.setItem(SLIDES_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      decks: [{ id: 'legacy-deck', workspaceId: null, title: 'Legacy deck', theme: 'violet', updatedAt: '2026-01-01T00:00:00.000Z', slides: [{ id: 'legacy-slide', title: 'Keep this title', body: 'Keep this body', notes: 'Keep these notes', layout: 'unknown-template' }] }],
+    }));
+    render(<SlidesWorkspace workspaceId={null} />);
+    fireEvent.click(screen.getByRole('button', { name: /Legacy deck/ }));
+    expect((screen.getByRole('combobox', { name: 'Slide layout' }) as HTMLSelectElement).value).toBe('title-content');
+    expect((screen.getByRole('textbox', { name: 'Slide title' }) as HTMLInputElement).value).toBe('Keep this title');
+    expect((screen.getByRole('textbox', { name: 'Slide text' }) as HTMLTextAreaElement).value).toBe('Keep this body');
+    expect((screen.getByRole('textbox', { name: 'Speaker notes' }) as HTMLTextAreaElement).value).toBe('Keep these notes');
+    expect(document.querySelector('.slide-print-stack .print-slide.slide-layout-title-content')).toBeTruthy();
+  });
+
+  it('switches real text layouts without rewriting content and persists the chosen layout to presentation and print views', async () => {
+    await createPresentation();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Slide title' }), { target: { value: 'Launch plan' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Slide text' }), { target: { value: 'First point\nSecond point\nThird point' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Speaker notes' }), { target: { value: 'Keep this note private.' } });
+    const layout = screen.getByRole('combobox', { name: 'Slide layout' }) as HTMLSelectElement;
+
+    fireEvent.change(layout, { target: { value: 'two-column' } });
+    const twoColumnCanvas = document.querySelector('.slide-canvas.slide-layout-two-column .slide-two-columns');
+    expect(twoColumnCanvas?.children).toHaveLength(2);
+    expect(twoColumnCanvas?.children[0].textContent).toContain('First point');
+    expect(twoColumnCanvas?.children[1].textContent).toContain('Third point');
+
+    fireEvent.change(layout, { target: { value: 'quote' } });
+    expect(document.querySelector('.slide-canvas.slide-layout-quote blockquote')?.textContent).toContain('Second point');
+    fireEvent.click(screen.getByRole('button', { name: 'Present' }));
+    expect(document.querySelector('.slides-present-overlay .slide-canvas.slide-layout-quote')).toBeTruthy();
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    fireEvent.change(layout, { target: { value: 'section-divider' } });
+    expect(document.querySelectorAll('.slide-canvas.slide-layout-section-divider .slide-section-copy p')).toHaveLength(3);
+    fireEvent.change(layout, { target: { value: 'title-content' } });
+    expect(document.querySelector('.slide-canvas.slide-layout-title-content')).toBeTruthy();
+    fireEvent.change(layout, { target: { value: 'section-divider' } });
+
+    expect((screen.getByRole('textbox', { name: 'Slide title' }) as HTMLInputElement).value).toBe('Launch plan');
+    expect((screen.getByRole('textbox', { name: 'Slide text' }) as HTMLTextAreaElement).value).toBe('First point\nSecond point\nThird point');
+    expect((screen.getByRole('textbox', { name: 'Speaker notes' }) as HTMLTextAreaElement).value).toBe('Keep this note private.');
+    const saved = JSON.parse(window.localStorage.getItem(SLIDES_STORAGE_KEY)!);
+    expect(saved.decks[0].slides[0]).toMatchObject({ title: 'Launch plan', body: 'First point\nSecond point\nThird point', notes: 'Keep this note private.', layout: 'section-divider' });
+    const printedSlide = document.querySelector('.slide-print-stack .print-slide.slide-layout-section-divider');
+    expect(printedSlide?.textContent).toContain('Launch plan');
+    expect(printedSlide?.textContent).toContain('Third point');
+    expect(printedSlide?.textContent).not.toContain('Keep this note private.');
+
+    cleanup();
+    render(<SlidesWorkspace workspaceId={null} />);
+    fireEvent.click(screen.getByRole('button', { name: /Untitled presentation/ }));
+    expect((screen.getByRole('combobox', { name: 'Slide layout' }) as HTMLSelectElement).value).toBe('section-divider');
+    expect(document.querySelector('.slide-canvas.slide-layout-section-divider')).toBeTruthy();
+  });
+
+  it('undoes and redoes layout changes through the same local persistence path', async () => {
+    await createPresentation();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Slide layout' }), { target: { value: 'two-column' } });
+    expect(JSON.parse(window.localStorage.getItem(SLIDES_STORAGE_KEY)!).decks[0].slides[0].layout).toBe('two-column');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect((screen.getByRole('combobox', { name: 'Slide layout' }) as HTMLSelectElement).value).toBe('title-content');
+    expect(JSON.parse(window.localStorage.getItem(SLIDES_STORAGE_KEY)!).decks[0].slides[0].layout).toBe('title-content');
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
+    expect((screen.getByRole('combobox', { name: 'Slide layout' }) as HTMLSelectElement).value).toBe('two-column');
+    expect(document.querySelector('.slide-print-stack .print-slide.slide-layout-two-column .slide-two-columns')).toBeTruthy();
+  });
+
   it('undoes and redoes content, theme, and slide ordering while persisting each result locally', async () => {
     await createPresentation();
     const slideTitle = screen.getByRole('textbox', { name: 'Slide title' }) as HTMLInputElement;

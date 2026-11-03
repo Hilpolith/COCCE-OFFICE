@@ -28,6 +28,16 @@ describe('bounded local Slides edit history', () => {
     expect(redone.history.future).toHaveLength(0);
   });
 
+  it('undoes and redoes a per-slide layout change', () => {
+    const { deck, slideId } = makeDeck();
+    const edited = updateSlide({ version: 1, decks: [deck] }, deck.id, slideId, { layout: 'two-column' }).decks[0];
+    const history = recordSlidesHistory(createSlidesHistory(), deck, edited, slideId);
+    const undone = undoSlidesHistory(history, edited, slideId);
+    expect(undone.target?.deck.slides[0].layout).toBe('title-content');
+    const redone = redoSlidesHistory(undone.history, deck, slideId);
+    expect(redone.target?.deck.slides[0].layout).toBe('two-column');
+  });
+
   it('does not record no-op content changes or snapshots from another deck', () => {
     const { deck, slideId } = makeDeck();
     const sameContent = updateDeck({ version: 1, decks: [deck] }, deck.id, { title: deck.title }).decks[0];

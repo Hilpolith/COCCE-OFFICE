@@ -2,8 +2,11 @@ export const SLIDES_STORAGE_KEY = 'cocce-office-slides-v1';
 export const MAX_SLIDES_PER_DECK = 100;
 export const MAX_SLIDE_TEXT_LENGTH = 12_000;
 
+export const SLIDE_LAYOUTS = ['title-content', 'two-column', 'quote', 'section-divider'] as const;
+export type SlideLayout = typeof SLIDE_LAYOUTS[number];
+export const DEFAULT_SLIDE_LAYOUT: SlideLayout = 'title-content';
 export type SlidesTheme = 'violet' | 'ocean' | 'ember';
-export type Slide = { id: string; title: string; body: string; notes: string };
+export type Slide = { id: string; title: string; body: string; notes: string; layout: SlideLayout };
 export type PresentationDeck = {
   id: string;
   workspaceId: string | null;
@@ -21,9 +24,13 @@ const now = () => new Date().toISOString();
 const makeId = () => globalThis.crypto?.randomUUID?.() ?? `slide-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const isTheme = (value: unknown): value is SlidesTheme => value === 'violet' || value === 'ocean' || value === 'ember';
+const isSlideLayout = (value: unknown): value is SlideLayout => typeof value === 'string' && SLIDE_LAYOUTS.some((layout) => layout === value);
 const textValue = (value: unknown, max = MAX_SLIDE_TEXT_LENGTH) => typeof value === 'string' ? value.slice(0, max) : '';
 
-function validSlide(value: unknown): value is Slide {
+type SlideInput = Pick<Slide, 'id' | 'title' | 'body' | 'notes'> & { layout?: unknown };
+type PresentationDeckInput = Omit<PresentationDeck, 'slides'> & { slides: SlideInput[] };
+
+function validSlide(value: unknown): value is SlideInput {
   if (!isRecord(value)) return false;
   return typeof value.id === 'string' && value.id.length > 0
     && typeof value.title === 'string' && value.title.length <= MAX_SLIDE_TEXT_LENGTH
@@ -31,7 +38,7 @@ function validSlide(value: unknown): value is Slide {
     && typeof value.notes === 'string' && value.notes.length <= MAX_SLIDE_TEXT_LENGTH;
 }
 
-function validDeck(value: unknown): value is PresentationDeck {
+function validDeck(value: unknown): value is PresentationDeckInput {
   if (!isRecord(value)) return false;
   return typeof value.id === 'string' && value.id.length > 0
     && (value.workspaceId === null || typeof value.workspaceId === 'string')
@@ -40,6 +47,20 @@ function validDeck(value: unknown): value is PresentationDeck {
     && Array.isArray(value.slides) && value.slides.length > 0 && value.slides.length <= MAX_SLIDES_PER_DECK
     && value.slides.every(validSlide)
     && typeof value.updatedAt === 'string';
+}
+
+function normalizeSlide(slide: SlideInput): Slide {
+  return {
+    id: slide.id,
+    title: slide.title,
+    body: slide.body,
+    notes: slide.notes,
+    layout: isSlideLayout(slide.layout) ? slide.layout : DEFAULT_SLIDE_LAYOUT,
+  };
+}
+
+function normalizeDeck(deck: PresentationDeckInput): PresentationDeck {
+  return { ...deck, slides: deck.slides.map(normalizeSlide) };
 }
 
 export function readSlidesState(storage: Pick<Storage, 'getItem'>): SlidesReadResult {
@@ -55,7 +76,7 @@ export function readSlidesState(storage: Pick<Storage, 'getItem'>): SlidesReadRe
     if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.decks) || !parsed.decks.every(validDeck)) {
       return { state: null, error: 'Saved presentation data is not in a supported format. It has been left untouched.' };
     }
-    return { state: { version: 1, decks: parsed.decks }, error: null };
+    return { state: { version: 1, decks: (parsed.decks as PresentationDeckInput[]).map(normalizeDeck) }, error: null };
   } catch {
     return { state: null, error: 'Saved presentation data could not be read. It has been left untouched.' };
   }
@@ -71,7 +92,7 @@ export function createDeck(state: SlidesState, workspaceId: string | null): { st
     workspaceId,
     title: 'Untitled presentation',
     theme: 'violet',
-    slides: [{ id: makeId(), title: 'A new idea', body: 'Start with one clear thought.', notes: '' }],
+    slides: [{ id: makeId(), title: 'A new idea', body: 'Start with one clear thought.', notes: '', layout: DEFAULT_SLIDE_LAYOUT }],
     updatedAt: now(),
   };
   return { state: { ...state, decks: [deck, ...state.decks] }, deck };
@@ -81,7 +102,7 @@ export function updateDeck(state: SlidesState, deckId: string, patch: Partial<Pi
   return { ...state, decks: state.decks.map((deck) => deck.id === deckId ? { ...deck, ...patch, updatedAt: now() } : deck) };
 }
 
-export function updateSlide(state: SlidesState, deckId: string, slideId: string, patch: Partial<Pick<Slide, 'title' | 'body' | 'notes'>>): SlidesState {
+export function updateSlide(state: SlidesState, deckId: string, slideId: string, patch: Partial<Pick<Slide, 'title' | 'body' | 'notes' | 'layout'>>): SlidesState {
   return { ...state, decks: state.decks.map((deck) => deck.id === deckId
     ? { ...deck, slides: deck.slides.map((slide) => slide.id === slideId ? { ...slide, ...patch } : slide), updatedAt: now() }
     : deck) };
@@ -91,7 +112,7 @@ export function addSlide(state: SlidesState, deckId: string): { state: SlidesSta
   let added: Slide | null = null;
   const decks = state.decks.map((deck) => {
     if (deck.id !== deckId || deck.slides.length >= MAX_SLIDES_PER_DECK) return deck;
-    added = { id: makeId(), title: 'New slide', body: '', notes: '' };
+    added = { id: makeId(), title: 'New slide', body: '', notes: '', layout: DEFAULT_SLIDE_LAYOUT };
     return { ...deck, slides: [...deck.slides, added], updatedAt: now() };
   });
   return { state: { ...state, decks }, slide: added };
@@ -151,7 +172,7 @@ export function importDeck(raw: string, workspaceId: string | null): Presentatio
     workspaceId,
     title: textValue(parsed.title, 300) || 'Imported presentation',
     theme: parsed.theme,
-    slides: parsed.slides.map((slide) => ({ id: makeId(), title: slide.title, body: slide.body, notes: slide.notes })),
+    slides: (parsed.slides as SlideInput[]).map((slide) => ({ ...normalizeSlide(slide), id: makeId() })),
     updatedAt: now(),
   };
 }

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   addSlide, createDeck, duplicateSlide, importDeck, moveSlide, readSlidesState,
-  removeDeck, removeSlide, serializeDeck, SLIDES_STORAGE_KEY, updateSlide, writeSlidesState,
+  DEFAULT_SLIDE_LAYOUT, removeDeck, removeSlide, serializeDeck, SLIDES_STORAGE_KEY, updateSlide, writeSlidesState,
 } from './slidesStore';
 
 function storage() {
@@ -52,7 +52,7 @@ describe('local Slides data model', () => {
   it('round-trips user content through the portable JSON export and imports into a new workspace', () => {
     const deck = createDeck({ version: 1, decks: [] }, 'source').deck;
     const source = updateSlide({ version: 1, decks: [deck] }, deck.id, deck.slides[0].id, {
-      title: 'Quarterly update', body: 'First point\nSecond point', notes: 'Mention the source.' });
+      title: 'Quarterly update', body: 'First point\nSecond point', notes: 'Mention the source.', layout: 'quote' });
     const exported = serializeDeck(source.decks[0]);
     const extended = JSON.parse(exported) as { slides: Array<Record<string, unknown>> };
     extended.slides[0].ignored = { nested: true };
@@ -61,9 +61,30 @@ describe('local Slides data model', () => {
     expect(imported.title).toBe(deck.title);
     expect(imported.slides[0].title).toBe('Quarterly update');
     expect(imported.slides[0].notes).toBe('Mention the source.');
+    expect(imported.slides[0].layout).toBe('quote');
     expect(imported.slides[0]).not.toHaveProperty('ignored');
     expect(imported.id).not.toBe(deck.id);
     expect(imported.slides[0].id).not.toBe(deck.slides[0].id);
+  });
+
+  it('defaults legacy, invalid stored, and invalid imported layout values without changing slide content', () => {
+    const deck = createDeck({ version: 1, decks: [] }, null).deck;
+    const stored = JSON.parse(JSON.stringify({ version: 1, decks: [deck] })) as { decks: Array<{ slides: Array<Record<string, unknown>> }> };
+    delete stored.decks[0].slides[0].layout;
+    disk.values.set(SLIDES_STORAGE_KEY, JSON.stringify(stored));
+    const legacy = readSlidesState(disk).state!.decks[0].slides[0];
+    expect(legacy.layout).toBe(DEFAULT_SLIDE_LAYOUT);
+    expect(legacy.title).toBe(deck.slides[0].title);
+
+    stored.decks[0].slides[0].layout = 'unknown-template';
+    disk.values.set(SLIDES_STORAGE_KEY, JSON.stringify(stored));
+    expect(readSlidesState(disk).state!.decks[0].slides[0].layout).toBe(DEFAULT_SLIDE_LAYOUT);
+
+    const exported = JSON.parse(serializeDeck(deck)) as { slides: Array<Record<string, unknown>> };
+    exported.slides[0].layout = 'unknown-template';
+    const imported = importDeck(JSON.stringify(exported), null);
+    expect(imported.slides[0].layout).toBe(DEFAULT_SLIDE_LAYOUT);
+    expect(imported.slides[0].body).toBe(deck.slides[0].body);
   });
 
   it('rejects malformed imports and preserves unsupported saved data instead of overwriting it', () => {

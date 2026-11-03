@@ -11,14 +11,26 @@ import {
 import type { SlidesHistory, SlidesHistorySnapshot } from './lib/slidesHistory';
 import {
   addSlide, createDeck, duplicateSlide, importDeck, moveSlide, readSlidesState,
-  removeDeck, removeSlide, serializeDeck, SLIDES_STORAGE_KEY, updateDeck, updateSlide, writeSlidesState,
+  removeDeck, removeSlide, serializeDeck, SLIDE_LAYOUTS, SLIDES_STORAGE_KEY, updateDeck, updateSlide, writeSlidesState,
 } from './lib/slidesStore';
-import type { PresentationDeck, Slide, SlidesState, SlidesTheme } from './lib/slidesStore';
+import type { PresentationDeck, Slide, SlideLayout, SlidesState, SlidesTheme } from './lib/slidesStore';
 import './slides.css';
 
 type Props = { workspaceId: string | null };
 
 const themeNames: Record<SlidesTheme, string> = { violet: 'Violet glass', ocean: 'Ocean glass', ember: 'Ember glass' };
+const layoutNames: Record<SlideLayout, string> = {
+  'title-content': 'Title and content',
+  'two-column': 'Two columns',
+  quote: 'Quote',
+  'section-divider': 'Section divider',
+};
+const layoutDescriptions: Record<SlideLayout, string> = {
+  'title-content': 'A clear title with the original body text below.',
+  'two-column': 'Splits non-empty body lines evenly into two columns.',
+  quote: 'Frames the body as a quotation beneath the title.',
+  'section-divider': 'Centers the title and treats each body line as a subtitle.',
+};
 const RECOVERY_KEY = `${SLIDES_STORAGE_KEY}:tab-recovery`;
 type LoadedSlides = { state: SlidesState | null; error: string | null; recovered: boolean };
 
@@ -255,7 +267,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
     }
   };
 
-  const patchSlide = (patch: Partial<Pick<Slide, 'title' | 'body' | 'notes'>>) => {
+  const patchSlide = (patch: Partial<Pick<Slide, 'title' | 'body' | 'notes' | 'layout'>>) => {
     if (state && activeDeck && activeSlide) {
       const field = Object.keys(patch)[0] ?? '';
       commitActiveDeckEdit(updateSlide(state, activeDeck.id, activeSlide.id, patch), activeSlide.id, `slide:${activeSlide.id}:${field}`);
@@ -317,7 +329,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
         <div className="slides-editor-layout">
           <aside className="slides-rail glass-card" aria-label="Slide list">
             <div className="slides-rail-heading"><div><span className="eyebrow">SLIDES</span><strong>{String(activeSlideIndex + 1).padStart(2, '0')} <span>/ {String(activeDeck.slides.length).padStart(2, '0')}</span></strong></div><button className="icon-button" aria-label="Add slide" title="Add slide" onClick={addNewSlide}><Plus size={16} /></button></div>
-            <div className="slides-thumbnails">{activeDeck.slides.map((slide, index) => <button key={slide.id} className={`slides-thumbnail ${index === activeSlideIndex ? 'selected' : ''}`} aria-label={`Slide ${index + 1}: ${slide.title || 'Untitled slide'}`} aria-current={index === activeSlideIndex ? 'true' : undefined} onClick={() => setActiveSlideIndex(index)}><span className={`slides-thumbnail-canvas theme-${activeDeck.theme}`}><strong>{slide.title || 'Untitled slide'}</strong><small>{slide.body || 'No slide text yet'}</small></span><span className="slides-thumbnail-caption">{String(index + 1).padStart(2, '0')} · {slide.title || 'Untitled slide'}</span></button>)}</div>
+            <div className="slides-thumbnails">{activeDeck.slides.map((slide, index) => <button key={slide.id} className={`slides-thumbnail ${index === activeSlideIndex ? 'selected' : ''}`} aria-label={`Slide ${index + 1}: ${slide.title || 'Untitled slide'}`} aria-current={index === activeSlideIndex ? 'true' : undefined} onClick={() => setActiveSlideIndex(index)}><span className={`slides-thumbnail-canvas theme-${activeDeck.theme} slide-layout-${slide.layout}`}><strong>{slide.title || 'Untitled slide'}</strong><small>{slide.body || 'No slide text yet'}</small></span><span className="slides-thumbnail-caption">{String(index + 1).padStart(2, '0')} · {slide.title || 'Untitled slide'}</span></button>)}</div>
           </aside>
 
           <section className="slides-workbench" aria-label="Slide editor">
@@ -327,6 +339,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
               <div><button className="icon-button" aria-label="Move slide up" title="Move slide up" disabled={activeSlideIndex === 0} onClick={() => shiftSlide(-1)}><ArrowUp size={15} /></button><button className="icon-button" aria-label="Move slide down" title="Move slide down" disabled={activeSlideIndex === activeDeck.slides.length - 1} onClick={() => shiftSlide(1)}><ArrowDown size={15} /></button><button className="icon-button" aria-label="Duplicate slide" title="Duplicate slide" disabled={activeDeck.slides.length >= 100} onClick={duplicateCurrentSlide}><Copy size={15} /></button><button className="icon-button danger-icon" aria-label="Delete slide" title="Delete slide" disabled={activeDeck.slides.length <= 1} onClick={deleteCurrentSlide}><Trash2 size={15} /></button></div>
             </div>
             <div className="slides-edit-fields glass-card">
+              <label className="slides-layout-field"><span>Slide layout</span><select aria-label="Slide layout" value={activeSlide.layout} aria-describedby="slide-layout-help" onChange={(event) => patchSlide({ layout: event.target.value as SlideLayout })}>{SLIDE_LAYOUTS.map((layout) => <option key={layout} value={layout}>{layoutNames[layout]}</option>)}</select><small id="slide-layout-help">{layoutDescriptions[activeSlide.layout]} Changes appearance only; all text and notes stay intact.</small></label>
               <label><span>Slide title</span><input aria-label="Slide title" value={activeSlide.title} maxLength={12_000} onChange={(event) => patchSlide({ title: event.target.value })} placeholder="Give this slide a title" /></label>
               <label><span>Slide text</span><textarea aria-label="Slide text" value={activeSlide.body} maxLength={12_000} onChange={(event) => patchSlide({ body: event.target.value })} placeholder="Add a short paragraph or one idea per line" rows={4} /></label>
               <label className="slides-notes-field"><span>Speaker notes <small>Only you can see these in this local deck.</small></span><textarea aria-label="Speaker notes" value={activeSlide.notes} maxLength={12_000} onChange={(event) => patchSlide({ notes: event.target.value })} placeholder="Add reminders for your talk" rows={3} /></label>
@@ -334,7 +347,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
           </section>
         </div>
         <div className="slides-editor-footer"><span><Check size={14} />{unsaved ? 'Unsaved · kept in this tab' : 'Saved in this browser'}</span><span>{feedback && !unsaved ? feedback : `${activeDeck.slides.length} slide${activeDeck.slides.length === 1 ? '' : 's'} · JSON export available`}</span><span className="slides-history-note">Undo/redo: latest 50 edits for this presentation · this session only</span></div>
-        <div className="slide-print-stack" aria-hidden="true">{activeDeck.slides.map((slide, index) => <div className={`print-slide theme-${activeDeck.theme}`} key={slide.id}><span className="eyebrow">{activeDeck.title || 'Untitled presentation'}</span><h1>{slide.title || 'Untitled slide'}</h1><SlideBody body={slide.body} cover={index === 0} /><small>{index + 1}</small></div>)}</div>
+        <div className="slide-print-stack" aria-hidden="true">{activeDeck.slides.map((slide, index) => <div className={`print-slide theme-${activeDeck.theme} slide-layout-${slide.layout}`} key={slide.id}><span className="eyebrow">{activeDeck.title || 'Untitled presentation'}</span><h1>{slide.title || 'Untitled slide'}</h1><SlideBody body={slide.body} cover={index === 0} layout={slide.layout} /><small>{index + 1}</small></div>)}</div>
       </>}
 
       {presenting && activeDeck && activeSlide && <div className="slides-present-overlay" role="dialog" aria-modal="true" aria-label="Presentation mode"><button className="icon-button present-close" aria-label="Exit presentation" onClick={() => setPresenting(false)}><X size={19} /></button><div className="present-counter">{activeSlideIndex + 1} / {activeDeck.slides.length}</div><div className={`present-stage ${presenterNotesVisible ? 'with-notes' : ''}`}><SlideCanvas deck={activeDeck} slide={activeSlide} index={activeSlideIndex} large />{presenterNotesVisible && <aside id="presenter-notes-panel" className="presenter-notes-panel" aria-label="Presenter notes" role="region"><div className="presenter-notes-heading"><FileText size={15} /><strong>Presenter notes</strong></div><p>{activeSlide.notes || 'No notes for this slide.'}</p></aside>}</div><div className="present-controls"><button className="button-secondary" onClick={() => setActiveSlideIndex((index) => Math.max(0, index - 1))} disabled={activeSlideIndex === 0}><ArrowLeft size={16} /> Previous</button><div className="present-controls-center"><button className="button-secondary presenter-notes-toggle" aria-pressed={presenterNotesVisible} aria-controls="presenter-notes-panel" onClick={() => setPresenterNotesVisible((visible) => !visible)}><FileText size={15} /> {presenterNotesVisible ? 'Hide speaker notes' : 'Show speaker notes'}</button><span>Use arrow keys to navigate · Esc to exit</span></div><button className="button-primary" onClick={() => setActiveSlideIndex((index) => Math.min(activeDeck.slides.length - 1, index + 1))} disabled={activeSlideIndex === activeDeck.slides.length - 1}>Next <ArrowRight size={16} /></button></div></div>}
@@ -344,14 +357,21 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
 }
 
 function SlideCanvas({ deck, slide, index, large = false }: { deck: PresentationDeck; slide: Slide; index: number; large?: boolean }) {
-  return <article className={`slide-canvas theme-${deck.theme} ${index === 0 ? 'slide-cover' : ''} ${large ? 'slide-canvas-large' : ''}`} aria-label={`Slide ${index + 1}: ${slide.title || 'Untitled slide'}`}>
-    <div className="slide-canvas-glow" /><span className="slide-canvas-brand"><Presentation size={14} /> COCCE SLIDES</span><div className="slide-canvas-content"><span className="slide-canvas-kicker">{index === 0 ? 'A NEW PRESENTATION' : `IDEA ${String(index).padStart(2, '0')}`}</span><h2>{slide.title || <span className="slide-placeholder">Your title goes here</span>}</h2><SlideBody body={slide.body} cover={index === 0} /></div><span className="slide-canvas-page">{String(index + 1).padStart(2, '0')}</span>
+  return <article className={`slide-canvas theme-${deck.theme} slide-layout-${slide.layout} ${index === 0 ? 'slide-cover' : ''} ${large ? 'slide-canvas-large' : ''}`} aria-label={`Slide ${index + 1}: ${slide.title || 'Untitled slide'}`}>
+    <div className="slide-canvas-glow" /><span className="slide-canvas-brand"><Presentation size={14} /> COCCE SLIDES</span><div className="slide-canvas-content"><span className="slide-canvas-kicker">{slide.layout === 'section-divider' ? 'SECTION' : index === 0 ? 'A NEW PRESENTATION' : `IDEA ${String(index).padStart(2, '0')}`}</span><h2>{slide.title || <span className="slide-placeholder">Your title goes here</span>}</h2><SlideBody body={slide.body} cover={index === 0} layout={slide.layout} /></div><span className="slide-canvas-page">{String(index + 1).padStart(2, '0')}</span>
   </article>;
 }
 
-function SlideBody({ body, cover }: { body: string; cover: boolean }) {
+function SlideBody({ body, cover, layout }: { body: string; cover: boolean; layout: SlideLayout }) {
   const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (!lines.length) return <p className="slide-placeholder">Add text to bring this slide to life.</p>;
+  if (layout === 'quote') return <blockquote className="slide-quote"><span className="slide-quote-mark" aria-hidden="true">“</span><div className="slide-quote-copy">{lines.map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</div></blockquote>;
+  if (layout === 'section-divider') return <div className="slide-section-copy">{lines.map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</div>;
+  if (layout === 'two-column') {
+    const splitAt = Math.ceil(lines.length / 2);
+    const columns = [lines.slice(0, splitAt), lines.slice(splitAt)];
+    return <div className="slide-two-columns">{columns.map((column, columnIndex) => <ul key={columnIndex}>{column.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}</ul>)}</div>;
+  }
   if (lines.length > 1) return <ul className={cover ? 'cover-points' : ''}>{lines.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}</ul>;
   return <p className={cover ? 'slide-subtitle' : 'slide-paragraph'}>{lines[0]}</p>;
 }
