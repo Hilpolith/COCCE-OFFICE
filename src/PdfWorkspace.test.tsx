@@ -847,3 +847,113 @@ describe('PDF annotation IDs are scoped to their local PDF', () => {
     });
   });
 });
+
+
+describe('PDF page-copy preflight', () => {
+  it('cancels before rereading or saving and leaves the local source and annotation sidecar unchanged', async () => {
+    const { sourceBytes, sourceFile, blobs } = await configureBoundPdfForCopy();
+    await openSyntheticPdf();
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const readsBefore = (repository.readFile as ReturnType<typeof vi.fn>).mock.calls.length;
+    const confirm = vi.fn((_message: string) => false);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Extract copy' }));
+
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm.mock.calls[0][0]).toContain('Digital signatures may no longer be valid');
+    expect(confirm.mock.calls[0][0]).toContain('local Office annotation sidecar is not copied');
+    expect((repository.readFile as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(readsBefore);
+    expect(repository.saveFile).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarBefore);
+    expect(new Uint8Array(await blobs.get(sourceFile.id)!.arrayBuffer())).toEqual(sourceBytes);
+  });
+
+  it('creates an extracted local copy only after confirmation and preserves the source and sidecar', async () => {
+    const { sourceBytes, sourceFile, records, blobs } = await configureBoundPdfForCopy();
+    await openSyntheticPdf();
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const confirm = vi.fn((_message: string) => true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Extract copy' }));
+
+    await waitFor(() => expect(repository.saveFile).toHaveBeenCalledOnce());
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm.mock.calls[0][0]).toContain('Extract 1 page');
+    const outputFile = records.find((file) => file.id !== sourceFile.id)!;
+    const outputBlob = blobs.get(outputFile.id)!;
+    const outputDocument = await PDFDocument.load(new Uint8Array(await outputBlob.arrayBuffer()));
+    expect(outputDocument.getPageCount()).toBe(1);
+    expect(outputFile.name).toContain('pages-1.pdf');
+    expect(new Uint8Array(await blobs.get(sourceFile.id)!.arrayBuffer())).toEqual(sourceBytes);
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarBefore);
+    expect(listPdfAnnotations(window.localStorage, null, outputFile.id)).toEqual([]);
+  });
+
+  it('refuses a page copy when the local source bytes no longer match the open PDF fingerprint', async () => {
+    const { sourceBytes, sourceFile, blobs } = await configureBoundPdfForCopy();
+    await openSyntheticPdf();
+    const changedBytes = sourceBytes.slice();
+    changedBytes[changedBytes.length - 1] ^= 1;
+    blobs.set(sourceFile.id, new Blob([changedBytes.slice().buffer as ArrayBuffer], { type: 'application/pdf' }));
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const confirm = vi.fn((_message: string) => true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate copy' }));
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('bytes no longer match the open document'));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(repository.saveFile).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarBefore);
+    expect(new Uint8Array(await blobs.get(sourceFile.id)!.arrayBuffer())).toEqual(changedBytes);
+  });
+
+  it('merges only the confirmed local inputs, rechecks them, and keeps both source sidecars untouched', async () => {
+    const { sourceBytes, sourceFile, records, blobs } = await configureBoundPdfForCopy();
+    const secondDocument = await PDFDocument.create();
+    secondDocument.addPage([420, 800]);
+    const secondBytes = new Uint8Array(await secondDocument.save({ useObjectStreams: false }));
+    const secondFile: DriveFile = {
+      ...sourceFile, id: 'synthetic-pdf-second', name: 'second.pdf', size: secondBytes.byteLength,
+    };
+    records.push(secondFile);
+    blobs.set(secondFile.id, new Blob([secondBytes.slice().buffer as ArrayBuffer], { type: 'application/pdf' }));
+    await openSyntheticPdf();
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    const confirm = vi.fn((_message: string) => true);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm });
+
+    fireEvent.click(screen.getByLabelText(`Select ${sourceFile.name} for merge`));
+    fireEvent.click(screen.getByLabelText(`Select ${secondFile.name} for merge`));
+    fireEvent.click(screen.getByRole('button', { name: 'Merge selected (2)' }));
+
+    await waitFor(() => expect(repository.saveFile).toHaveBeenCalledOnce());
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm.mock.calls[0][0]).toContain(sourceFile.name);
+    expect(confirm.mock.calls[0][0]).toContain(secondFile.name);
+    const outputFile = records.find((file) => file.id !== sourceFile.id && file.id !== secondFile.id)!;
+    const outputDocument = await PDFDocument.load(new Uint8Array(await blobs.get(outputFile.id)!.arrayBuffer()));
+    expect(outputDocument.getPageCount()).toBe(4);
+    expect(new Uint8Array(await blobs.get(sourceFile.id)!.arrayBuffer())).toEqual(sourceBytes);
+    expect(new Uint8Array(await blobs.get(secondFile.id)!.arrayBuffer())).toEqual(secondBytes);
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarBefore);
+    expect(listPdfAnnotations(window.localStorage, null, outputFile.id)).toEqual([]);
+  });
+
+  it('does not change sources or annotations when local output storage fails', async () => {
+    const { sourceBytes, sourceFile, blobs } = await configureBoundPdfForCopy();
+    await openSyntheticPdf();
+    const sidecarBefore = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);
+    repository.saveFile = vi.fn(async () => { throw new Error('Synthetic local quota failure.'); });
+    Object.defineProperty(window, 'confirm', { configurable: true, value: () => true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate copy' }));
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Synthetic local quota failure'));
+    expect(repository.saveFile).toHaveBeenCalledOnce();
+    expect(new Uint8Array(await blobs.get(sourceFile.id)!.arrayBuffer())).toEqual(sourceBytes);
+    expect(window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY)).toBe(sidecarBefore);
+  });
+});

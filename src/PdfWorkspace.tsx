@@ -8,7 +8,7 @@ import {
   FileText, Files, Highlighter, LoaderCircle, MessageSquare, RotateCw, Search,
   Strikethrough, Trash2, Underline, Undo2, Upload, X,
 } from 'lucide-react';
-import { localDriveRepository } from './lib/driveStore';
+import { localDriveRepository, MAX_LOCAL_FILE_BYTES } from './lib/driveStore';
 import type { DriveFile, DriveRepository } from './lib/driveStore';
 import {
   createPdfAnnotation, deletePdfAnnotation, deletePdfAnnotations, listPdfAnnotations,
@@ -27,7 +27,10 @@ import { mapPdfSearchTextRangeToItems, measurePdfSearchHitRects } from './lib/pd
 import type { PdfSearchOverlayRect } from './lib/pdfSearchHighlights';
 import { pdfTextMarkToViewportLine } from './lib/pdfTextMarks';
 import { createPdfAnnotatedCopy, fingerprintPdfBytes } from './lib/pdfAnnotatedCopy';
-import { extractPdfPages, mergePdfFiles, parsePageRange, reorderPdfPages, rotatePdfPage } from './lib/pdfTools';
+import {
+  assertPdfMergeInputLimits, extractPdfPages, MAX_PDF_MERGE_INPUTS, MAX_PDF_MERGE_TOTAL_INPUT_BYTES,
+  MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles, parsePageRange, reorderPdfPages, rotatePdfPage,
+} from './lib/pdfTools';
 import './pdf.css';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -45,8 +48,10 @@ interface PageDimensions {
   viewport: PdfViewportLike;
   viewBox: readonly [number, number, number, number];
 }
+interface VerifiedPdfSnapshot { file: DriveFile; bytes: Uint8Array; fingerprint: string }
 interface PdfAnnotationHistoryEntry { scope: string; added: PdfAnnotation[]; removed: PdfAnnotation[] }
 const MAX_PDF_ANNOTATION_HISTORY = 50;
+const PDF_PAGE_COPY_WARNING = 'This creates a separate browser-local PDF copy. Digital signatures may no longer be valid, and forms, embedded PDF features, bookmarks, attachments, or metadata may not be preserved. The local Office annotation sidecar is not copied. Original files and sidecars remain unchanged; nothing is uploaded.';
 
 const isPdf = (file: DriveFile) => file.mimeType === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 const toArrayBuffer = (bytes: Uint8Array) => {
@@ -129,6 +134,12 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
       : unverifiedVisualAnnotationCount > 0
         ? `${unverifiedVisualAnnotationCount} older or unverified mark${unverifiedVisualAnnotationCount === 1 ? '' : 's'} must be recreated on this exact PDF before export.`
         : `${visualAnnotations.length} visual mark${visualAnnotations.length === 1 ? '' : 's'} ready. ${annotationCommentCount} comment${annotationCommentCount === 1 ? '' : 's'} will be excluded.`;
+  const pageCopyLimitMessage = !sourceFingerprint
+    ? 'Page-copy actions are disabled because this browser cannot verify the open PDF with a local SHA-256 fingerprint.'
+    : pdfDocument && pdfDocument.numPages > MAX_PDF_PAGE_OPERATION_PAGES
+      ? `Page-copy actions are limited to ${MAX_PDF_PAGE_OPERATION_PAGES} pages; this PDF has ${pdfDocument.numPages}.`
+      : '';
+  const pageCopyDisabled = busy || Boolean(pageCopyLimitMessage);
   const canUndoAnnotation = annotationHistory.at(-1)?.scope === annotationScope;
   const recordAnnotationHistory = (entry: Omit<PdfAnnotationHistoryEntry, 'scope'>) => {
     setAnnotationHistory((current) => [...current, { ...entry, scope: annotationScope }].slice(-MAX_PDF_ANNOTATION_HISTORY));
@@ -355,10 +366,34 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     void uploadFiles(selected);
   };
 
-  const readSelectedBytes = async () => {
-    if (!selectedFile) throw new Error('Choose a PDF file first.');
-    const result = await repository.readFile(selectedFile.id, workspaceId);
-    return new Uint8Array(await result.blob.arrayBuffer());
+  const readVerifiedPdfSnapshot = async (expectedFile: DriveFile, expectedFingerprint?: string): Promise<VerifiedPdfSnapshot> => {
+    const { file: storedFile, blob } = await repository.readFile(expectedFile.id, workspaceId);
+    const metadataMatches = storedFile.id === expectedFile.id
+      && storedFile.workspaceId === workspaceId
+      && expectedFile.workspaceId === workspaceId
+      && storedFile.name === expectedFile.name
+      && storedFile.mimeType === expectedFile.mimeType
+      && storedFile.size === expectedFile.size
+      && storedFile.createdAt === expectedFile.createdAt
+      && storedFile.updatedAt === expectedFile.updatedAt
+      && storedFile.deletedAt === null;
+    if (!metadataMatches) throw new Error('A selected local PDF changed or is no longer available; no copy was created. Refresh the file list and try again.');
+    if (!Number.isSafeInteger(storedFile.size) || storedFile.size < 1 || storedFile.size > MAX_LOCAL_FILE_BYTES || blob.size !== storedFile.size) {
+      throw new Error(`Each local PDF input must match its stored size and fit the ${formatBytes(MAX_LOCAL_FILE_BYTES)} limit; no copy was created.`);
+    }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (bytes.byteLength !== storedFile.size) throw new Error('A selected PDF changed while it was being read; no copy was created.');
+    let fingerprint: string;
+    try { fingerprint = await fingerprintPdfBytes(bytes); }
+    catch { throw new Error('This browser cannot verify local PDF bytes with SHA-256, so no page copy was created.'); }
+    if (expectedFingerprint && fingerprint !== expectedFingerprint) {
+      throw new Error('The selected PDF bytes no longer match the open document; no copy was created. Reopen the PDF and try again.');
+    }
+    return { file: storedFile, bytes, fingerprint };
+  };
+
+  const assertPdfSnapshotStillCurrent = async (snapshot: VerifiedPdfSnapshot) => {
+    await readVerifiedPdfSnapshot(snapshot.file, snapshot.fingerprint);
   };
 
   const exportAnnotationBackup = async () => {
@@ -507,25 +542,59 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     setNotice(message);
   };
 
-  const exportRotatedPage = async () => {
-    if (!selectedFile) return;
+  const confirmLocalPdfPageCopy = (description: string) => window.confirm(
+    `${description}\n\n${PDF_PAGE_COPY_WARNING}\n\nSingle-PDF operations are limited to ${MAX_PDF_PAGE_OPERATION_PAGES} pages and ${formatBytes(MAX_LOCAL_FILE_BYTES)} per input/output. Merges accept ${MAX_PDF_MERGE_INPUTS} PDFs, ${formatBytes(MAX_PDF_MERGE_TOTAL_INPUT_BYTES)} combined source bytes, and ${MAX_PDF_PAGE_OPERATION_PAGES} total pages.`,
+  );
+
+  const runSinglePdfPageCopy = async (
+    file: DriveFile,
+    expectedFingerprint: string,
+    description: string,
+    suffix: string,
+    transform: (source: Uint8Array) => Promise<Uint8Array>,
+    successMessage: string,
+  ) => {
+    if (!expectedFingerprint) {
+      setError('The open PDF could not be verified with a local SHA-256 fingerprint; no page copy was created.');
+      return;
+    }
+    if (!confirmLocalPdfPageCopy(description)) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const bytes = await rotatePdfPage(await readSelectedBytes(), currentPage, 90);
-      await savePdfCopy(outputName(selectedFile.name, `page-${currentPage}-rotated`), bytes, `Created a new copy with page ${currentPage} rotated.`);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not rotate this PDF page.'); }
+      const snapshot = await readVerifiedPdfSnapshot(file, expectedFingerprint);
+      const output = await transform(snapshot.bytes);
+      await assertPdfSnapshotStillCurrent(snapshot);
+      await savePdfCopy(outputName(file.name, suffix), output, successMessage);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create a local PDF page copy.'); }
     finally { setBusy(false); }
   };
 
-  const exportExtract = async () => {
-    if (!selectedFile || !pdfDocument) return;
-    setBusy(true); setError(''); setNotice('');
-    try {
-      const pages = parsePageRange(pageRange, pdfDocument.numPages);
-      const bytes = await extractPdfPages(await readSelectedBytes(), pages);
-      await savePdfCopy(outputName(selectedFile.name, `pages-${pages.join('-')}`), bytes, `Saved ${pages.length} selected page${pages.length === 1 ? '' : 's'} as a new PDF copy.`);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not extract those pages.'); }
-    finally { setBusy(false); }
+  const exportRotatedPage = () => {
+    const file = selectedFile;
+    const document = pdfDocument;
+    const page = currentPage;
+    const fingerprint = sourceFingerprint;
+    if (!file || !document) return;
+    void runSinglePdfPageCopy(
+      file, fingerprint, `Rotate page ${page} of “${file.name}” in a new copy?`, `page-${page}-rotated`,
+      (source) => rotatePdfPage(source, page, 90),
+      `Created a separate local copy with page ${page} rotated. The original PDF and its annotation sidecar were not changed.`,
+    );
+  };
+
+  const exportExtract = () => {
+    const file = selectedFile;
+    const document = pdfDocument;
+    const fingerprint = sourceFingerprint;
+    if (!file || !document) return;
+    let pages: number[];
+    try { pages = parsePageRange(pageRange, document.numPages); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not parse that page range.'); return; }
+    void runSinglePdfPageCopy(
+      file, fingerprint, `Extract ${pages.length} page${pages.length === 1 ? '' : 's'} from “${file.name}” in a new copy?`, `pages-${pages.join('-')}`,
+      (source) => extractPdfPages(source, pages),
+      `Saved ${pages.length} selected page${pages.length === 1 ? '' : 's'} as a separate local PDF copy. The original PDF and its annotation sidecar were not changed.`,
+    );
   };
 
   const movePageInOrder = (direction: -1 | 1) => {
@@ -538,26 +607,38 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   };
 
   const exportReordered = async () => {
-    if (!selectedFile || pageOrder.length < 2) return;
-    setBusy(true); setError(''); setNotice('');
-    try {
-      const bytes = await reorderPdfPages(await readSelectedBytes(), pageOrder);
-      await savePdfCopy(outputName(selectedFile.name, 'reordered'), bytes, 'Saved a reordered copy; the original PDF was not changed.');
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not reorder PDF pages.'); }
-    finally { setBusy(false); }
+    const file = selectedFile;
+    const document = pdfDocument;
+    const fingerprint = sourceFingerprint;
+    const order = [...pageOrder];
+    if (!file || !document || order.length < 2) return;
+    if (order.length === document.numPages && order.every((page, index) => page === index + 1)) {
+      setNotice('The page order is unchanged; no copy was created.');
+      return;
+    }
+    await runSinglePdfPageCopy(
+      file, fingerprint, `Save the selected ${order.length}-page order for “${file.name}” as a new PDF copy?`, 'reordered',
+      (source) => reorderPdfPages(source, order),
+      'Saved a separate reordered local copy. The original PDF and its annotation sidecar were not changed.',
+    );
   };
 
   const mergeSelected = async () => {
     const selected = files.filter((file) => mergeIds.includes(file.id));
-    if (selected.length < 2) { setError('Select at least two PDFs to merge.'); return; }
+    try { assertPdfMergeInputLimits(selected.map((file) => file.size)); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'The selected PDFs exceed the local merge limits.'); return; }
+    const selectedNames = selected.map((file) => `${file.name} (${formatBytes(file.size)})`).join(' + ');
+    if (!confirmLocalPdfPageCopy(`Merge these selected local PDFs into a new copy: ${selectedNames}?`)) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const sources = await Promise.all(selected.map(async (file) => {
-        const { blob } = await repository.readFile(file.id, workspaceId);
-        return new Uint8Array(await blob.arrayBuffer());
-      }));
-      const merged = await mergePdfFiles(sources);
-      await savePdfCopy(outputName(selected[0].name, 'merged'), merged, `Merged ${selected.length} PDFs into a new local copy.`);
+      const snapshots: VerifiedPdfSnapshot[] = [];
+      for (const file of selected) snapshots.push(await readVerifiedPdfSnapshot(file));
+      const merged = await mergePdfFiles(snapshots.map((snapshot) => snapshot.bytes));
+      for (const snapshot of snapshots) await assertPdfSnapshotStillCurrent(snapshot);
+      await savePdfCopy(
+        outputName(selected[0].name, 'merged'), merged,
+        `Merged ${selected.length} local PDFs into a separate copy. Original files and their annotation sidecars were not changed.`,
+      );
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not merge the selected PDFs.'); }
     finally { setBusy(false); }
   };
@@ -736,7 +817,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
       <div className="pdf-workspace-layout">
         <aside className="pdf-library glass-card" aria-label="PDF files in this browser"><div className="pdf-library-heading"><div><span className="eyebrow">MY PDFs</span><strong>{files.length} local {files.length === 1 ? 'file' : 'files'}</strong></div><button className="icon-button" aria-label="Add a PDF" onClick={() => inputRef.current?.click()}><FilePlus2 size={16} /></button></div>
           {listLoading ? <div className="pdf-library-empty" role="status">Reading local files…</div> : files.length ? <div className="pdf-library-list">{files.map((file) => <article key={file.id} className={`pdf-library-item ${selectedFile?.id === file.id ? 'pdf-library-item-active' : ''}`}><button className="pdf-library-open" onClick={() => selectFile(file.id)} disabled={busy}><span className="pdf-library-file-icon"><FileText size={17} /></span><span><strong title={file.name}>{file.name}</strong><small>{formatBytes(file.size)} · PDF</small></span></button><label className="pdf-merge-checkbox"><input type="checkbox" checked={mergeIds.includes(file.id)} onChange={() => toggleMerge(file.id)} aria-label={`Select ${file.name} for merge`} title="Select for merge" disabled={busy} /></label></article>)}</div> : <div className="pdf-library-empty"><FileText size={22} /><p>No PDFs saved in this browser yet.</p><button className="button-tertiary" onClick={() => inputRef.current?.click()}><Upload size={14} /> Add a PDF</button></div>}
-          {files.length > 1 && <div className="pdf-merge-action"><button className="button-secondary" onClick={() => void mergeSelected()} disabled={busy}><Files size={14} /> Merge selected ({mergeIds.length})</button><small>Creates a new PDF copy in Drive.</small></div>}
+          {files.length > 1 && <div className="pdf-merge-action"><button className="button-secondary" onClick={() => void mergeSelected()} disabled={busy}><Files size={14} /> Merge selected ({mergeIds.length})</button><small>Creates a separate local copy: up to {MAX_PDF_MERGE_INPUTS} PDFs, {formatBytes(MAX_PDF_MERGE_TOTAL_INPUT_BYTES)} combined input, and {MAX_PDF_PAGE_OPERATION_PAGES} pages. Sources and sidecars stay unchanged.</small></div>}
         </aside>
 
         <section className="pdf-viewer-panel glass-card" aria-label="PDF viewer">
@@ -773,10 +854,11 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
               <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => changeSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button>{searchTerm && <button className="button-tertiary pdf-search-clear" onClick={clearSearch} aria-label="Clear PDF search" title="Clear search"><X size={14} /> Clear</button>}</div>
               {(searchHits.length > 0 || searchTruncated) && <div className="pdf-search-results" aria-label="PDF search results"><div className="pdf-search-heading"><strong>{searchHits.length} match{searchHits.length === 1 ? '' : 'es'}{searchTruncated ? ' (first 2,000 shown)' : ''}</strong>{searchHits.length > 0 && <div className="pdf-search-navigation"><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex - 1)} aria-label="Previous search match" title="Previous match"><ArrowLeft size={14} /></button><span aria-live="polite" aria-atomic="true">{currentSearchIndex + 1} / {searchHits.length} · Page {searchHits[currentSearchIndex]?.page ?? currentPage}</span><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex + 1)} aria-label="Next search match" title="Next match"><ArrowRight size={14} /></button></div>}</div>{searchHits.map((hit, index) => <button key={`${hit.page}-${hit.offset}`} className={index === currentSearchIndex ? 'pdf-search-result-active' : ''} aria-current={index === currentSearchIndex ? 'true' : undefined} onClick={() => navigateToSearchHit(index)}><span>Match {index + 1} · Page {hit.page}</span><small>{hit.excerpt}</small></button>)}{searchTruncated && <small className="pdf-search-truncated">Search stopped at 2,000 matches.</small>}</div>}
               <section className="pdf-edit-tools"><div className="pdf-tools-heading"><div><span className="eyebrow">COPY-BASED PAGE TOOLS</span><h2>Create a new PDF copy</h2></div><span className="pdf-original-badge">Original stays unchanged</span></div>
+                <p className="pdf-page-copy-note" role="note">Rotate, extract, reorder, and merge re-read selected files and verify their bytes before saving a separate local copy. Each source and output is limited to {formatBytes(MAX_LOCAL_FILE_BYTES)}; page copies are limited to {MAX_PDF_PAGE_OPERATION_PAGES} pages. Merges accept up to {MAX_PDF_MERGE_INPUTS} PDFs, {formatBytes(MAX_PDF_MERGE_TOTAL_INPUT_BYTES)} combined source bytes, and {MAX_PDF_PAGE_OPERATION_PAGES} total pages. Digital signatures and some embedded PDF features or metadata may not be preserved. For these four actions, Office sidecar annotations and comments are not copied; the separate “Flatten local marks” action below can include only verified visual marks, while comments and note text stay excluded. Source files and sidecars stay unchanged; nothing is uploaded.{pageCopyLimitMessage ? ` ${pageCopyLimitMessage}` : ''}</p>
                 <div className="pdf-tool-card pdf-annotated-copy-card"><div><strong>Flatten local marks into a separate copy</strong><small>This writes verified highlights, underlines, and strike-throughs into page content. They will not be editable PDF annotation objects; comments and note text are excluded.</small><small className="pdf-annotated-copy-status" role="status">{annotatedCopyStatus}</small></div><button className="button-secondary" onClick={() => void exportAnnotatedCopy()} disabled={annotatedCopyDisabled}>{busy ? 'Working…' : 'Create annotated copy'}</button><small className="pdf-annotated-copy-warning">This browser-only operation does not change the source. It may not preserve digital signatures or advanced form behavior.</small></div>
-                <div className="pdf-tool-card"><div><strong>Rotate current page</strong><small>Apply a 90° rotation to page {currentPage} in a saved copy.</small></div><button className="button-tertiary" onClick={() => void exportRotatedPage()} disabled={busy}><RotateCw size={14} /> Rotate copy</button></div>
-                <div className="pdf-tool-card pdf-tool-range"><div><strong>Extract pages</strong><small>Enter individual page numbers or inclusive ranges, such as 1-3,5.</small></div><div className="pdf-tool-controls"><input aria-label="Pages to extract" value={pageRange} onChange={(event) => setPageRange(event.target.value)} /><button className="button-tertiary" onClick={() => void exportExtract()} disabled={busy}>Extract copy</button></div></div>
-                <div className="pdf-tool-card pdf-tool-range"><div><strong>Reorder pages</strong><small>Move the current page in the order list, then save the reordered copy.</small></div><div className="pdf-tool-controls"><button className="button-tertiary" onClick={() => movePageInOrder(-1)} disabled={busy || pageOrder.indexOf(currentPage) <= 0}>Move earlier</button><button className="button-tertiary" onClick={() => movePageInOrder(1)} disabled={busy || pageOrder.indexOf(currentPage) < 0 || pageOrder.indexOf(currentPage) >= pageOrder.length - 1}>Move later</button><button className="button-secondary" onClick={() => void exportReordered()} disabled={busy || pageOrder.length < 2}>Save order</button></div></div>
+                <div className="pdf-tool-card"><div><strong>Rotate current page</strong><small>Apply a 90° rotation to page {currentPage} in a saved copy.</small></div><button className="button-tertiary" onClick={exportRotatedPage} disabled={pageCopyDisabled}><RotateCw size={14} /> Rotate copy</button></div>
+                <div className="pdf-tool-card pdf-tool-range"><div><strong>Extract pages</strong><small>Enter individual page numbers or inclusive ranges, such as 1-3,5.</small></div><div className="pdf-tool-controls"><input aria-label="Pages to extract" value={pageRange} onChange={(event) => setPageRange(event.target.value)} /><button className="button-tertiary" onClick={exportExtract} disabled={pageCopyDisabled}>Extract copy</button></div></div>
+                <div className="pdf-tool-card pdf-tool-range"><div><strong>Reorder pages</strong><small>Move the current page in the order list, then save the reordered copy.</small></div><div className="pdf-tool-controls"><button className="button-tertiary" onClick={() => movePageInOrder(-1)} disabled={busy || pageOrder.indexOf(currentPage) <= 0}>Move earlier</button><button className="button-tertiary" onClick={() => movePageInOrder(1)} disabled={busy || pageOrder.indexOf(currentPage) < 0 || pageOrder.indexOf(currentPage) >= pageOrder.length - 1}>Move later</button><button className="button-secondary" onClick={() => void exportReordered()} disabled={pageCopyDisabled || pageOrder.length < 2}>Save order</button></div></div>
               </section>
             </>}
           </> : <div className="pdf-viewer-empty"><div className="pdf-empty-icon"><BookOpenText size={28} /></div><h2>Open a local PDF</h2><p>Choose a PDF already in this browser’s Drive, or add a file to get started.</p><button className="button-primary" onClick={() => inputRef.current?.click()}><Upload size={15} /> Add PDF</button></div>}
