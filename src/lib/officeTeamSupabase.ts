@@ -83,7 +83,7 @@ export function getOfficeTeamClient(config: OfficeTeamConfigState): SupabaseClie
       storageKey: 'cocce-office-auth-session',
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: true,
       flowType: 'pkce',
     },
   });

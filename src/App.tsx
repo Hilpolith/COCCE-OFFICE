@@ -21,6 +21,7 @@ import SlidesWorkspace from './SlidesWorkspace';
 import { slidesCloudFilesEnabled } from './lib/slidesCloudFeature';
 import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './lib/documentEditor';
 import VaultWorkspace from './VaultWorkspace';
+import OfficeAccountControl from './OfficeAccountControl';
 import { readSurfaceStyle, writeSurfaceStyle } from './lib/appearancePreferences';
 import type { SurfaceStyle } from './lib/appearancePreferences';
 
@@ -363,6 +364,7 @@ function App() {
           <div className="topbar-actions">
             <label className="search-box"><Search size={16} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-keyshortcuts="Control+k Meta+k" aria-label={page === 'team' ? 'Search local planner items' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
             <span className="local-status"><span className="status-dot" /> Office workspace</span>
+            <OfficeAccountControl />
             <button className="icon-button help-button" title="Workspace information" aria-label="Workspace information" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
           </div>
         </header>
