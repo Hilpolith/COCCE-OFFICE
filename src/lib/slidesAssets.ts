@@ -26,6 +26,15 @@ export type SlideImageMetadata = {
   height: number;
   createdAt: string;
 };
+export type SlideImageCloudRestoreInput = {
+  sourceId: string;
+  mimeType: SlideImageMimeType;
+  size: number;
+  width: number;
+  height: number;
+  createdAt: string;
+  bytes: Uint8Array;
+};
 
 type StoredSlideImage = SlideImageMetadata;
 type StoredSlideImageBlob = { id: string; blob: Blob };
@@ -374,9 +383,107 @@ export class BrowserSlidesAssetRepository {
   async listDeckImages(deckId: string): Promise<SlideImageMetadata[]> {
     return withStores('readonly', (stores, complete, fail) => {
       const [store] = stores;
-      const request = store.index('deckId').getAll(deckId);
+      const request = store.index('deckId').getAll(deckId, MAX_RETAINED_SLIDE_IMAGES_PER_DECK + 1);
       request.onsuccess = () => complete((request.result as StoredSlideImage[]).map(metadata));
       request.onerror = () => fail(request.error ?? new Error('Could not list local slide images.'));
+    }, this.factory);
+  }
+
+  async restoreCloudImages(
+    deckId: string,
+    images: readonly SlideImageCloudRestoreInput[],
+    decoder?: SlideImageDecoder,
+    idFactory: () => string = newId,
+  ): Promise<Map<string, string>> {
+    if (!deckId || deckId.length > 128) throw new Error('A valid new presentation ID is required for image restore.');
+    if (!Array.isArray(images) || images.length > MAX_RETAINED_SLIDE_IMAGES_PER_DECK) throw new Error('The cloud copy contains too many retained local images.');
+    if (!images.length) return new Map();
+
+    const sourceIds = new Set<string>();
+    const destinationIds = new Set<string>();
+    let incomingBytes = 0;
+    const incoming = await Promise.all(images.map(async (image) => {
+      if (!image || typeof image.sourceId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(image.sourceId)
+        || sourceIds.has(image.sourceId)) throw new Error('The cloud copy contains invalid or duplicate image IDs.');
+      sourceIds.add(image.sourceId);
+      if (!SLIDE_IMAGE_MIME_TYPES.includes(image.mimeType) || !Number.isSafeInteger(image.size)
+        || image.size < 1 || image.size > MAX_SLIDE_IMAGE_BYTES || !(image.bytes instanceof Uint8Array)
+        || image.bytes.byteLength !== image.size || !Number.isFinite(Date.parse(image.createdAt)))
+        throw new Error('The cloud copy contains invalid image metadata.');
+      const blob = new Blob([image.bytes], { type: image.mimeType });
+      const checked = await validateLocalSlideImage(blob, decoder);
+      if (checked.size !== image.size || checked.mimeType !== image.mimeType || checked.width !== image.width || checked.height !== image.height)
+        throw new Error('A cloud image does not match its validated metadata.');
+      incomingBytes += checked.size;
+      if (incomingBytes > MAX_RETAINED_SLIDE_IMAGE_BYTES_PER_DECK) throw new Error('The cloud copy exceeds the 24 MB retained image limit for one presentation.');
+      const id = idFactory();
+      if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id) || id === image.sourceId || destinationIds.has(id))
+        throw new Error('Could not generate fresh, unique local image IDs for restore.');
+      destinationIds.add(id);
+      const record: StoredSlideImage = {
+        id,
+        deckId,
+        mimeType: image.mimeType,
+        size: image.size,
+        width: image.width,
+        height: image.height,
+        createdAt: image.createdAt,
+      };
+      return { sourceId: image.sourceId, record, blob: new Blob([image.bytes], { type: image.mimeType }) };
+    }));
+    const restoredIds = new Map(incoming.map(({ sourceId, record }) => [sourceId, record.id]));
+
+    return withStores('readwrite', (stores, complete, fail) => {
+      const [store, blobStore] = stores;
+      const reject = (error: unknown) => {
+        const cause = error instanceof Error ? error : new Error('Could not restore local presentation images.');
+        fail(cause.name === 'QuotaExceededError'
+          ? new Error('The browser could not restore these images because local slide-image storage is full. Existing presentations are unchanged.')
+          : cause);
+      };
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const records = request.result as StoredSlideImage[];
+        if (records.some((record) => !Number.isSafeInteger(record.size) || record.size < 0)) {
+          reject(new Error('Local image metadata is invalid; no images were restored.'));
+          return;
+        }
+        if (records.some((record) => record.deckId === deckId)) {
+          reject(new Error('A local presentation with this ID already has image assets.'));
+          return;
+        }
+        if (records.some((record) => destinationIds.has(record.id))) {
+          reject(new Error('A generated image ID already exists locally; retry the restore.'));
+          return;
+        }
+        if (records.length + incoming.length > MAX_RETAINED_SLIDE_IMAGES_TOTAL) {
+          reject(new Error(`COCCE Office has reached its ${MAX_RETAINED_SLIDE_IMAGES_TOTAL}-image local storage limit. Delete an unused presentation to free image assets.`));
+          return;
+        }
+        const totalBytes = records.reduce((sum, record) => sum + record.size, 0);
+        if (totalBytes + incomingBytes > MAX_RETAINED_SLIDE_IMAGE_BYTES_TOTAL) {
+          reject(new Error('COCCE Office local slide-image storage is full. Delete an unused presentation to free image assets.'));
+          return;
+        }
+        let remaining = incoming.length * 2;
+        const added = () => {
+          remaining -= 1;
+          if (remaining === 0) complete(restoredIds);
+        };
+        try {
+          for (const { record, blob } of incoming) {
+            const metadataRequest = store.add(record);
+            const blobRequest = blobStore.add({ id: record.id, blob } satisfies StoredSlideImageBlob);
+            metadataRequest.onsuccess = added;
+            blobRequest.onsuccess = added;
+            metadataRequest.onerror = () => reject(metadataRequest.error ?? new Error('Could not save restored image metadata.'));
+            blobRequest.onerror = () => reject(blobRequest.error ?? new Error('Could not save restored image bytes.'));
+          }
+        } catch (error) {
+          reject(error);
+        }
+      };
+      request.onerror = () => reject(request.error ?? new Error('Could not check local image storage before restore.'));
     }, this.factory);
   }
 

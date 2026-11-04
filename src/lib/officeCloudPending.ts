@@ -36,6 +36,8 @@ const validDate = (value: unknown) =>
 function valid(value: unknown): value is PendingCloudCopy {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const r = value as Record<string, unknown>;
+  const slidesCopy = typeof r.displayName === 'string' && r.displayName.endsWith('.cocce-slides.bin');
+  const maxCopyBytes = slidesCopy ? 25 * 1024 * 1024 : 3 * 1024 * 1024;
   return (
     Object.keys(r).every((key) => fields.has(key)) &&
     [r.actorId, r.workspaceId, r.idempotencyKey].every(
@@ -45,13 +47,14 @@ function valid(value: unknown): value is PendingCloudCopy {
     /^[A-Za-z0-9_-]{1,128}$/.test(r.documentId) &&
     typeof r.displayName === 'string' &&
     (r.displayName.endsWith('.cocce-docs.json') ||
-      r.displayName.endsWith('.cocce-sheets.json')) &&
+      r.displayName.endsWith('.cocce-sheets.json') ||
+      r.displayName.endsWith('.cocce-slides.bin')) &&
     r.displayName.length <= 255 &&
     !/[\x00-\x1f\x7f/\\:<>"|?*]/.test(r.displayName) &&
     typeof r.sizeBytes === 'number' &&
     Number.isSafeInteger(r.sizeBytes) &&
     r.sizeBytes > 0 &&
-    r.sizeBytes <= 3 * 1024 * 1024 &&
+    r.sizeBytes <= maxCopyBytes &&
     typeof r.sha256Hex === 'string' &&
     /^[0-9a-f]{64}$/.test(r.sha256Hex) &&
     validDate(r.createdAt) &&

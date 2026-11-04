@@ -9,6 +9,10 @@ import {
   createSlidesHistory, hasSameEditableDeckContent, recordSlidesHistory, redoSlidesHistory, undoSlidesHistory,
 } from './lib/slidesHistory';
 import type { SlidesHistory, SlidesHistorySnapshot } from './lib/slidesHistory';
+import SlidesCloudPanel from './SlidesCloudPanel';
+import { createRestoredSlidesDeck } from './lib/slidesCloudSnapshot';
+import { slidesCloudFilesEnabled } from './lib/slidesCloudFeature';
+import type { SlidesCloudSnapshot } from './lib/slidesCloudSnapshot';
 import {
   localSlidesAssetRepository, MAX_ACTIVE_SLIDE_IMAGES, MAX_ACTIVE_SLIDE_IMAGE_BYTES, MAX_SLIDE_IMAGE_BYTES,
 } from './lib/slidesAssets';
@@ -19,7 +23,7 @@ import {
 import type { PresentationDeck, Slide, SlideLayout, SlidesState, SlidesTheme } from './lib/slidesStore';
 import './slides.css';
 
-type Props = { workspaceId: string | null };
+type Props = { workspaceId: string | null; onGoToTeam?: () => void };
 
 const themeNames: Record<SlidesTheme, string> = { violet: 'Violet glass', ocean: 'Ocean glass', ember: 'Ember glass' };
 const layoutNames: Record<SlideLayout, string> = {
@@ -54,7 +58,7 @@ function clearTabRecovery() {
   try { window.sessionStorage.removeItem(RECOVERY_KEY); } catch { /* Recovery cleanup is best-effort. */ }
 }
 
-export default function SlidesWorkspace({ workspaceId }: Props) {
+export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefined }: Props) {
   const [loadResult, setLoadResult] = useState<LoadedSlides>(readSlidesForTab);
   const state = loadResult.state;
   const [activeDeckId, setActiveDeckId] = useState<string | null>(null);
@@ -63,6 +67,8 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
   const [unsaved, setUnsaved] = useState(loadResult.recovered);
   const [presenting, setPresenting] = useState(false);
   const [presenterNotesVisible, setPresenterNotesVisible] = useState(false);
+  const [slidesCloudOpen, setSlidesCloudOpen] = useState(false);
+  const slidesCloudReady = slidesCloudFilesEnabled(import.meta.env);
   const [feedback, setFeedback] = useState(loadResult.recovered ? 'Recovered unsaved edits from this tab. Retry save to keep them in local storage.' : '');
   const [history, setHistory] = useState<SlidesHistory>(createSlidesHistory);
   const [historyAnnouncement, setHistoryAnnouncement] = useState('');
@@ -74,6 +80,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
   const imageImportGenerationRef = useRef(new Map<string, number>());
   const selectionRevisionRef = useRef(0);
   const [assetCleanupFailed, setAssetCleanupFailed] = useState(false);
+  const currentWorkspaceIdRef = useRef(workspaceId);
 
   const decks = useMemo(() => state?.decks.filter((deck) => deck.workspaceId === workspaceId) ?? [], [state, workspaceId]);
   const activeDeck = decks.find((deck) => deck.id === activeDeckId) ?? null;
@@ -97,7 +104,8 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
     }
     currentStateRef.current = state;
     currentSelectionRef.current = nextSelection;
-  }, [state, activeDeck?.id, activeSlide?.id]);
+    currentWorkspaceIdRef.current = workspaceId;
+  }, [state, activeDeck?.id, activeSlide?.id, workspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -309,6 +317,60 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
     if (pendingDeckAssetCleanupRef.current.size) await retryPendingAssetCleanup();
   };
 
+  const restoreCloudCopy = async (snapshot: SlidesCloudSnapshot) => {
+    if (unsaved || !currentStateRef.current) throw new Error('Save local Slides changes before restoring a cloud copy.');
+    const originalState = currentStateRef.current;
+    const destinationWorkspaceId = workspaceId;
+    const usedIds = new Set(originalState.decks.flatMap((deck) => [deck.id, ...deck.slides.map((slide) => slide.id), ...deck.slides.flatMap((slide) => slide.imageAssetId ? [slide.imageAssetId] : [])]));
+    const makeFreshId = () => {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const id = globalThis.crypto?.randomUUID?.() ?? `slides-cloud-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+        if (!usedIds.has(id)) { usedIds.add(id); return id; }
+      }
+      throw new Error('Could not generate fresh local IDs for this presentation.');
+    };
+    const newDeckId = makeFreshId();
+    let imagesInstalled = false;
+    try {
+      const assetIdMap = await localSlidesAssetRepository.restoreCloudImages(newDeckId, snapshot.images.map((image) => ({
+        sourceId: image.id,
+        mimeType: image.mimeType,
+        size: image.size,
+        width: image.width,
+        height: image.height,
+        createdAt: image.createdAt,
+        bytes: image.bytes,
+      })));
+      imagesInstalled = snapshot.images.length > 0;
+      if (currentStateRef.current !== originalState || currentWorkspaceIdRef.current !== destinationWorkspaceId || unsaved)
+        throw new Error('The active local workspace or presentation changed during restore. No presentation was added.');
+      const restoredDeck = createRestoredSlidesDeck(snapshot, destinationWorkspaceId, newDeckId, assetIdMap, makeFreshId);
+      const nextState = { ...originalState, decks: [restoredDeck, ...originalState.decks] };
+      writeSlidesState(window.localStorage, nextState);
+      clearTabRecovery();
+      currentStateRef.current = nextState;
+      setLoadResult({ state: nextState, error: null, recovered: false });
+      setUnsaved(false);
+      setHistory(createSlidesHistory());
+      setHistoryAnnouncement('');
+      setActiveSlideIndex(0);
+      selectDeck(restoredDeck.id);
+      setSlidesCloudOpen(false);
+      setFeedback('Cloud copy restored as a new local presentation with its image files.');
+    } catch (cause) {
+      if (imagesInstalled) {
+        try {
+          await localSlidesAssetRepository.deleteDeckImages(newDeckId);
+        } catch {
+          pendingDeckAssetCleanupRef.current.add(newDeckId);
+          setAssetCleanupFailed(true);
+          throw new Error('Restore was not added to local presentations, but its temporary image files could not yet be removed. Retry image cleanup.');
+        }
+      }
+      throw cause;
+    }
+  };
+
   const downloadJson = (deck: PresentationDeck) => {
     const imageCount = deck.slides.filter((slide) => Boolean(slide.imageAssetId)).length;
     if (imageCount > 0 && !window.confirm(`This JSON transfer will omit ${imageCount} local image${imageCount === 1 ? '' : 's'}; it includes slide text, layouts, notes, and image descriptions only. Image files remain in this browser. Continue?`)) return;
@@ -474,16 +536,16 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
     <div className="page slides-page" onKeyDown={handleHistoryShortcut}>
       <div className="slides-page-heading">
         <div>
-          <span className="eyebrow">COCCE SLIDES · LOCAL MODE</span>
+          <span className="eyebrow">{slidesCloudReady ? 'COCCE SLIDES · LOCAL-FIRST' : 'COCCE SLIDES · LOCAL MODE'}</span>
           <h1>{activeDeck ? 'Edit presentation' : 'Presentations'}</h1>
-          <p className="page-lede">Create and edit simple presentations saved in this browser. PPTX, cloud sync, and co-editing are not connected.</p>
+          <p className="page-lede">{slidesCloudReady ? 'Create and edit presentations saved in this browser. Manual cloud copies are optional; PPTX, background sync, and co-editing are not connected.' : 'Create and edit simple presentations saved in this browser. PPTX, cloud copies, and co-editing are not connected in this environment.'}</p>
         </div>
         <div className="slides-heading-actions">
           {activeDeck ? <button className="button-secondary" onClick={() => { selectDeck(null); setActiveSlideIndex(0); setHistoryAnnouncement(''); }}><ChevronLeft size={16} /> All presentations</button> : <button className="button-primary" onClick={beginDeck}><Plus size={17} /> New presentation</button>}
         </div>
       </div>
 
-      <div className="slides-local-note"><LockKeyhole size={14} /><span>Slides are saved in this browser, scoped to <strong>{workspaceId ? 'this local workspace' : 'Personal space'}</strong>. Image files use local IndexedDB; JSON transfer omits them after confirmation.</span></div>
+      <div className="slides-local-note"><LockKeyhole size={14} /><span>Slides are saved in this browser, scoped to <strong>{workspaceId ? 'this local workspace' : 'Personal space'}</strong>. Image files use local IndexedDB; {slidesCloudReady ? 'a confirmed cloud copy includes the full presentation and all retained image files. No background sync occurs.' : 'JSON transfer omits local images after confirmation.'}</span></div>
       {unsaved && <div className="slides-unsaved" role="alert"><span>{feedback}</span><button className="button-tertiary" onClick={retrySave}>Retry save</button></div>}
       {assetCleanupFailed && <div className="slides-unsaved" role="alert"><span>The presentation is deleted, but its local image files still need cleanup.</span><button className="button-tertiary" onClick={() => { void retryPendingAssetCleanup(); }}>Retry image cleanup</button></div>}
 
@@ -493,6 +555,7 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
           <div className="slides-library-actions">
             <input ref={inputRef} className="visually-hidden-input" type="file" accept="application/json,.json" onChange={importFile} aria-label="Choose a presentation JSON file" />
             <button className="button-secondary" onClick={() => inputRef.current?.click()}><FileUp size={15} /> Import JSON</button>
+            {slidesCloudReady && <button className="button-secondary" aria-expanded={slidesCloudOpen} onClick={() => setSlidesCloudOpen((open) => !open)}>{slidesCloudOpen ? 'Hide cloud copies' : 'Cloud copies'}</button>}
             {decks.length > 0 && <button className="button-primary" onClick={beginDeck}><Plus size={16} /> New presentation</button>}
           </div>
         </div>
@@ -502,11 +565,14 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
         </button>)}</div> : <div className="slides-empty glass-card"><div className="slides-empty-art"><Presentation size={28} /><span><i /><i /><i /></span></div><h2>Your first presentation starts here</h2><p>Make a small deck, edit each slide, then present it or print/save it as a PDF from your browser.</p><div className="slides-empty-actions"><button className="button-primary" onClick={beginDeck}><Plus size={16} /> Create a presentation</button><button className="button-secondary" onClick={() => inputRef.current?.click()}><FileUp size={15} /> Import a JSON deck</button></div></div>}
       </section>}
 
+      {!activeDeck && slidesCloudReady && slidesCloudOpen && <SlidesCloudPanel deck={null} hasUnsavedChanges={unsaved} onRestore={restoreCloudCopy} onGoToTeam={onGoToTeam} />}
+
       {activeDeck && activeSlide && <>
         <div className="slides-editor-toolbar">
           <label className="slides-deck-name"><span className="eyebrow">PRESENTATION TITLE</span><input aria-label="Presentation title" value={activeDeck.title} maxLength={300} onChange={(event) => patchDeck({ title: event.target.value })} /></label>
           <div className="slides-toolbar-actions">
             <label className="slides-theme-picker"><span className="eyebrow">THEME</span><select aria-label="Slide theme" value={activeDeck.theme} onChange={(event) => patchDeck({ theme: event.target.value as SlidesTheme })}>{(Object.keys(themeNames) as SlidesTheme[]).map((theme) => <option key={theme} value={theme}>{themeNames[theme]}</option>)}</select></label>
+            {slidesCloudReady && <button className="button-secondary small-button" aria-expanded={slidesCloudOpen} onClick={() => setSlidesCloudOpen((open) => !open)}>{slidesCloudOpen ? 'Hide cloud copies' : 'Cloud copies'}</button>}
             <div className="slides-history-actions" role="group" aria-label="Edit history for this presentation, up to 50 changes in this session">
               <button type="button" className="button-secondary" aria-label="Undo" aria-keyshortcuts="Control+Z Meta+Z" title="Undo last Slides edit (Ctrl/Cmd+Z)" disabled={!canUndo} onClick={undoEdit}><Undo2 size={15} /><span>Undo</span></button>
               <button type="button" className="button-secondary" aria-label="Redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Redo last Slides edit (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)" disabled={!canRedo} onClick={redoEdit}><Redo2 size={15} /><span>Redo</span></button>
@@ -518,6 +584,8 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
             <button className="icon-button danger-icon" title="Delete presentation" aria-label="Delete presentation" onClick={deletePresentation}><Trash2 size={16} /></button>
           </div>
         </div>
+
+        {slidesCloudReady && slidesCloudOpen && <SlidesCloudPanel deck={activeDeck} hasUnsavedChanges={unsaved} onRestore={restoreCloudCopy} onGoToTeam={onGoToTeam} />}
 
         <div className="slides-editor-layout">
           <aside className="slides-rail glass-card" aria-label="Slide list">
@@ -539,13 +607,13 @@ export default function SlidesWorkspace({ workspaceId }: Props) {
               <div className="slides-image-tools">
                 <div className="slides-image-actions"><button type="button" className="button-secondary" onClick={() => imageInputRef.current?.click()}><ImagePlus size={15} /> {activeSlide.imageAssetId ? 'Replace local image' : 'Add local image'}</button>{activeSlide.imageAssetId && <button type="button" className="button-tertiary" onClick={removeLocalImage}>Remove from slide</button>}</div>
                 <label><span>Image description (alt text)</span><input aria-label="Image description" value={activeSlide.imageAltText ?? ''} maxLength={500} onChange={(event) => patchSlide({ imageAltText: event.target.value })} placeholder="Describe the image, or leave blank if decorative" /></label>
-                <small>PNG, JPEG, or WebP · up to 2 MB per image · kept in this browser. Removing from a slide is undoable; deleting the presentation clears its image files.</small>
+                <small>PNG, JPEG, or WebP · up to 2 MB per image · kept in this browser unless you confirm a cloud copy. Removing from a slide is undoable; deleting the presentation clears its local image files.</small>
               </div>
-              <label className="slides-notes-field"><span>Speaker notes <small>Only you can see these in this local deck.</small></span><textarea aria-label="Speaker notes" value={activeSlide.notes} maxLength={12_000} onChange={(event) => patchSlide({ notes: event.target.value })} placeholder="Add reminders for your talk" rows={3} /></label>
+              <label className="slides-notes-field"><span>Speaker notes <small>Stored in this local deck. A confirmed cloud copy shares them with workspace members.</small></span><textarea aria-label="Speaker notes" value={activeSlide.notes} maxLength={12_000} onChange={(event) => patchSlide({ notes: event.target.value })} placeholder="Add reminders for your talk" rows={3} /></label>
             </div>
           </section>
         </div>
-        <div className="slides-editor-footer"><span><Check size={14} />{unsaved ? 'Unsaved · kept in this tab' : 'Saved in this browser'}</span><span>{feedback && !unsaved ? feedback : `${activeDeck.slides.length} slide${activeDeck.slides.length === 1 ? '' : 's'} · JSON export available`}</span><span className="slides-history-note">Undo/redo: latest 50 edits for this presentation · this session only</span></div>
+        <div className="slides-editor-footer"><span><Check size={14} />{unsaved ? 'Unsaved · kept in this tab' : 'Saved in this browser'}</span><span>{feedback && !unsaved ? feedback : `${activeDeck.slides.length} slide${activeDeck.slides.length === 1 ? '' : 's'} · JSON export${slidesCloudReady ? ' and explicit cloud copy' : ''} available`}</span><span className="slides-history-note">Undo/redo: latest 50 edits for this presentation · this session only</span></div>
         <div className="slide-print-stack" aria-hidden="true">{activeDeck.slides.map((slide, index) => <div className={`print-slide theme-${activeDeck.theme} slide-layout-${slide.layout} ${slide.imageAssetId ? 'has-image' : ''}`} key={slide.id}><div className="print-slide-content"><span className="eyebrow">{activeDeck.title || 'Untitled presentation'}</span><h1>{slide.title || 'Untitled slide'}</h1><SlideBody body={slide.body} cover={index === 0} layout={slide.layout} /></div>{slide.imageAssetId && imageUrls[slide.imageAssetId] && <img className="print-slide-image" src={imageUrls[slide.imageAssetId]} alt={slide.imageAltText ?? ''} />}{slide.imageAssetId && missingImageIds.includes(slide.imageAssetId) && <span className="print-image-missing">Local image unavailable</span>}<small>{index + 1}</small></div>)}</div>
       </>}
 

@@ -9,13 +9,16 @@ import {
   validateLocalSlideImage,
 } from './slidesAssets';
 
-function png(width = 8, height = 6): Blob {
+function pngBytes(width = 8, height = 6): Uint8Array {
   const bytes = new Uint8Array(33);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   bytes.set([0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52], 8);
   new DataView(bytes.buffer).setUint32(16, width, false);
   new DataView(bytes.buffer).setUint32(20, height, false);
-  return new Blob([bytes], { type: 'image/png' });
+  return bytes;
+}
+function png(width = 8, height = 6): Blob {
+  return new Blob([pngBytes(width, height).buffer as ArrayBuffer], { type: 'image/png' });
 }
 
 function jpeg(width = 8, height = 6): Blob {
@@ -104,6 +107,50 @@ describe('local Slides image safety and persistence', () => {
     expect(await repo.deleteDeckImages('deck-a')).toBe(1);
     expect(await repo.listDeckImages('deck-a')).toEqual([]);
     expect(await repo.listDeckImages('deck-b')).toEqual([other]);
+  });
+
+  it('restores cloud images under fresh IDs while preserving their exact bytes and the source files', async () => {
+    const repo = repository();
+    const source = await repo.saveImage(png(), 'source-deck', decoder);
+    const sourceBytes = pngBytes();
+    const idMap = await repo.restoreCloudImages('restored-deck', [{
+      sourceId: source.id,
+      mimeType: source.mimeType,
+      size: source.size,
+      width: source.width,
+      height: source.height,
+      createdAt: source.createdAt,
+      bytes: sourceBytes,
+    }], decoder, () => 'restored-image-id');
+
+    expect(idMap.get(source.id)).toBe('restored-image-id');
+    expect(await repo.listDeckImages('source-deck')).toEqual([source]);
+    const restored = await repo.readImage('restored-image-id', 'restored-deck');
+    expect(restored.metadata).toMatchObject({
+      id: 'restored-image-id', deckId: 'restored-deck', mimeType: source.mimeType,
+      size: source.size, width: source.width, height: source.height, createdAt: source.createdAt,
+    });
+    expect(restored.blob.type).toBe('image/png');
+    expect(restored.metadata.size).toBe(sourceBytes.byteLength);
+  });
+
+  it('rolls back all restored media if any paired IndexedDB write fails', async () => {
+    const repo = repository();
+    const first = await repo.saveImage(png(), 'source-deck', decoder);
+    const second = await repo.saveImage(png(), 'source-deck', decoder);
+    const originalAdd = IDBObjectStore.prototype.add;
+    let calls = 0;
+    vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementation(function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['add']>) {
+      calls += 1;
+      if (calls === 3) throw new DOMException('disk quota exceeded', 'QuotaExceededError');
+      return originalAdd.apply(this, args);
+    });
+    await expect(repo.restoreCloudImages('restore-rollback', [
+      { sourceId: first.id, mimeType: first.mimeType, size: first.size, width: first.width, height: first.height, createdAt: first.createdAt, bytes: pngBytes() },
+      { sourceId: second.id, mimeType: second.mimeType, size: second.size, width: second.width, height: second.height, createdAt: second.createdAt, bytes: pngBytes() },
+    ], decoder, (() => { let index = 0; return () => `restore-image-${++index}`; })())).rejects.toThrow(/local slide-image storage is full/);
+    expect(await repo.listDeckImages('restore-rollback')).toEqual([]);
+    expect(await repo.listDeckImages('source-deck')).toEqual(expect.arrayContaining([first, second]));
   });
 
   it('fails closed when IndexedDB reports a storage quota error and leaves no image reference to commit', async () => {

@@ -46,6 +46,13 @@ describe('cloud upload-intent recovery journal', () => {
     savePendingCloudCopy(s, sheetsCopy);
     expect(listPendingCloudCopies(s, a, b)).toEqual([sheetsCopy]);
   });
+  it('accepts a complete Slides package up to the shared 25 MiB cloud-file limit', () => {
+    const s = store();
+    const slidesCopy = { ...copy, displayName: 'Quarterly.cocce-slides.bin', sizeBytes: 25 * 1024 * 1024 };
+    savePendingCloudCopy(s, slidesCopy);
+    expect(listPendingCloudCopies(s, a, b)).toEqual([slidesCopy]);
+    expect(() => savePendingCloudCopy(s, { ...slidesCopy, sizeBytes: 25 * 1024 * 1024 + 1 })).toThrow(/Invalid/);
+  });
   it('adds server identifiers without replacing immutable intent metadata', () => {
     const s = store();
     savePendingCloudCopy(s, copy);
@@ -88,7 +95,7 @@ describe('cloud upload-intent recovery journal', () => {
     for (const invalid of [
       { ...copy, uploadUrl: 'https://example.com' },
       { ...copy, uploadSessionId: a },
-      { ...copy, sizeBytes: 4 * 1024 * 1024 },
+      { ...copy, sizeBytes: 26 * 1024 * 1024 },
       { ...copy, displayName: '../private' },
     ]) {
       expect(() => savePendingCloudCopy(s, invalid)).toThrow(/Invalid/);
