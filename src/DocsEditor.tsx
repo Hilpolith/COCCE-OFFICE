@@ -25,6 +25,8 @@ import type { DocsReviewComment } from './lib/docsReviewComments';
 import { findDocsTextMatches, MAX_DOCS_FIND_MATCHES, MAX_DOCS_FIND_QUERY_CHARS, MAX_DOCS_FIND_REPLACEMENT_CHARS, replaceDocsTextMatches } from './lib/docsFindReplace';
 import type { DocsTextMatch } from './lib/docsFindReplace';
 import OfficeAiWriter from './OfficeAiWriter';
+import DocsCloudPanel from './DocsCloudPanel';
+import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import './docs.css';
 import {
   ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
@@ -212,7 +214,7 @@ function docsTableCellSelectionRange(selection: Selection, kind: DocsTableSelect
   return { anchorCell: cellPositions[0]![0]!, headCell: cellPositions[cellPositions.length - 1]![cellPositions[0]!.length - 1]! };
 }
 
-export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBack, onExport, onExportDocx, onDelete, onGoToTeam }: {
+export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBack, onExport, onExportDocx, onDelete, onGoToTeam, onRestoreCloudCopy }: {
   document: OfficeDocument;
   hasUnsavedChanges: boolean;
   onPatch: (patch: DocumentPatch) => boolean;
@@ -221,8 +223,11 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   onExportDocx: (richText: string) => void | Promise<void>;
   onDelete: () => void;
   onGoToTeam: () => void;
+  onRestoreCloudCopy?: (snapshot: DocsCloudSnapshot) => boolean;
 }) {
   const patchRef = useRef(onPatch);
+  const [cloudOpen, setCloudOpen] = useState(false);
+  const cloudEnabled = import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true' && Boolean(onRestoreCloudCopy);
   const [tableNotice, setTableNotice] = useState('');
   const tableGuard = useMemo(() => createDocsTableGuard(setTableNotice), []);
   const initialReviewScope = makeDocsReviewScope(document.workspaceId, document.id);
@@ -652,12 +657,15 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
           {hasUnsavedChanges ? 'Unsaved · kept in this tab' : 'Saved on this device'}
         </span>
         {hasUnsavedChanges && <button type="button" className="button-secondary small-button" onClick={() => { if (editor) saveEditor(editor); }}>Retry save</button>}
+        {cloudEnabled && <button type="button" className="button-secondary small-button" aria-expanded={cloudOpen} aria-controls={cloudOpen ? 'docs-cloud-area' : undefined} onClick={() => setCloudOpen((open) => !open)}>Cloud copies</button>}
         <button type="button" className="button-secondary small-button" aria-expanded={findOpen} aria-controls={findOpen ? 'docs-find-panel' : undefined} onClick={() => { setFindOpen((open) => !open); setFindNotice({ text: '', error: false }); }}><Search size={14} /> Find &amp; Replace</button>
         <button type="button" className="button-secondary small-button" disabled={!editor} onClick={exportMarkdown}><ArrowUpRight size={14} /> Export .md</button>
         <button type="button" className="button-secondary small-button" onClick={() => { void onExportDocx(editor?.getHTML() ?? document.richText ?? ''); }}><FileText size={14} /> Export .docx</button>
         <button type="button" className="icon-button danger-button" onClick={onDelete} aria-label="Delete document" title="Delete local document"><X size={16} /></button>
       </div>
     </div>
+
+    {cloudEnabled && cloudOpen && onRestoreCloudCopy && <div id="docs-cloud-area"><DocsCloudPanel key={document.id} document={document} hasUnsavedChanges={hasUnsavedChanges} onRestore={onRestoreCloudCopy} onGoToTeam={onGoToTeam} /></div>}
 
     <div className="docs-format-toolbar glass-card" role="toolbar" aria-label="Document formatting">
       <span className="docs-format-group" aria-label="Paragraph style">
@@ -798,6 +806,6 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </div>
       <div className="document-editor-bottom"><span>{hasUnsavedChanges ? <X size={13} /> : <Check size={13} />}{hasUnsavedChanges ? 'Export or retry before closing this tab' : 'Formatting saves locally as you type'}</span><span>{document.content.length.toLocaleString()} characters</span></div>
     </article>
-    <p className="editor-footnote"><LockKeyhole size={13} /> Drafts and review-comment sidecars stay in this browser. Simple bounded tables round-trip in DOCX; merged, nested, uneven, or over-limit imported tables become warned text, and unsupported export tables are refused. Review comments are not included in document exports or AI requests. Other Word structures may be omitted. Files are not uploaded, and cloud sync, sharing, and collaboration are not connected.</p>
+    <p className="editor-footnote"><LockKeyhole size={13} /> Drafts and review-comment sidecars stay in this browser. Simple bounded tables round-trip in DOCX; merged, nested, uneven, or over-limit imported tables become warned text, and unsupported export tables are refused. Review comments are not included in document exports or AI requests. Other Word structures may be omitted. {cloudEnabled ? 'Only an explicit, confirmed cloud-copy action sends document text and formatting to the chosen Office workspace. Documents with review comments are refused by this first copy format. Live sync and shared editing are not connected.' : 'Files are not uploaded, and cloud sync, sharing, and collaboration are not connected.'}</p>
   </div>;
 }

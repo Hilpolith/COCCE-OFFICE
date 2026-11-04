@@ -12,6 +12,7 @@ import {
   updateDocument, writePreviewState,
 } from './lib/localStore';
 import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
+import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import { deleteDocsReviewCommentsForDocument } from './lib/docsReviewComments';
 import { createDocxBlob, DOCX_IMPORT_LIMITS_COPY, importDocxFile, safeDocxFilename } from './lib/docxInterchange';
 import SheetsWorkspace from './SheetsWorkspace';
@@ -255,6 +256,18 @@ function App() {
     setDialog('delete');
   };
 
+  const restoreCloudDocument = (snapshot: DocsCloudSnapshot): boolean => {
+    const created = addDocument(state);
+    const next = updateDocument(created.state, created.document.id, {
+      title: `${snapshot.title} (cloud copy)`, content: snapshot.content, richText: snapshot.richText,
+    });
+    if (!persist(next)) return false;
+    setPage('docs');
+    setSelectedDocumentId(created.document.id);
+    setFeedback('Cloud copy restored as a new document on this device. Existing local drafts were not changed.');
+    return true;
+  };
+
   const confirmDeleteDocument = () => {
     if (!selectedDocument) return;
     if (!persist(removeDocument(state, selectedDocument.id))) return;
@@ -357,7 +370,7 @@ function App() {
         <div className="content-scroll">
           {page === 'home' && <Dashboard greeting={clockLabel} activeWorkspace={activeWorkspace?.name ?? 'Personal space'} workspaceCount={state.workspaces.length} documentCount={workspaceDocuments.length} lastEdited={lastEdited} documents={visibleDocuments.slice(0, 5)} onCreateDocument={createDocument} onOpenDocument={openDocument} onCreateWorkspace={() => setDialog('workspace')} onNavigate={goTo} />}
           {page === 'docs' && (selectedDocument
-            ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onExportDocx={exportDocumentDocx} onDelete={deleteDocument} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} /></Suspense>
+            ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onExportDocx={exportDocumentDocx} onDelete={deleteDocument} onRestoreCloudCopy={restoreCloudDocument} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} /></Suspense>
             : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} onImportDocx={importDocumentDocx} />)}
           {page === 'drive' && <DriveWorkspace workspaceId={activeWorkspace?.id ?? null} documents={visibleDocuments} query={query} onOpenDocument={openDocument} onCreateDocument={createDocument} />}
           {page === 'pdf' && <Suspense fallback={<div className="page" role="status">Opening local PDF tools…</div>}><PdfWorkspace workspaceId={activeWorkspace?.id ?? null} /></Suspense>}

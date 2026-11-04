@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "vitest run && node --test scripts/office-profile-privacy-check.mjs scripts/office-ai-api-check.mjs",
+    "test": "vitest run && node --test scripts/office-profile-privacy-check.mjs scripts/office-ai-api-check.mjs scripts/office-cloud-boundaries.mjs scripts/office-cloud-postgres-check.mjs",
     "preview": "vite preview",
     "test:office-schema": "node --test scripts/office-profile-privacy-check.mjs",
-    "test:office-ai-api": "node --test scripts/office-ai-api-check.mjs"
+    "test:office-ai-api": "node --test scripts/office-ai-api-check.mjs",
+    "test:office-cloud": "vitest run supabase/functions/office-cloud-files/core.test.ts && node --test scripts/office-cloud-boundaries.mjs scripts/office-cloud-postgres-check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
@@ -29,6 +30,7 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.14",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
