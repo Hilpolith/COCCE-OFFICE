@@ -14,7 +14,7 @@ import {
 import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
 import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import { deleteDocsReviewCommentsForDocument } from './lib/docsReviewComments';
-import { createDocxBlob, DOCX_IMPORT_LIMITS_COPY, importDocxFile, safeDocxFilename } from './lib/docxInterchange';
+import { createDocxBlob, DOCX_IMPORT_CONFIRMATION, importDocxFile, safeDocxFilename } from './lib/docxInterchange';
 import SheetsWorkspace from './SheetsWorkspace';
 import DriveWorkspace from './DriveWorkspace';
 import SlidesWorkspace from './SlidesWorkspace';
@@ -471,7 +471,7 @@ function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx }: { d
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
-    if (!file || !window.confirm(DOCX_IMPORT_LIMITS_COPY)) return;
+    if (!file || !window.confirm(DOCX_IMPORT_CONFIRMATION)) return;
     setImporting(true);
     try { await onImportDocx(file); } finally { setImporting(false); }
   };

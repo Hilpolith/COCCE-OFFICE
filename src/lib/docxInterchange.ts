@@ -13,7 +13,7 @@ const MAX_XML_DEPTH = 64;
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const ORDERED_LIST_REFERENCE = 'cocce-office-decimal-v1';
 
-export const DOCX_IMPORT_LIMITS_COPY = `Import a new local document from a limited DOCX subset (5 MB file limit; 25 MB expanded-package limit). Text, headings 1–3, common emphasis, simple lists, and rectangular tables up to ${DOCS_TABLE_LIMITS.maxRows} rows × ${DOCS_TABLE_LIMITS.maxColumns} columns are supported. Tables are limited to ${DOCS_TABLE_LIMITS.maxTables} per document, ${DOCS_TABLE_LIMITS.maxCellTextChars.toLocaleString()} text characters per cell, and ${DOCS_TABLE_LIMITS.maxTotalTextChars.toLocaleString()} table-text characters total. Merged, nested, uneven, complex, or over-limit tables are imported as readable text with a warning. Images, page layout, comments, tracked changes, table styling, and advanced Word features may be omitted. Links are imported as text only; no external targets are followed. The original file stays on this device and is not stored in Docs or uploaded.`;
+export const DOCX_IMPORT_CONFIRMATION = 'Import this local DOCX file?';
 
 export interface ImportedDocx {
   title: string;

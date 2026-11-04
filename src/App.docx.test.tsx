@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { DEFAULT_STATE, STORAGE_KEY } from './lib/localStore';
-import { createDocxBlob, DOCX_IMPORT_LIMITS_COPY, DOCX_MIME } from './lib/docxInterchange';
+import { createDocxBlob, DOCX_IMPORT_CONFIRMATION, DOCX_MIME } from './lib/docxInterchange';
 
 const existing = {
   id: 'existing-document', workspaceId: null, title: 'Existing draft', content: 'Keep this existing text',
@@ -46,7 +46,7 @@ describe('Docs local DOCX import UI', () => {
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
 
     await waitFor(() => expect((screen.getByRole('textbox', { name: 'Document title' }) as HTMLInputElement).value).toBe('Synthetic import'));
-    expect(confirm).toHaveBeenCalledWith(DOCX_IMPORT_LIMITS_COPY);
+    expect(confirm).toHaveBeenCalledWith(DOCX_IMPORT_CONFIRMATION);
     expect(screen.getByRole('textbox', { name: 'Document content' }).textContent).toContain('Local import');
     expect(screen.getByRole('textbox', { name: 'Document content' }).textContent).toContain('Synthetic only');
     const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).documents as typeof existing[];
