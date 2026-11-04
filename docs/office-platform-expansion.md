@@ -6,7 +6,7 @@ This document is a **backlog and acceptance plan, not an implementation claim**.
 
 Build **one complete module at a time**. Each module must be researched, designed, implemented, tested and verified against the existing application before the next module starts. A module is not complete until its real workflow, persistence boundary, permissions, failure handling, reports where applicable, accessibility behavior and regression tests pass. This document does not claim that any item below is implemented.
 
-The current verified product remains local-first and bounded. Docs, Sheets, Slides, PDF and personal Drive/Vault files retain their existing local behavior and format restrictions described in the [capability roadmap](office-capability-roadmap.md). Office Teams is server-backed collaboration, but it does not make personal editor files cloud-synced. Nothing in this backlog silently widens those limits.
+The current verified product remains local-first and bounded. Docs, Sheets, Slides, PDF and personal Drive/Vault originals retain their local behavior and format restrictions described in the [capability roadmap](office-capability-roadmap.md). Docs and Sheets now support separately confirmed, bounded cloud copies through authenticated Office workspaces; copies are not background-synced. Office Teams is server-backed collaboration, but it does not make local personal originals collaborative. Nothing in this backlog silently widens those limits.
 
 ## Non-negotiable boundaries
 

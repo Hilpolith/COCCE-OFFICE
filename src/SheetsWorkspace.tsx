@@ -23,10 +23,16 @@ import {
   SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS,
 } from './lib/spreadsheetEngine';
 import { createXlsxBlob, importXlsxFile, MAX_XLSX_FILE_BYTES, safeXlsxFilename, XLSX_EXPORT_WARNING, XLSX_IMPORT_WARNING } from './lib/xlsxInterchange';
+import SheetsCloudPanel from './SheetsCloudPanel';
+import { restoreSheetsCloudCopy } from './lib/sheetsCloudSnapshot';
+import type { SheetsCloudSnapshot } from './lib/sheetsCloudSnapshot';
 
 const GRID_ROWS = SHEET_VISIBLE_ROWS;
 const GRID_COLUMNS = SHEET_VISIBLE_COLUMNS;
 const EMPTY_SHEETS_HISTORY = createSheetsHistory();
+function officeCloudFilesEnabled() {
+  return import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true';
+}
 function shortDate(iso: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(iso));
 }
@@ -98,7 +104,7 @@ function nextCellAddress(address: string, direction: CellDirection | 'next' | 'p
   return cellAddress(row, column);
 }
 
-export default function SheetsWorkspace({ state, onState }: { state: PreviewState; onState: (next: PreviewState) => boolean }) {
+export default function SheetsWorkspace({ state, onState, onGoToTeam }: { state: PreviewState; onState: (next: PreviewState) => boolean; onGoToTeam?: () => void }) {
   const [selectedWorkbookId, setSelectedWorkbookId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const importInput = useRef<HTMLInputElement>(null);
@@ -113,6 +119,19 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
     if (!onState(created.state)) return;
     setSelectedWorkbookId(created.workbook.id);
     setNotice('Blank spreadsheet created on this device.');
+  };
+
+  const restoreCloudCopy = (snapshot: SheetsCloudSnapshot): boolean => {
+    try {
+      const restored = restoreSheetsCloudCopy(state, snapshot);
+      if (!onState(restored.state)) return false;
+      setSelectedWorkbookId(restored.workbook.id);
+      setNotice('Cloud copy restored as a new local spreadsheet. Existing workbooks were not changed.');
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The cloud copy could not be restored.');
+      return false;
+    }
   };
 
   const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -175,6 +194,8 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
       workbook={workbook}
       onBack={() => { setSelectedWorkbookId(null); setNotice(''); }}
       onState={onState}
+      onRestoreCloudCopy={restoreCloudCopy}
+      onGoToTeam={onGoToTeam ?? (() => undefined)}
       state={state}
       notice={notice}
     />;
@@ -186,7 +207,7 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
         <div>
           <span className="eyebrow">COCCE SHEETS · LOCAL ENGINE</span>
           <h1>Your spreadsheets</h1>
-          <p className="page-lede">Create browser-local workbooks, calculate formulas, and import or export CSV or a bounded XLSX subset. Data stays in this browser and is not shared or backed up.</p>
+          <p className="page-lede">Create browser-local workbooks, calculate formulas, and import or export CSV or a bounded XLSX subset. Local originals stay in this browser; you can make a separate, explicitly confirmed cloud copy when enabled. There is no live sync.</p>
         </div>
         <div className="sheet-page-actions">
           <button className="button-secondary" onClick={() => importInput.current?.click()}><Upload size={16} /> Import CSV</button>
@@ -200,7 +221,7 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
       {notice && <div className="sheet-notice" role="status"><Check size={15} />{notice}</div>}
       <section className="sheet-limit-card glass-card">
         <div className="sheet-limit-icon"><Table2 size={19} /></div>
-        <div><strong>A useful local spreadsheet foundation</strong><p>Cell references, ranges, arithmetic, comparisons, and common functions are evaluated locally. CSV is supported, along with a bounded one-sheet XLSX subset; Excel formatting, dates, charts, merged cells, macros, and cloud sync are not included.</p></div>
+        <div><strong>A useful local spreadsheet foundation</strong><p>Cell references, ranges, arithmetic, comparisons, and common functions are evaluated locally. CSV is supported, along with a bounded one-sheet XLSX subset; Excel formatting, dates, charts, merged cells, macros, and live cloud sync are not included.</p></div>
         <span className="local-only-chip"><LockKeyhole size={13} /> This device</span>
       </section>
 
@@ -216,11 +237,13 @@ export default function SheetsWorkspace({ state, onState }: { state: PreviewStat
   );
 }
 
-function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
+function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCopy, onGoToTeam, notice }: {
   workbook: OfficeWorkbook;
   state: PreviewState;
   onState: (next: PreviewState) => boolean;
   onBack: () => void;
+  onRestoreCloudCopy: (snapshot: SheetsCloudSnapshot) => boolean;
+  onGoToTeam: () => void;
   notice: string;
 }) {
   const worksheet = workbook.worksheets.find((item) => item.id === workbook.activeWorksheetId) ?? workbook.worksheets[0];
@@ -233,6 +256,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
   const [persistenceError, setPersistenceError] = useState(false);
   const [historyByWorksheet, setHistoryByWorksheet] = useState<Record<string, SheetsHistory>>({});
   const [exportingXlsx, setExportingXlsx] = useState(false);
+  const [cloudOpen, setCloudOpen] = useState(false);
   const cancelledEditAddress = useRef<string | null>(null);
   const cellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const displayedCells = useMemo(() => {
@@ -504,10 +528,12 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, notice }: {
       <div className="sheet-editor-heading">
         <div className="sheet-title-area"><span className="sheet-heading-icon"><FileSpreadsheet size={18} /></span><div><label className="eyebrow" htmlFor="workbook-title">WORKBOOK NAME</label><input id="workbook-title" className="workbook-title-input" value={workbook.title} onChange={(event) => saveState(updateWorkbook(state, workbook.id, { title: event.target.value }))} aria-label="Spreadsheet name" /></div></div>
         <div className="sheet-export-actions">
+          {officeCloudFilesEnabled() && <button className="button-secondary" type="button" aria-expanded={cloudOpen} aria-controls={cloudOpen ? 'sheets-cloud-area' : undefined} onClick={() => setCloudOpen((open) => !open)}>Cloud copies</button>}
           <button className="button-secondary" onClick={exportCurrent}><Download size={15} /> Export CSV</button>
           <button className="button-secondary" onClick={() => void exportXlsx()} disabled={exportingXlsx} title={workbook.worksheets.length === 1 ? 'Export this bounded local worksheet as XLSX' : 'XLSX export is limited to single-sheet workbooks'}><Download size={15} /> {exportingXlsx ? 'Preparing XLSX…' : 'Export XLSX'}</button>
         </div>
       </div>
+      {officeCloudFilesEnabled() && cloudOpen && <div id="sheets-cloud-area"><SheetsCloudPanel key={workbook.id} workbook={workbook} hasUnsavedChanges={Boolean(editingAddress) || persistenceError} onRestore={onRestoreCloudCopy} onGoToTeam={onGoToTeam} /></div>}
       <div className="sheet-toolbar">
         <span className="name-box" aria-label="Selected cell">{selectedAddress}</span>
         <span className="formula-equals">fx</span>

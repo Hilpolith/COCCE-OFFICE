@@ -62,6 +62,7 @@ let confirmOverridden = false;
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   if (confirmOverridden) {
     if (originalConfirm) Object.defineProperty(window, 'confirm', { configurable: true, writable: true, value: originalConfirm });
     else Reflect.deleteProperty(window, 'confirm');
@@ -71,6 +72,16 @@ afterEach(() => {
 });
 
 describe('Sheets workspace keyboard navigation', () => {
+  it('keeps the cloud-copy control hidden unless the Office cloud flag is enabled', () => {
+    vi.stubEnv('VITE_OFFICE_CLOUD_FILES_READY', 'false');
+    openGrid();
+    expect(screen.queryByRole('button', { name: 'Cloud copies' })).toBeNull();
+    cleanup();
+    vi.stubEnv('VITE_OFFICE_CLOUD_FILES_READY', 'true');
+    openGrid();
+    expect(screen.getByRole('button', { name: 'Cloud copies' })).toBeTruthy();
+  });
+
   it('moves with arrows, Tab, reverse Tab, Enter, and reverse Enter', () => {
     openGrid();
     const a1 = cell('A1');

@@ -40,6 +40,12 @@ describe('cloud upload-intent recovery journal', () => {
       /uploadUrl|access_token|richText|content|Bearer/,
     );
   });
+  it('accepts a Sheets cloud-copy filename in the same bounded recovery journal', () => {
+    const s = store();
+    const sheetsCopy = { ...copy, displayName: 'Budget.cocce-sheets.json' };
+    savePendingCloudCopy(s, sheetsCopy);
+    expect(listPendingCloudCopies(s, a, b)).toEqual([sheetsCopy]);
+  });
   it('adds server identifiers without replacing immutable intent metadata', () => {
     const s = store();
     savePendingCloudCopy(s, copy);
@@ -113,6 +119,7 @@ describe('cloud upload-intent recovery journal', () => {
       { ...copy, actorId: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA' },
       { ...copy, displayName: 'https://example.com/file.cocce-docs.json' },
       { ...copy, displayName: 'Authorization: Bearer secret.cocce-docs.json' },
+      { ...copy, displayName: 'Private.cocce-pdf.json' },
       { ...copy, access_token: 'credential' },
     ])
       expect(() => savePendingCloudCopy(s, invalid)).toThrow(/Invalid/);

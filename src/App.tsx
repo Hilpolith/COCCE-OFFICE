@@ -374,7 +374,7 @@ function App() {
             : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} onImportDocx={importDocumentDocx} />)}
           {page === 'drive' && <DriveWorkspace workspaceId={activeWorkspace?.id ?? null} documents={visibleDocuments} query={query} onOpenDocument={openDocument} onCreateDocument={createDocument} />}
           {page === 'pdf' && <Suspense fallback={<div className="page" role="status">Opening local PDF tools…</div>}><PdfWorkspace workspaceId={activeWorkspace?.id ?? null} /></Suspense>}
-          {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} />}
+          {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} />}
           {page === 'vault' && <VaultWorkspace />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} /></Suspense>}
@@ -475,7 +475,27 @@ function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx }: { d
     setImporting(true);
     try { await onImportDocx(file); } finally { setImporting(false); }
   };
-  return <div className="page subpage"><div className="page-title-row docs-page-title-row"><div><span className="eyebrow">COCCE DOCS · LOCAL MODE</span><h1>Documents</h1><p className="page-lede">Format local drafts with headings, text styles, lists, quotes, and simple tables. Add review comments to selected text; comment notes stay in this browser. DOCX import/export supports bounded rectangular tables. Cloud sync and shared collaboration are not connected.</p></div><div className="docs-page-actions"><input ref={inputRef} className="visually-hidden" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFile} aria-label="Choose a DOCX file" /><button className="button-secondary" disabled={importing} onClick={() => inputRef.current?.click()}><FileText size={16} /> {importing ? 'Importing…' : 'Import DOCX'}</button><button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button></div></div><p className="docs-import-copy">{DOCX_IMPORT_LIMITS_COPY}</p><div className="panel glass-card listing-panel"><div className="panel-heading"><div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div>{documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}</div></div>;
+  return <div className="page subpage">
+    <div className="page-title-row docs-page-title-row">
+      <div>
+        <span className="eyebrow">COCCE DOCS · LOCAL MODE</span>
+        <h1>Documents</h1>
+        <p className="page-lede">Format local drafts with headings, text styles, lists, quotes, and simple tables. Add review comments to selected text; comment notes stay in this browser. DOCX import/export supports bounded rectangular tables. Cloud sync and shared collaboration are not connected.</p>
+      </div>
+      <div className="docs-page-actions">
+        <input ref={inputRef} className="visually-hidden" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFile} aria-label="Choose a DOCX file" />
+        <button className="button-secondary" disabled={importing} onClick={() => inputRef.current?.click()}><FileText size={16} /> {importing ? 'Importing…' : 'Import DOCX'}</button>
+        <button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button>
+      </div>
+    </div>
+    <div className="panel glass-card listing-panel">
+      <div className="panel-heading">
+        <div><span className="eyebrow">{query ? 'SEARCH RESULTS' : 'THIS SPACE'}</span><h2>{documents.length} {documents.length === 1 ? 'document' : 'documents'}</h2></div>
+        <span className="local-only-chip"><LockKeyhole size={13} /> Device only</span>
+      </div>
+      {documents.length ? <DocumentRows documents={documents} onOpen={onOpen} /> : <EmptyDocuments onCreate={onCreate} />}
+    </div>
+  </div>;
 }
 
 function SettingsPage({ state, surfaceStyle, onSurfaceStyle, onTheme, onAccent }: { state: PreviewState; surfaceStyle: SurfaceStyle; onSurfaceStyle: (surface: SurfaceStyle) => void; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
@@ -496,7 +516,7 @@ function SettingsPage({ state, surfaceStyle, onSurfaceStyle, onTheme, onAccent }
     </section>
     <section className="settings-panel glass-card connection-panel">
       <div className="settings-heading"><div className="settings-icon connection-icon"><Activity size={18} /></div><div><h2>Connection status</h2><p>Office Team collaboration is server-backed; most productivity tools remain browser-local.</p></div></div>
-      <div className="connection-list"><ConnectionRow label="COCCE Auth" value="Existing accounts · Team only" /><ConnectionRow label="Office collaboration data" value="Office-specific backend" /><ConnectionRow label="Cloud file storage" value="Not connected" /><ConnectionRow label="AI provider" value="OpenRouter free model · Docs only" /></div>
+      <div className="connection-list"><ConnectionRow label="COCCE Auth" value="Existing accounts · Team only" /><ConnectionRow label="Office collaboration data" value="Office-specific backend" /><ConnectionRow label="Cloud file storage" value={import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true' ? 'Explicit copies · Docs and Sheets' : 'Not enabled in this environment'} /><ConnectionRow label="AI provider" value="OpenRouter free model · Docs only" /></div>
       <p className="connection-note">Office collaboration uses existing COCCE Auth and only Office-specific database objects. Docs AI sends selected excerpts or typed draft prompts after a user action; a full-document summary requires a separate confirmation and sends bounded plain text only. The fixed free Google AI Studio provider is listed as retaining prompts for 55 days with no training; no paid or alternate-provider fallback or background AI run occurs.</p>
     </section>
   </div>;

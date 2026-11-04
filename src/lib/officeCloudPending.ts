@@ -44,7 +44,8 @@ function valid(value: unknown): value is PendingCloudCopy {
     typeof r.documentId === 'string' &&
     /^[A-Za-z0-9_-]{1,128}$/.test(r.documentId) &&
     typeof r.displayName === 'string' &&
-    r.displayName.endsWith('.cocce-docs.json') &&
+    (r.displayName.endsWith('.cocce-docs.json') ||
+      r.displayName.endsWith('.cocce-sheets.json')) &&
     r.displayName.length <= 255 &&
     !/[\x00-\x1f\x7f/\\:<>"|?*]/.test(r.displayName) &&
     typeof r.sizeBytes === 'number' &&

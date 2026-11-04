@@ -76,7 +76,7 @@ describe('working appearance preferences', () => {
     expect(document.documentElement.dataset.surface).toBe('glass');
     expect(window.localStorage.getItem(APPEARANCE_STORAGE_KEY)).toBe('{invalid');
     const row = screen.getByText('Cloud file storage').closest('.connection-row');
-    expect(row?.textContent).toContain('Not connected');
+    expect(row?.textContent).toContain('Not enabled in this environment');
     expect(screen.getByText(/Supported system settings for reduced transparency/)).toBeTruthy();
   });
 

@@ -41,7 +41,7 @@ describe('Docs local DOCX import UI', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
-    expect(screen.getByText(/Import a new local document from a limited DOCX subset/i)).toBeTruthy();
+    expect(screen.queryByText(/Import a new local document from a limited DOCX subset/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
 
