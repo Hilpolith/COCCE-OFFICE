@@ -13,6 +13,7 @@ import SlidesCloudPanel from './SlidesCloudPanel';
 import { createRestoredSlidesDeck } from './lib/slidesCloudSnapshot';
 import { slidesCloudFilesEnabled } from './lib/slidesCloudFeature';
 import type { SlidesCloudSnapshot } from './lib/slidesCloudSnapshot';
+import OfficeAiPromptWorkbench, { OfficeWorkbenchLayout } from './OfficeWorkbench';
 import {
   localSlidesAssetRepository, MAX_ACTIVE_SLIDE_IMAGES, MAX_ACTIVE_SLIDE_IMAGE_BYTES, MAX_SLIDE_IMAGE_BYTES,
 } from './lib/slidesAssets';
@@ -532,8 +533,16 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
     return <div className="page slides-page"><div className="slides-error glass-card" role="alert"><LockKeyhole size={18} /><div><strong>Saved presentations are protected</strong><p>{loadResult.error}</p></div></div></div>;
   }
 
+  const aiTargetId = activeDeck && activeSlide ? `${activeDeck.id}:${activeSlide.id}` : '';
+  const previewAiSlideText = (output: string) => {
+    const candidate = output.trim();
+    if (!candidate) return { candidate: null, previewText: output, reason: 'The response was empty. Nothing can be applied.' };
+    if (candidate.length > 12_000) return { candidate: null, previewText: output, reason: 'The response is longer than this slide’s 12,000-character limit. Nothing can be applied.' };
+    return { candidate, previewText: candidate, detail: 'Only the active slide body will change. Its title, notes, image, layout, and other slides remain untouched.' };
+  };
+
   return (
-    <div className="page slides-page" onKeyDown={handleHistoryShortcut}>
+    <div className="page slides-page office-editor-page" onKeyDown={handleHistoryShortcut}>
       <div className="slides-page-heading">
         <div>
           <span className="eyebrow">{slidesCloudReady ? 'COCCE SLIDES · LOCAL-FIRST' : 'COCCE SLIDES · LOCAL MODE'}</span>
@@ -567,7 +576,33 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
 
       {!activeDeck && slidesCloudReady && slidesCloudOpen && <SlidesCloudPanel deck={null} hasUnsavedChanges={unsaved} onRestore={restoreCloudCopy} onGoToTeam={onGoToTeam} />}
 
-      {activeDeck && activeSlide && <>
+      {activeDeck && activeSlide && <OfficeWorkbenchLayout className="slides-workbench-layout" rail={<OfficeAiPromptWorkbench
+        area="slides"
+        description="Draft body text for the active slide, review the before/after preview, then apply it explicitly."
+        targetId={aiTargetId}
+        targetLabel={`slide ${activeSlideIndex + 1} body`}
+        currentValue={activeSlide.body}
+        currentValueLabel="Current slide text"
+        proposedValueLabel="Proposed slide text"
+        promptPlaceholder="For example: write three concise points about a fictional community garden launch."
+        privacyNote="Only your typed prompt is sent. Active slide text, speaker notes, images, deck title, and other slides are not sent."
+        applyLabel="Apply to slide"
+        maxPromptChars={900}
+        liveActionVerified={false}
+        buildPrompt={(prompt) => `Draft plain-text body content for one slide, using only facts supplied in my prompt. Return one line per idea; do not include explanations, Markdown fences, or invented details. User request: ${prompt}`}
+        previewResult={previewAiSlideText}
+        onApply={(candidate, capturedTargetId) => {
+          const latest = currentStateRef.current;
+          if (!latest || !activeDeck || !activeSlide || capturedTargetId !== aiTargetId
+            || currentSelectionRef.current.deckId !== activeDeck.id || currentSelectionRef.current.slideId !== activeSlide.id
+            || candidate.length > 12_000) return false;
+          const latestSlide = latest.decks.find((deck) => deck.id === activeDeck.id)?.slides.find((slide) => slide.id === activeSlide.id);
+          if (!latestSlide || latestSlide.body !== activeSlide.body) return false;
+          if (latestSlide.body === candidate) return true;
+          return commitActiveDeckEdit(updateSlide(latest, activeDeck.id, activeSlide.id, { body: candidate }), activeSlide.id, `slide:${activeSlide.id}:body`);
+        }}
+      />}>
+        <>
         <div className="slides-editor-toolbar">
           <label className="slides-deck-name"><span className="eyebrow">PRESENTATION TITLE</span><input aria-label="Presentation title" value={activeDeck.title} maxLength={300} onChange={(event) => patchDeck({ title: event.target.value })} /></label>
           <div className="slides-toolbar-actions">
@@ -614,8 +649,10 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
           </section>
         </div>
         <div className="slides-editor-footer"><span><Check size={14} />{unsaved ? 'Unsaved · kept in this tab' : 'Saved in this browser'}</span><span>{feedback && !unsaved ? feedback : `${activeDeck.slides.length} slide${activeDeck.slides.length === 1 ? '' : 's'} · JSON export${slidesCloudReady ? ' and explicit cloud copy' : ''} available`}</span><span className="slides-history-note">Undo/redo: latest 50 edits for this presentation · this session only</span></div>
-        <div className="slide-print-stack" aria-hidden="true">{activeDeck.slides.map((slide, index) => <div className={`print-slide theme-${activeDeck.theme} slide-layout-${slide.layout} ${slide.imageAssetId ? 'has-image' : ''}`} key={slide.id}><div className="print-slide-content"><span className="eyebrow">{activeDeck.title || 'Untitled presentation'}</span><h1>{slide.title || 'Untitled slide'}</h1><SlideBody body={slide.body} cover={index === 0} layout={slide.layout} /></div>{slide.imageAssetId && imageUrls[slide.imageAssetId] && <img className="print-slide-image" src={imageUrls[slide.imageAssetId]} alt={slide.imageAltText ?? ''} />}{slide.imageAssetId && missingImageIds.includes(slide.imageAssetId) && <span className="print-image-missing">Local image unavailable</span>}<small>{index + 1}</small></div>)}</div>
-      </>}
+        </>
+      </OfficeWorkbenchLayout>}
+
+      {activeDeck && activeSlide && <div className="slide-print-stack" aria-hidden="true">{activeDeck.slides.map((slide, index) => <div className={`print-slide theme-${activeDeck.theme} slide-layout-${slide.layout} ${slide.imageAssetId ? 'has-image' : ''}`} key={slide.id}><div className="print-slide-content"><span className="eyebrow">{activeDeck.title || 'Untitled presentation'}</span><h1>{slide.title || 'Untitled slide'}</h1><SlideBody body={slide.body} cover={index === 0} layout={slide.layout} /></div>{slide.imageAssetId && imageUrls[slide.imageAssetId] && <img className="print-slide-image" src={imageUrls[slide.imageAssetId]} alt={slide.imageAltText ?? ''} />}{slide.imageAssetId && missingImageIds.includes(slide.imageAssetId) && <span className="print-image-missing">Local image unavailable</span>}<small>{index + 1}</small></div>)}</div>}
 
       {presenting && activeDeck && activeSlide && <div className="slides-present-overlay" role="dialog" aria-modal="true" aria-label="Presentation mode"><button className="icon-button present-close" aria-label="Exit presentation" onClick={() => setPresenting(false)}><X size={19} /></button><div className="present-counter">{activeSlideIndex + 1} / {activeDeck.slides.length}</div><div className={`present-stage ${presenterNotesVisible ? 'with-notes' : ''}`}><SlideCanvas deck={activeDeck} slide={activeSlide} index={activeSlideIndex} large imageUrl={activeSlide.imageAssetId ? imageUrls[activeSlide.imageAssetId] : undefined} imageMissing={Boolean(activeSlide.imageAssetId && missingImageIds.includes(activeSlide.imageAssetId))} />{presenterNotesVisible && <aside id="presenter-notes-panel" className="presenter-notes-panel" aria-label="Presenter notes" role="region"><div className="presenter-notes-heading"><FileText size={15} /><strong>Presenter notes</strong></div><p>{activeSlide.notes || 'No notes for this slide.'}</p></aside>}</div><div className="present-controls"><button className="button-secondary" onClick={() => setActiveSlideIndex((index) => Math.max(0, index - 1))} disabled={activeSlideIndex === 0}><ArrowLeft size={16} /> Previous</button><div className="present-controls-center"><button className="button-secondary presenter-notes-toggle" aria-pressed={presenterNotesVisible} aria-controls="presenter-notes-panel" onClick={() => setPresenterNotesVisible((visible) => !visible)}><FileText size={15} /> {presenterNotesVisible ? 'Hide speaker notes' : 'Show speaker notes'}</button><span>Use arrow keys to navigate · Esc to exit</span></div><button className="button-primary" onClick={() => setActiveSlideIndex((index) => Math.min(activeDeck.slides.length - 1, index + 1))} disabled={activeSlideIndex === activeDeck.slides.length - 1}>Next <ArrowRight size={16} /></button></div></div>}
       {feedback && !activeDeck && <div className="slides-feedback" role="status">{feedback}</div>}

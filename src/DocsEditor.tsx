@@ -25,6 +25,7 @@ import type { DocsReviewComment } from './lib/docsReviewComments';
 import { findDocsTextMatches, MAX_DOCS_FIND_MATCHES, MAX_DOCS_FIND_QUERY_CHARS, MAX_DOCS_FIND_REPLACEMENT_CHARS, replaceDocsTextMatches } from './lib/docsFindReplace';
 import type { DocsTextMatch } from './lib/docsFindReplace';
 import OfficeAiWriter from './OfficeAiWriter';
+import { OfficeWorkbenchLayout } from './OfficeWorkbench';
 import DocsCloudPanel from './DocsCloudPanel';
 import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import './docs.css';
@@ -648,7 +649,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     onExport(editor.getHTML());
   };
 
-  return <div className="page editor-page">
+  return <div className="page editor-page office-editor-page">
     <div className="editor-toolbar">
       <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
       <div className="editor-actions">
@@ -667,6 +668,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
     {cloudEnabled && cloudOpen && onRestoreCloudCopy && <div id="docs-cloud-area"><DocsCloudPanel key={document.id} document={document} hasUnsavedChanges={hasUnsavedChanges} onRestore={onRestoreCloudCopy} onGoToTeam={onGoToTeam} /></div>}
 
+    <OfficeWorkbenchLayout className="docs-workbench-layout" rail={<OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} defaultExpanded />}>
+      <div className="docs-editor-main">
     <div className="docs-format-toolbar glass-card" role="toolbar" aria-label="Document formatting">
       <span className="docs-format-group" aria-label="Paragraph style">
         <FormattingButton label="Paragraph" icon={<Pilcrow size={16} />} active={editorState.paragraph} onClick={() => editor?.chain().focus().setParagraph().run()} />
@@ -754,8 +757,6 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <p className="docs-find-note">Search is local and excludes review-comment notes. Matches do not cross inline-formatting, paragraph, or table-cell boundaries. Limits: {MAX_DOCS_FIND_QUERY_CHARS}-character query, {MAX_DOCS_FIND_REPLACEMENT_CHARS.toLocaleString()}-character replacement, {MAX_DOCS_FIND_MATCHES.toLocaleString()} matches, and 200,000 document text characters.</p>
     </section>}
 
-    <OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} />
-
     <section className="docs-review-panel glass-card" aria-label="Local document review comments">
       <div className="docs-review-heading">
         <div><span className="eyebrow">REVIEW</span><h2>Comments</h2><small>{reviewComments.filter((comment) => comment.status === 'open').length} open · {reviewComments.length} total</small></div>
@@ -807,5 +808,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <div className="document-editor-bottom"><span>{hasUnsavedChanges ? <X size={13} /> : <Check size={13} />}{hasUnsavedChanges ? 'Export or retry before closing this tab' : 'Formatting saves locally as you type'}</span><span>{document.content.length.toLocaleString()} characters</span></div>
     </article>
     <p className="editor-footnote"><LockKeyhole size={13} /> Drafts and review-comment sidecars stay in this browser. Simple bounded tables round-trip in DOCX; merged, nested, uneven, or over-limit imported tables become warned text, and unsupported export tables are refused. Review comments are not included in document exports or AI requests. Other Word structures may be omitted. {cloudEnabled ? 'Only an explicit, confirmed cloud-copy action sends document text and formatting to the chosen Office workspace. Documents with review comments are refused by this first copy format. Live sync and shared editing are not connected.' : 'Files are not uploaded, and cloud sync, sharing, and collaboration are not connected.'}</p>
+      </div>
+    </OfficeWorkbenchLayout>
   </div>;
 }

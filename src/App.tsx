@@ -22,6 +22,7 @@ import { slidesCloudFilesEnabled } from './lib/slidesCloudFeature';
 import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './lib/documentEditor';
 import VaultWorkspace from './VaultWorkspace';
 import OfficeAccountControl from './OfficeAccountControl';
+import OfficeEditorChrome from './OfficeEditorChrome';
 import { readSurfaceStyle, writeSurfaceStyle } from './lib/appearancePreferences';
 import type { SurfaceStyle } from './lib/appearancePreferences';
 
@@ -155,6 +156,7 @@ function App() {
   }, [workspaceDocuments, query]);
   const selectedDocument = workspaceDocuments.find((document) => document.id === selectedDocumentId) ?? null;
   const lastEdited = [...workspaceDocuments].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.updatedAt;
+  const activeEditorModule = page === 'docs' || page === 'sheets' || page === 'slides' ? page : null;
 
   const goTo = (nextPage: PageId) => {
     setPage(nextPage);
@@ -371,6 +373,7 @@ function App() {
 
         {Object.keys(unsavedDocuments).length > 0 && <div className="unsaved-drafts-banner" role="alert"><ShieldCheck size={15} /><span>{Object.keys(unsavedDocuments).length} unsaved {Object.keys(unsavedDocuments).length === 1 ? 'draft is' : 'drafts are'} kept in this tab only. Reopen the draft and retry save or export Markdown or DOCX before closing this tab.</span></div>}
         <div className="content-scroll">
+          {activeEditorModule && <OfficeEditorChrome active={activeEditorModule} storageLabel={activeWorkspace ? 'Local Office space · this browser' : 'Personal space · this browser'} onNavigate={(module) => goTo(module)} />}
           {page === 'home' && <Dashboard greeting={clockLabel} activeWorkspace={activeWorkspace?.name ?? 'Personal space'} workspaceCount={state.workspaces.length} documentCount={workspaceDocuments.length} lastEdited={lastEdited} documents={visibleDocuments.slice(0, 5)} onCreateDocument={createDocument} onOpenDocument={openDocument} onCreateWorkspace={() => setDialog('workspace')} onNavigate={goTo} />}
           {page === 'docs' && (selectedDocument
             ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onExportDocx={exportDocumentDocx} onDelete={deleteDocument} onRestoreCloudCopy={restoreCloudDocument} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} /></Suspense>

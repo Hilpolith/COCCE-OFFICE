@@ -85,6 +85,14 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
+  :root :is(.office-editor-chrome, .office-workbench-rail) {
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+  :root .office-editor-page :is(.editor-toolbar, .sheet-editor-topline, .slides-editor-toolbar) {
+    -webkit-backdrop-filter: var(--glass-mini-filter);
+    backdrop-filter: var(--glass-mini-filter);
+  }
   :root :is(.team-panel, .office-collab-panel, .docs-format-toolbar) {
     background: var(--glass-sheen), var(--glass-surface);
   }

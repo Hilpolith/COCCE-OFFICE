@@ -57,13 +57,13 @@ function readableError(error: unknown): string {
   return 'The writing assistant could not complete that request. Try again.';
 }
 
-export default function OfficeAiWriter({ editor, documentTitle = 'Untitled document', onGoToTeam }: { editor: Editor | null; documentTitle?: string; onGoToTeam: () => void }) {
+export default function OfficeAiWriter({ editor, documentTitle = 'Untitled document', onGoToTeam, defaultExpanded = false }: { editor: Editor | null; documentTitle?: string; onGoToTeam: () => void; defaultExpanded?: boolean }) {
   const teamConfig = useMemo(
     () => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment),
     [],
   );
   const client = useMemo(() => getOfficeTeamClient(teamConfig), [teamConfig]);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [authStatus, setAuthStatus] = useState<AuthStatus>(() => client ? 'loading' : 'misconfigured');
   const [availability, setAvailability] = useState<Availability>('unknown');
   const [selection, setSelection] = useState<Selection>({ from: 0, to: 0, text: '', isCellSelection: false });

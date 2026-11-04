@@ -60,6 +60,15 @@ async function createPresentation() {
 }
 
 describe('Slides workspace', () => {
+  it('keeps the print-only slide stack outside the screen workbench', async () => {
+    await createPresentation();
+    const stack = document.querySelector('.slide-print-stack');
+    expect(stack).not.toBeNull();
+    expect(stack?.parentElement?.classList.contains('slides-page')).toBe(true);
+    expect(stack?.closest('.office-workbench-layout')).toBeNull();
+    expect(document.querySelector('.office-workbench-layout')).not.toBeNull();
+  });
+
   it('creates, edits, adds, reorders, and persists presentation content', async () => {
     await createPresentation();
     fireEvent.change(screen.getByRole('textbox', { name: 'Presentation title' }), { target: { value: 'Product notes' } });

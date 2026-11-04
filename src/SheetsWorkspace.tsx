@@ -16,14 +16,16 @@ import {
 import type { SheetsHistory } from './lib/spreadsheetHistory';
 import {
   cellAddress, csvRowsToCells, displayCellValue, fillFormula, fillNumericSeries,
-  isCsvFileSizeAllowed, isFormulaTextWithinLimit, MAX_CSV_FILE_BYTES,
+  isCsvFileSizeAllowed, isFormulaTextWithinLimit, isSupportedFormulaWithinVisibleGrid, MAX_CSV_FILE_BYTES,
   MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS,
   MAX_SHEETS_FORMULA_CHARS, MAX_SHEETS_FORMULA_FILL_CELLS,
   parseCsv, parseTsvMatrix, serializeCsv, serializeTsvRange,
   SHEET_VISIBLE_COLUMNS, SHEET_VISIBLE_ROWS,
 } from './lib/spreadsheetEngine';
+import { extractSingleSupportedSheetFormula } from './lib/officeAiPrompt';
 import { createXlsxBlob, importXlsxFile, MAX_XLSX_FILE_BYTES, safeXlsxFilename, XLSX_EXPORT_WARNING, XLSX_IMPORT_WARNING } from './lib/xlsxInterchange';
 import SheetsCloudPanel from './SheetsCloudPanel';
+import OfficeAiPromptWorkbench, { OfficeWorkbenchLayout } from './OfficeWorkbench';
 import { restoreSheetsCloudCopy } from './lib/sheetsCloudSnapshot';
 import type { SheetsCloudSnapshot } from './lib/sheetsCloudSnapshot';
 
@@ -299,6 +301,13 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
     if ((worksheet.cells[address] ?? '') === value) return true;
     return saveWorksheetChange(updateWorksheetCell(state, workbook.id, worksheet.id, address, value), `cell:${address}`);
   };
+  const aiTargetId = `${workbook.id}:${worksheet.id}:${selectedAddress}`;
+  const previewAiFormula = (output: string) => {
+    const formula = extractSingleSupportedSheetFormula(output);
+    if (!formula) return { candidate: null, previewText: output, reason: 'The response was not exactly one formula supported by the local engine and visible grid. Nothing can be applied.' };
+    const previewCells = { ...worksheet.cells, [selectedAddress]: formula };
+    return { candidate: formula, previewText: formula, detail: `Local result preview: ${displayCellValue(previewCells, selectedAddress)}. Applying changes only ${selectedAddress}; use Undo to reverse it.` };
+  };
   const undoEdit = () => {
     const transition = undoSheetsHistory(history, worksheet.cells);
     if (!transition.cells) return;
@@ -519,12 +528,31 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
   };
 
   return (
-    <div className="page subpage sheet-editor-page" onCopy={copyRange} onPaste={pasteRange} onKeyDown={handleHistoryShortcut}>
+    <div className="page subpage sheet-editor-page office-editor-page" onCopy={copyRange} onPaste={pasteRange} onKeyDown={handleHistoryShortcut}>
       <div className="sheet-editor-topline">
         <button className="back-button" onClick={onBack}><ArrowLeft size={15} /> All spreadsheets</button>
         <span className="local-only-chip" role={persistenceError ? 'alert' : undefined}><LockKeyhole size={13} /> {persistenceError ? 'Not saved' : 'Saved on this device'}</span>
       </div>
       {persistenceError && <div className="sheet-notice sheet-save-error" role="alert">Changes were not saved. Your previous browser copy was preserved; free storage or update the app before trying again.</div>}
+      <OfficeWorkbenchLayout className="sheets-workbench-layout" rail={<OfficeAiPromptWorkbench
+        area="sheets"
+        description="Draft a formula for the active cell, then review the local result before applying it."
+        targetId={aiTargetId}
+        targetLabel={`cell ${selectedAddress}`}
+        currentValue={rawValue}
+        currentValueLabel={`Current ${selectedAddress}`}
+        proposedValueLabel={`Proposed formula for ${selectedAddress}`}
+        promptPlaceholder="For example: total the monthly amounts in B2 through B13."
+        privacyNote="Only your typed prompt and active cell address are sent. Workbook contents and cell values stay on this device and are not sent."
+        applyLabel="Apply formula"
+        maxPromptChars={800}
+        liveActionVerified={false}
+        buildPrompt={(prompt) => `Write one formula for cell ${selectedAddress} in COCCE Sheets. Return only a single formula beginning with =. Use only the local engine functions IF, IFERROR, SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ABS, ROUND, AND, OR, NOT, CONCAT, COUNTIF, SUMIF, and visible A1:L24 references. Do not assume cell contents unless I include them in my prompt. Request: ${prompt}`}
+        previewResult={previewAiFormula}
+        onApply={(formula, capturedTargetId) => capturedTargetId === aiTargetId
+          && isSupportedFormulaWithinVisibleGrid(formula)
+          && updateCell(selectedAddress, formula)}
+      />}>
       <div className="sheet-editor-heading">
         <div className="sheet-title-area"><span className="sheet-heading-icon"><FileSpreadsheet size={18} /></span><div><label className="eyebrow" htmlFor="workbook-title">WORKBOOK NAME</label><input id="workbook-title" className="workbook-title-input" value={workbook.title} onChange={(event) => saveState(updateWorkbook(state, workbook.id, { title: event.target.value }))} aria-label="Spreadsheet name" /></div></div>
         <div className="sheet-export-actions">
@@ -575,6 +603,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
           </div>
           <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · references/ranges · IF · IFERROR · COUNTIF · SUMIF'}</span></div>
       <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Local formula text is capped at {MAX_SHEETS_FORMULA_CHARS} characters; IFERROR, COUNTIF and SUMIF support exact and relational criteria, relational comparisons require matching value types, not-equal criteria count unlike types as different, and wildcards are unsupported. Criteria are capped at 256 characters, formula ranges at 10,000 cells. Fill series uses two finite numeric seeds in one row or column and asks before overwriting; Fill formula translates relative A1 references and preserves `$` anchors, but refuses unsupported or out-of-grid references and asks before overwriting. Undo/redo is capped at 50 session steps per worksheet and restores saved cell-content edits, paste, and fill operations; workbook/sheet names, structure, and import/export actions are not included. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
-      </div>
+      </OfficeWorkbenchLayout>
+    </div>
     );
   }
