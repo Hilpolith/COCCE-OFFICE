@@ -10,14 +10,16 @@ import {
 import type { IndustryTeamSetup } from './lib/industryWorkspaces';
 
 vi.mock('./OfficeTeamCollaboration', () => ({
-  default: ({ initialWorkspaceName, onWorkspaceCreated }: {
+  default: ({ initialWorkspaceName, initialWorkspaceId, onWorkspaceCreated }: {
     initialWorkspaceName?: string;
+    initialWorkspaceId?: string;
     onWorkspaceCreated?: (workspaceId: string, workspaceName: string) => void;
   }) => <>
     <output data-testid="initial-team-name">{initialWorkspaceName}</output>
-    <button type="button" onClick={() => onWorkspaceCreated?.('server-team-id', initialWorkspaceName ?? 'Office Team')}>
+    <output data-testid="initial-team-id">{initialWorkspaceId}</output>
+    {!initialWorkspaceId && <button type="button" onClick={() => onWorkspaceCreated?.('server-team-id', initialWorkspaceName ?? 'Office Team')}>
       Create synthetic Office Team
-    </button>
+    </button>}
   </>,
 }));
 
@@ -40,6 +42,18 @@ function renderIndustryTeam(onIndustryTeamLinked = vi.fn(), industrySetup = setu
 }
 
 describe('industry office to Office Team handoff', () => {
+  it('opens a linked team without offering to create a replacement or changing the local register', () => {
+    const onIndustryTeamLinked = vi.fn();
+    renderIndustryTeam(onIndustryTeamLinked, { ...setup, teamWorkspaceId: 'server-team-id' });
+
+    expect(screen.getByTestId('initial-team-id').textContent).toBe('server-team-id');
+    expect(screen.getByTestId('initial-team-name').textContent).toBe('');
+    expect(screen.getByText('Opening the linked team for Kijiji School')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Create synthetic Office Team' })).toBeNull();
+    expect(onIndustryTeamLinked).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)).toBeNull();
+  });
+
   it('creates a prefilled team and stores only its workspace ID beside the untouched local register', async () => {
     const created = createIndustryOffice(emptyIndustryState(), {
       industryId: setup.industryId, name: setup.officeName, country: 'Tanzania',

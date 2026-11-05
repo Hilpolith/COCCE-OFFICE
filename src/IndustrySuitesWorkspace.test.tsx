@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import IndustrySuitesWorkspace from './IndustrySuitesWorkspace';
-import { INDUSTRY_STORAGE_KEY } from './lib/industryWorkspaces';
+import {
+  INDUSTRY_STORAGE_KEY, createIndustryOffice, emptyIndustryState, linkIndustryTeam, writeIndustryState,
+} from './lib/industryWorkspaces';
 
 afterEach(() => {
   cleanup();
@@ -13,6 +15,25 @@ afterEach(() => {
 beforeEach(() => window.localStorage.clear());
 
 describe('industry office workbench', () => {
+  it('passes the existing Office Team ID when an office user chooses Open team', async () => {
+    const office = createIndustryOffice(emptyIndustryState(), {
+      industryId: 'school', name: 'Kijiji School', country: 'Tanzania',
+    }).office!;
+    const linked = linkIndustryTeam({ version: 1, offices: [office] }, office.id, 'server-team-id');
+    writeIndustryState(window.localStorage, linked);
+    const onCreateTeam = vi.fn();
+    render(<IndustrySuitesWorkspace preferredIndustryId="school" onCreateTeam={onCreateTeam} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open team' }));
+
+    expect(onCreateTeam).toHaveBeenCalledWith({
+      officeId: office.id,
+      officeName: 'Kijiji School',
+      industryId: 'school',
+      teamWorkspaceId: 'server-team-id',
+    });
+  });
+
   it('creates a sector edition, persists work stages locally, and hands team creation to Office collaboration', async () => {
     const onCreateTeam = vi.fn();
     render(<IndustrySuitesWorkspace preferredIndustryId="manufacturing" onCreateTeam={onCreateTeam} />);

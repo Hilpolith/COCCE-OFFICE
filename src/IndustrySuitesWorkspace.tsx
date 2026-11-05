@@ -120,7 +120,12 @@ export default function IndustrySuitesWorkspace({
 
   const openTeam = () => {
     if (!activeOffice) return;
-    onCreateTeam({ officeId: activeOffice.id, officeName: activeOffice.name, industryId: activeOffice.industryId });
+    onCreateTeam({
+      officeId: activeOffice.id,
+      officeName: activeOffice.name,
+      industryId: activeOffice.industryId,
+      teamWorkspaceId: activeOffice.teamWorkspaceId,
+    });
   };
 
   const activeCount = activeOffice && definition

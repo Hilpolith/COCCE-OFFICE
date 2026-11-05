@@ -37,9 +37,11 @@ function OfficeConnectionGate({ status }: { status: OfficeConfigFailure }) {
 
 export default function OfficeTeamCollaboration({
   initialWorkspaceName,
+  initialWorkspaceId,
   onWorkspaceCreated,
 }: {
   initialWorkspaceName?: string;
+  initialWorkspaceId?: string;
   onWorkspaceCreated?: (workspaceId: string, workspaceName: string) => void;
 } = {}) {
   const config = resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment);
@@ -58,7 +60,11 @@ export default function OfficeTeamCollaboration({
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
   const workspaceIdRef = useRef('');
+  const preferredWorkspaceSelectionRef = useRef<{ target: string | undefined; resolved: boolean }>({ target: initialWorkspaceId, resolved: false });
   const workspaceGenerationRef = useRef(0);
+  useEffect(() => {
+    preferredWorkspaceSelectionRef.current = { target: initialWorkspaceId, resolved: false };
+  }, [initialWorkspaceId]);
   const setWorkspaceScope = useCallback((nextId: string) => {
     if (workspaceIdRef.current !== nextId) {
       workspaceIdRef.current = nextId;
@@ -110,11 +116,12 @@ export default function OfficeTeamCollaboration({
       userIdRef.current = nextUserId;
       accountGenerationRef.current += 1;
       resetAccountScopedState();
+      preferredWorkspaceSelectionRef.current = { target: initialWorkspaceId, resolved: false };
       setAuthPassword('');
     }
     setUser(nextUser);
     setError(''); setNotice('');
-  }, [resetAccountScopedState]);
+  }, [initialWorkspaceId, resetAccountScopedState]);
 
   const activeWorkspace = workspaces.find((item) => item.workspace_id === workspaceId) ?? null;
   const isAdmin = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin';
@@ -189,7 +196,17 @@ export default function OfficeTeamCollaboration({
         setInvitations(nextInvitations);
         setNotifications(nextNotifications);
         const selectedWorkspaceId = workspaceIdRef.current;
-        if (!selectedWorkspaceId || !nextWorkspaces.some((item) => item.workspace_id === selectedWorkspaceId)) {
+        const preferredId = initialWorkspaceId?.trim();
+        const preferredSelection = preferredWorkspaceSelectionRef.current;
+        const preferredIsAvailable = Boolean(preferredId && nextWorkspaces.some((item) => item.workspace_id === preferredId));
+        if (preferredId && (preferredSelection.target !== initialWorkspaceId || !preferredSelection.resolved || (preferredIsAvailable && !selectedWorkspaceId))) {
+          preferredWorkspaceSelectionRef.current = { target: initialWorkspaceId, resolved: true };
+          setWorkspaceScope(preferredIsAvailable ? preferredId : '');
+          setConversationScope('');
+          setNotice(preferredIsAvailable
+            ? 'Opened the existing team linked to this industry office.'
+            : 'The team linked to this industry office is not available to this Office account. Check the signed-in account or team membership; no new team was created.');
+        } else if (!preferredId && (!selectedWorkspaceId || !nextWorkspaces.some((item) => item.workspace_id === selectedWorkspaceId))) {
           setWorkspaceScope(nextWorkspaces[0]?.workspace_id ?? '');
           setConversationScope('');
         }
@@ -199,7 +216,7 @@ export default function OfficeTeamCollaboration({
     void load();
     const timer = window.setInterval(() => { void load(); }, 30_000);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [client, schemaReady, setConversationScope, setWorkspaceScope, user, workspaceId]);
+  }, [client, initialWorkspaceId, schemaReady, setConversationScope, setWorkspaceScope, user, workspaceId]);
 
   useEffect(() => {
     if (!schemaReady || !client || !user || !workspaceId) return undefined;
@@ -570,9 +587,9 @@ export default function OfficeTeamCollaboration({
     {!user ? signInForm : <>
       <div className="office-collab-account"><span>Signed in to existing COCCE Auth · <strong>{user.email ?? user.id}</strong></span><small>Office’s session is local to this browser. Signing out here does not sign out other COCCE apps.</small><button className="button-tertiary office-signout" disabled={busy} onClick={() => { void signOutOfficeSession(); }}><LogOut size={14} /> Sign out of Office</button></div>
       {invitations.length > 0 && <div className="office-inbox"><h3><Bell size={15} /> Invitations for you</h3>{invitations.map((invitation) => { const inviterPresence = invitation.workspace_id === workspaceId ? visiblePresence.find((person) => person.user_id === invitation.inviter_id) : undefined; return <article className="office-invite-row" key={invitation.invitation_id}><div><strong>{invitation.workspace_name}</strong><OfficePersonIdentity name={invitation.inviter_name} avatarUrl={invitation.inviter_avatar_url} isVip={invitation.inviter_is_vip} vipExpiresAt={invitation.inviter_vip_expires_at} presenceStatus={inviterPresence?.status ?? invitation.inviter_presence_status} lastSeenAt={inviterPresence?.last_seen_at ?? invitation.inviter_last_seen_at} now={presenceNow} compact /><small>{invitation.role}</small></div><button className="button-primary" disabled={busy} onClick={() => respond(invitation, true)}>Accept</button><button className="button-secondary" disabled={busy} onClick={() => respond(invitation, false)}>Decline</button></article>; })}</div>}
-      {(workspaces.length === 0 || initialWorkspaceName) && <div className="office-create-space"><h3>{initialWorkspaceName ? 'Create an Office team for this industry office' : 'Create an Office space'}</h3><p>{initialWorkspaceName ? `This creates a server-backed team named for ${initialWorkspaceName}. Industry register items remain local and are not uploaded.` : 'This creates a server-backed Office workspace in the selected COCCE project. It does not convert or upload the local planner above.'}</p><form onSubmit={createWorkspace}><input aria-label="Office space name" value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={80} placeholder="Office space name" required /><button className="button-primary" disabled={busy}><Plus size={15} /> {initialWorkspaceName ? 'Create team' : 'Create Office'}</button></form></div>}
+      {!initialWorkspaceId && (workspaces.length === 0 || initialWorkspaceName) && <div className="office-create-space"><h3>{initialWorkspaceName ? 'Create an Office team for this industry office' : 'Create an Office space'}</h3><p>{initialWorkspaceName ? `This creates a server-backed team named for ${initialWorkspaceName}. Industry register items remain local and are not uploaded.` : 'This creates a server-backed Office workspace in the selected COCCE project. It does not convert or upload the local planner above.'}</p><form onSubmit={createWorkspace}><input aria-label="Office space name" value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={80} placeholder="Office space name" required /><button className="button-primary" disabled={busy}><Plus size={15} /> {initialWorkspaceName ? 'Create team' : 'Create Office'}</button></form></div>}
       {workspaces.length === 0 ? null : <>
-        <label className="office-workspace-select">Office space<select aria-label="Office space" value={workspaceId} onChange={(event) => { setWorkspaceScope(event.target.value); setConversationScope(''); setMembers([]); setLoadedWorkspaceId(''); setWorkspaceInvitations([]); setPresence([]); setSearch(''); setSearchResults([]); setConversations([]); setMessages([]); setLoadedMessagesConversationId(''); setMessageBody(''); setGroupTitle(''); setGroupMemberIds([]); }}>{workspaces.map((item) => <option key={item.workspace_id} value={item.workspace_id}>{item.name} · {item.role}</option>)}</select></label>
+        <label className="office-workspace-select">Office space<select aria-label="Office space" value={workspaceId} onChange={(event) => { setWorkspaceScope(event.target.value); setConversationScope(''); setNotice(''); setMembers([]); setLoadedWorkspaceId(''); setWorkspaceInvitations([]); setPresence([]); setSearch(''); setSearchResults([]); setConversations([]); setMessages([]); setLoadedMessagesConversationId(''); setMessageBody(''); setGroupTitle(''); setGroupMemberIds([]); }}>{!workspaceId && <option value="" disabled>Select an available team</option>}{workspaces.map((item) => <option key={item.workspace_id} value={item.workspace_id}>{item.name} · {item.role}</option>)}</select></label>
         {activeWorkspace && <div className="office-collab-grid">
           <div className="office-collab-column">
             <section className="office-subpanel"><div className="office-subpanel-title"><h3><Users size={15} /> Members</h3><span>{visibleMembers.filter((member) => member.status === 'active').length}</span></div>

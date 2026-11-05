@@ -148,6 +148,7 @@ export interface IndustryTeamSetup {
   officeId: string;
   officeName: string;
   industryId: IndustryId;
+  teamWorkspaceId?: string | null;
 }
 
 export const emptyIndustryState = (): IndustryState => ({ version: 1, offices: [] });
@@ -355,13 +356,14 @@ export function returnIndustryWorkItem(state: IndustryState, officeId: string, i
 }
 
 export function linkIndustryTeam(state: IndustryState, officeId: string, teamWorkspaceId: string, now = new Date()): IndustryState {
-  if (!teamWorkspaceId.trim() || teamWorkspaceId.length > 128) return state;
+  const normalizedWorkspaceId = teamWorkspaceId.trim();
+  if (!normalizedWorkspaceId || normalizedWorkspaceId.length > 128) return state;
   let linked = false;
   const timestamp = now.toISOString();
   const offices = state.offices.map((office) => {
     if (office.id !== officeId) return office;
     linked = true;
-    return { ...office, teamWorkspaceId, updatedAt: timestamp };
+    return { ...office, teamWorkspaceId: normalizedWorkspaceId, updatedAt: timestamp };
   });
   return linked ? { ...state, offices } : state;
 }

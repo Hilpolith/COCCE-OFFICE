@@ -74,7 +74,8 @@ export default function TeamWorkspace({ workspaceId, workspaceName, query, indus
   const activeProjects = scoped.items.filter((item) => item.type === 'project' && !item.archived).sort((a, b) => a.name.localeCompare(b.name));
   const activeItems = scoped.items.filter((item) => !item.archived);
   const openTaskCount = scoped.tasks.filter((task) => task.status !== 'done').length;
-  const suggestedIndustryTeamName = industryTeamSetup
+  const linkedIndustryTeamId = industryTeamSetup?.teamWorkspaceId?.trim() || undefined;
+  const suggestedIndustryTeamName = industryTeamSetup && !linkedIndustryTeamId
     ? `${industryTeamSetup.officeName} · ${getIndustryDefinition(industryTeamSetup.industryId).shortLabel}`.slice(0, 80)
     : undefined;
 
@@ -251,8 +252,8 @@ export default function TeamWorkspace({ workspaceId, workspaceName, query, indus
       </div>
 
       <div className="team-local-notice" role="note"><LockKeyhole size={16} /><span><strong>Local planning only.</strong> The structure and tasks below stay in this browser; they are not linked to Office memberships or conversations in the separate collaboration panel.</span></div>
-      {industryTeamSetup && <div className="team-industry-setup" role="note"><Building2 size={17} /><span><strong>Creating a team for {industryTeamSetup.officeName}</strong><small>{getIndustryDefinition(industryTeamSetup.industryId).label} · the server-backed team is separate from this device-local industry work register.</small></span></div>}
-      <OfficeTeamCollaboration initialWorkspaceName={suggestedIndustryTeamName} onWorkspaceCreated={handleIndustryTeamCreated} />
+      {industryTeamSetup && <div className="team-industry-setup" role="note"><Building2 size={17} /><span><strong>{linkedIndustryTeamId ? `Opening the linked team for ${industryTeamSetup.officeName}` : `Creating a team for ${industryTeamSetup.officeName}`}</strong><small>{getIndustryDefinition(industryTeamSetup.industryId).label} · the server-backed team is separate from this device-local industry work register.</small></span></div>}
+      <OfficeTeamCollaboration initialWorkspaceName={suggestedIndustryTeamName} initialWorkspaceId={linkedIndustryTeamId} onWorkspaceCreated={handleIndustryTeamCreated} />
       {feedback && <div className="team-feedback" role={/could not|not saved|invalid|limit|larger|malformed|conflict|move or|resolve active|storage|quota|write failed/i.test(feedback) ? 'alert' : 'status'}><CircleAlert size={15} />{feedback}<button className="team-feedback-close" onClick={() => setFeedback('')} aria-label="Dismiss message"><X size={14} /></button></div>}
 
       <div className="team-planner-grid">

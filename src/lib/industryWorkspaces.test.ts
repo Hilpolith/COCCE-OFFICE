@@ -53,7 +53,7 @@ describe('industry workspaces stay local and bounded', () => {
     const first = createIndustryOffice(emptyIndustryState(), { industryId: 'business', name: 'Studio', country: 'Tanzania' }, fixed).office!;
     const second = createIndustryOffice({ version: 1, offices: [first] }, { industryId: 'ngo', name: 'Field Office', country: 'Tanzania' }, fixed).office!;
     const state = { version: 1 as const, offices: [first, second] };
-    const linked = linkIndustryTeam(state, first.id, 'server-office-workspace-123', fixed);
+    const linked = linkIndustryTeam(state, first.id, '  server-office-workspace-123  ', fixed);
     expect(linked.offices[0].teamWorkspaceId).toBe('server-office-workspace-123');
     expect(linked.offices[1].teamWorkspaceId).toBeNull();
     expect(linkIndustryTeam(linked, first.id, '   ', fixed)).toBe(linked);
