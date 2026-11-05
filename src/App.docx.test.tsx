@@ -40,6 +40,7 @@ describe('Docs local DOCX import UI', () => {
     const file = new File([await blob.arrayBuffer()], 'Synthetic import.docx', { type: DOCX_MIME });
 
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
     expect(screen.queryByText(/Import a new local document from a limited DOCX subset/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
@@ -62,6 +63,7 @@ describe('Docs local DOCX import UI', () => {
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
 
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
     fireEvent.click(screen.getByRole('button', { name: /Existing draft/ }));
     fireEvent.click(await screen.findByRole('button', { name: /Export \.docx/ }));
@@ -76,6 +78,7 @@ describe('Docs local DOCX import UI', () => {
   it('persists a locally authored table across reload without a network request', async () => {
     const network = vi.spyOn(globalThis, 'fetch');
     const firstRender = render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
     fireEvent.click(screen.getByRole('button', { name: /Existing draft/ }));
     const content = await screen.findByRole('textbox', { name: 'Document content' });
@@ -96,6 +99,7 @@ describe('Docs local DOCX import UI', () => {
     firstRender.unmount();
 
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
     fireEvent.click(screen.getByRole('button', { name: /Existing draft/ }));
     const reloaded = await screen.findByRole('textbox', { name: 'Document content' });
@@ -117,6 +121,7 @@ describe('Docs local DOCX import UI', () => {
     const file = new File([await blob.arrayBuffer()], 'Recoverable.docx', { type: DOCX_MIME });
 
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
@@ -134,6 +139,7 @@ describe('Docs local DOCX import UI', () => {
     const file = new File([await blob.arrayBuffer()], 'Cancelled.docx', { type: DOCX_MIME });
 
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });

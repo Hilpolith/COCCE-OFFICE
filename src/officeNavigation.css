@@ -1,0 +1,87 @@
+.sidebar {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.sidebar-bottom { flex: none; }
+.nav-group-trigger > span:nth-child(2) { flex: 1; min-width: 0; }
+.nav-group-caret {
+  margin-left: auto;
+  opacity: .68;
+  transition: transform .18s, opacity .18s;
+}
+.nav-group-trigger:hover .nav-group-caret { opacity: 1; }
+.nav-group-caret.is-expanded { transform: rotate(180deg); }
+.nav-subgroup {
+  display: grid;
+  gap: 2px;
+  margin: 1px 0 4px 13px;
+  padding: 3px 0 3px 9px;
+  border-left: 1px solid var(--border);
+}
+.nav-button.nav-subbutton {
+  min-height: 33px;
+  padding: 0 8px 0 9px;
+  border-radius: 10px;
+  font-size: 10px;
+  gap: 8px;
+}
+.nav-button.nav-subbutton > svg { width: 15px; height: 15px; }
+.nav-button.nav-subbutton .nav-active-marker { left: -11px; top: 7px; height: 18px; }
+.nav-industry-button > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-industry-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: #be91ff;
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 32%, transparent);
+}
+.nav-button.nav-industry-government { --industry-color: #ff9b63; }
+.nav-button.nav-industry-school { --industry-color: #55d5c3; }
+.nav-button.nav-industry-university { --industry-color: #77a9ff; }
+.nav-button.nav-industry-business { --industry-color: #be91ff; }
+.nav-button.nav-industry-accounting { --industry-color: #ffd166; }
+.nav-button.nav-industry-manufacturing { --industry-color: #ff846e; }
+.nav-button.nav-industry-healthcare-admin { --industry-color: #67c6e9; }
+.nav-button.nav-industry-ngo { --industry-color: #87d986; }
+.nav-button.nav-industry-hospitality { --industry-color: #f39ac0; }
+.nav-button.nav-industry-church { --industry-color: #b7a1ff; }
+.nav-industry-dot.nav-industry-government { background: #ff9b63; }
+.nav-industry-dot.nav-industry-school { background: #55d5c3; }
+.nav-industry-dot.nav-industry-university { background: #77a9ff; }
+.nav-industry-dot.nav-industry-business { background: #be91ff; }
+.nav-industry-dot.nav-industry-accounting { background: #ffd166; }
+.nav-industry-dot.nav-industry-manufacturing { background: #ff846e; }
+.nav-industry-dot.nav-industry-healthcare-admin { background: #67c6e9; }
+.nav-industry-dot.nav-industry-ngo { background: #87d986; }
+.nav-industry-dot.nav-industry-hospitality { background: #f39ac0; }
+.nav-industry-dot.nav-industry-church { background: #b7a1ff; }
+.nav-button.nav-industry-button.active {
+  color: var(--industry-color, #be91ff);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--industry-color, #be91ff) 14%, transparent), rgba(255,255,255,.035));
+  border-color: color-mix(in srgb, var(--industry-color, #be91ff) 22%, transparent);
+}
+.team-industry-setup {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 13px 0;
+  padding: 13px 15px;
+  border: 1px solid color-mix(in srgb, #8e8cff 32%, var(--border));
+  border-radius: 14px;
+  background: linear-gradient(105deg, rgba(141,139,255,.11), rgba(255,255,255,.025));
+  color: var(--text);
+}
+.team-industry-setup > svg { flex: none; margin-top: 1px; color: #b2a9ff; }
+.team-industry-setup > span { display: grid; gap: 4px; }
+.team-industry-setup strong { font-size: 11px; }
+.team-industry-setup small { color: var(--muted); font-size: 10px; line-height: 1.5; }
+@media (max-height: 760px) and (min-width: 761px) {
+  .sidebar { padding-top: 16px; padding-bottom: 14px; }
+  .brand-lockup { padding-bottom: 15px; }
+  .sidebar-section-label { padding-top: 16px; }
+  .nav-button { min-height: 35px; }
+  .nav-button.nav-subbutton { min-height: 29px; }
+  .sidebar-divider { margin-top: 10px; }
+}

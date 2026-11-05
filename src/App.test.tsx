@@ -12,6 +12,7 @@ const draft = {
 
 async function openDraft() {
   render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
   fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
   fireEvent.click(screen.getByRole('button', { name: /Saved title/ }));
   await screen.findByRole('textbox', { name: 'Document content' }, { timeout: 5000 });
@@ -43,6 +44,7 @@ describe('local Docs recovery integration', () => {
   it('searches visible rich-text content even when the older plain-text copy is empty', () => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULT_STATE, documents: [{ ...draft, content: '', richText: '<p>Find the needleword here</p>' }] }));
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Search local documents' }), { target: { value: 'needleword' } });
     expect(screen.getByRole('button', { name: /Saved title/ })).toBeTruthy();
@@ -114,8 +116,24 @@ describe('local Docs recovery integration', () => {
     expect(screen.queryByRole('button', { name: /invite|message|send|assign to/i })).toBeNull();
   });
 
+  it('keeps document destinations under one tab and exposes industry suites separately', () => {
+    render(<App />);
+    expect(screen.queryByRole('button', { name: 'Docs' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
+    expect(screen.getByRole('button', { name: 'Docs' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sheets' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Slides' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Office suites' }));
+    expect(screen.getByRole('button', { name: 'Government' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Accounting' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Accounting' }));
+    expect(screen.getByRole('heading', { name: 'Create an industry office' })).toBeTruthy();
+    expect(screen.getByText(/not a ledger or tax engine/i)).toBeTruthy();
+  });
+
   it('opens the device-local Vault from application navigation', async () => {
     render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     fireEvent.click(screen.getByRole('button', { name: 'Vault' }));
     expect(await screen.findByRole('heading', { name: 'Start a local Vault' })).toBeTruthy();
     expect(screen.getByText(/not cloud storage or enterprise access control/i)).toBeTruthy();

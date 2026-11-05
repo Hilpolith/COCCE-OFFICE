@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 import {
-  Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness,
+  Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness, Building2,
   Check, ChevronDown, ChevronLeft, CircleHelp, CloudOff, Command,
   FileSpreadsheet, FileText, FolderOpen, Grid2X2, LayoutDashboard,
   LockKeyhole, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings2,
-  ShieldCheck, Sparkles, Sun, WandSparkles, X,
+  ShieldCheck, Sparkles, Sun, X,
 } from 'lucide-react';
 import {
   addDocument, addWorkspace, readPreviewState, removeDocument, selectWorkspace,
@@ -25,23 +25,32 @@ import OfficeAccountControl from './OfficeAccountControl';
 import OfficeEditorChrome from './OfficeEditorChrome';
 import { readSurfaceStyle, writeSurfaceStyle } from './lib/appearancePreferences';
 import type { SurfaceStyle } from './lib/appearancePreferences';
+import IndustrySuitesWorkspace from './IndustrySuitesWorkspace';
+import { getIndustryDefinition, industryCatalog } from './lib/industryWorkspaces';
+import type { IndustryId, IndustryTeamSetup } from './lib/industryWorkspaces';
+import './officeNavigation.css';
 
 const DocumentEditor = lazy(() => import('./DocsEditor'));
 const PdfWorkspace = lazy(() => import('./PdfWorkspace'));
 const TeamWorkspace = lazy(() => import('./TeamWorkspace'));
 
-const moduleNav = [
+const documentNav = [
   { id: 'docs', label: 'Docs', icon: FileText, detail: 'Local rich-text drafts' },
   { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, detail: 'Local formula engine' },
   { id: 'slides', label: 'Slides', icon: Grid2X2, detail: 'Presentation editor' },
   { id: 'pdf', label: 'PDF', icon: BookOpenText, detail: 'PDF tools' },
   { id: 'drive', label: 'Drive', icon: FolderOpen, detail: 'Files in this browser' },
-  { id: 'team', label: 'Team', icon: MessageCircle, detail: 'Local planner · private' },
   { id: 'vault', label: 'Vault', icon: LockKeyhole, detail: 'Protected files' },
-  { id: 'automations', label: 'AI Automations', icon: WandSparkles, detail: 'Agents and workflows' },
 ] as const;
 
-type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'pdf' | 'drive' | 'team' | 'vault' | 'automations' | 'settings';
+const toolkitNav = [
+  { id: 'docs', label: 'Documents', icon: FileText, detail: 'Docs, Sheets, Slides, PDF, Drive and Vault' },
+  { id: 'industry', label: 'Industry suites', icon: Building2, detail: 'Sector-specific local work registers' },
+  { id: 'team', label: 'Team & collaboration', icon: MessageCircle, detail: 'Local planner and separate Office Team' },
+] as const;
+
+type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'pdf' | 'drive' | 'team' | 'vault' | 'industry' | 'settings';
+const documentPageIds: readonly PageId[] = ['docs', 'sheets', 'slides', 'pdf', 'drive', 'vault'];
 type DialogMode = 'workspace' | 'delete' | null;
 
 const themeOptions: { id: ThemeId; name: string; color: string }[] = [
@@ -77,6 +86,10 @@ function App() {
   const [dialog, setDialog] = useState<DialogMode>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [documentsExpanded, setDocumentsExpanded] = useState(false);
+  const [officeSuitesExpanded, setOfficeSuitesExpanded] = useState(false);
+  const [industryFocus, setIndustryFocus] = useState<IndustryId | null>(null);
+  const [industryTeamSetup, setIndustryTeamSetup] = useState<IndustryTeamSetup | null>(null);
   const [query, setQuery] = useState('');
   const [feedback, setFeedback] = useState(browserStorage === unavailableBrowserStorage ? 'Could not save or read browser storage. Existing local data has not been changed; allow browser storage before editing.' : '');
   const [clockLabel] = useState(() => {
@@ -160,15 +173,38 @@ function App() {
 
   const goTo = (nextPage: PageId) => {
     setPage(nextPage);
+    if (documentPageIds.includes(nextPage)) { setDocumentsExpanded(true); setOfficeSuitesExpanded(false); }
+    if (nextPage === 'industry') { setOfficeSuitesExpanded(true); setDocumentsExpanded(false); }
     setSelectedDocumentId(null);
     setMobileMenuOpen(false);
     setQuery('');
+  };
+
+  const toggleDocuments = () => {
+    if (!documentPageIds.includes(page)) { goTo('docs'); return; }
+    setDocumentsExpanded((open) => !open);
+  };
+
+  const toggleOfficeSuites = () => {
+    if (page !== 'industry') { setIndustryFocus(null); goTo('industry'); return; }
+    setOfficeSuitesExpanded((open) => !open);
+  };
+
+  const selectIndustry = (industryId: IndustryId) => {
+    setIndustryFocus(industryId);
+    goTo('industry');
+  };
+
+  const openIndustryTeam = (setup: IndustryTeamSetup) => {
+    setIndustryTeamSetup(setup);
+    goTo('team');
   };
 
   const createDocument = () => {
     const result = addDocument(state);
     if (!persist(result.state)) return;
     setPage('docs');
+    setDocumentsExpanded(true);
     setSelectedDocumentId(result.document.id);
     setFeedback('New document created on this device.');
     window.setTimeout(() => setFeedback(''), 2800);
@@ -176,6 +212,7 @@ function App() {
 
   const openDocument = (document: OfficeDocument) => {
     setPage('docs');
+    setDocumentsExpanded(true);
     setSelectedDocumentId(document.id);
   };
 
@@ -243,6 +280,7 @@ function App() {
         setUnsavedDocuments((current) => ({ ...current, [draft.id]: draft }));
       }
       setPage('docs');
+      setDocumentsExpanded(true);
       setSelectedDocumentId(draft.id);
       const warning = imported.warnings.length ? ` ${imported.warnings.join(' ')}` : '';
       setFeedback(saved
@@ -267,6 +305,7 @@ function App() {
     });
     if (!persist(next)) return false;
     setPage('docs');
+    setDocumentsExpanded(true);
     setSelectedDocumentId(created.document.id);
     setFeedback('Cloud copy restored as a new document on this device. Existing local drafts were not changed.');
     return true;
@@ -339,9 +378,19 @@ function App() {
         <div className="sidebar-section-label">WORKSPACE</div>
         <nav className="primary-nav">
           <NavButton active={page === 'home'} icon={<LayoutDashboard size={18} />} label="Overview" onClick={() => goTo('home')} />
-          {moduleNav.map(({ id, label, icon: Icon }) => (
-            <NavButton key={id} active={page === id} icon={<Icon size={18} />} label={label} onClick={() => goTo(id)} />
-          ))}
+          <button type="button" className={`nav-button nav-group-trigger ${documentPageIds.includes(page) ? 'active' : ''}`} aria-expanded={documentsExpanded} aria-controls="documents-subnav" onClick={toggleDocuments}>
+            <FileText size={18} /><span>Documents</span><ChevronDown size={14} className={`nav-group-caret ${documentsExpanded ? 'is-expanded' : ''}`} />{documentPageIds.includes(page) && <span className="nav-active-marker" />}
+          </button>
+          {documentsExpanded && <div className="nav-subgroup" id="documents-subnav">
+            {documentNav.map(({ id, label, icon: Icon }) => <NavButton key={id} className="nav-subbutton" active={page === id} icon={<Icon size={16} />} label={label} onClick={() => goTo(id)} />)}
+          </div>}
+          <button type="button" className={`nav-button nav-group-trigger ${page === 'industry' ? 'active' : ''}`} aria-expanded={officeSuitesExpanded} aria-controls="industry-subnav" onClick={toggleOfficeSuites}>
+            <Building2 size={18} /><span>Office suites</span><ChevronDown size={14} className={`nav-group-caret ${officeSuitesExpanded ? 'is-expanded' : ''}`} />{page === 'industry' && <span className="nav-active-marker" />}
+          </button>
+          {officeSuitesExpanded && <div className="nav-subgroup" id="industry-subnav">
+            {industryCatalog.map((industry) => <NavButton key={industry.id} className={`nav-subbutton nav-industry-button nav-industry-${industry.id}`} active={page === 'industry' && industryFocus === industry.id} icon={<span className={`nav-industry-dot nav-industry-${industry.id}`} />} label={industry.shortLabel} onClick={() => selectIndustry(industry.id)} />)}
+          </div>}
+          <NavButton active={page === 'team'} icon={<MessageCircle size={18} />} label="Team" onClick={() => goTo('team')} />
         </nav>
 
         <div className="sidebar-bottom">
@@ -361,10 +410,10 @@ function App() {
         <header className="topbar">
           <div className="topbar-left">
             <button className="icon-button mobile-menu-button" aria-label="Open navigation" onClick={() => setMobileMenuOpen(true)}><Menu size={19} /></button>
-            <div className="breadcrumb"><span>COCCE Office</span><ChevronLeft size={13} className="breadcrumb-sep" /><strong>{pageTitle(page, Boolean(selectedDocument))}</strong></div>
+            <div className="breadcrumb"><span>COCCE Office</span><ChevronLeft size={13} className="breadcrumb-sep" /><strong>{pageTitle(page, Boolean(selectedDocument), industryFocus)}</strong></div>
           </div>
           <div className="topbar-actions">
-            <label className="search-box"><Search size={16} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-keyshortcuts="Control+k Meta+k" aria-label={page === 'team' ? 'Search local planner items' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
+            <label className="search-box"><Search size={16} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-keyshortcuts="Control+k Meta+k" aria-label={page === 'team' ? 'Search local planner items' : page === 'industry' ? 'Search local industry work' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
             <span className="local-status"><span className="status-dot" /> Office workspace</span>
             <OfficeAccountControl />
             <button className="icon-button help-button" title="Workspace information" aria-label="Workspace information" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
@@ -383,12 +432,12 @@ function App() {
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
           {page === 'vault' && <VaultWorkspace />}
-          {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} /></Suspense>}
+          {page === 'industry' && <IndustrySuitesWorkspace key={industryFocus ?? 'all'} preferredIndustryId={industryFocus} onCreateTeam={openIndustryTeam} />}
+          {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={() => setIndustryTeamSetup(null)} /></Suspense>}
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
-          {page !== 'home' && page !== 'docs' && page !== 'drive' && page !== 'pdf' && page !== 'sheets' && page !== 'slides' && page !== 'vault' && page !== 'team' && page !== 'settings' && <UnavailablePage page={page} />}
         </div>
 
-        <footer className="app-footer"><span><ShieldCheck size={13} /> Office Team collaboration uses the Office backend; most other modules remain browser-local.</span><span>COCCE OFFICE · COLLABORATION RELEASE</span></footer>
+        <footer className="app-footer"><span><ShieldCheck size={13} /> Team collaboration is server-backed; documents and the first industry registers remain browser-local.</span><span>COCCE OFFICE · INDUSTRY WORKBENCH PREVIEW</span></footer>
       </section>
 
       {feedback && <div className="toast" role={/could not save|not saved|preserved/i.test(feedback) ? 'alert' : 'status'}><Check size={16} />{feedback}</div>}
@@ -398,15 +447,16 @@ function App() {
   );
 }
 
-function pageTitle(page: PageId, editing: boolean) {
+function pageTitle(page: PageId, editing: boolean, industryFocus: IndustryId | null) {
   if (page === 'docs' && editing) return 'Document editor';
   if (page === 'home') return 'Overview';
   if (page === 'settings') return 'Preferences';
-  return moduleNav.find((item) => item.id === page)?.label ?? 'Overview';
+  if (page === 'industry') return industryFocus ? getIndustryDefinition(industryFocus).shortLabel : 'Office suites';
+  return documentNav.find((item) => item.id === page)?.label ?? toolkitNav.find((item) => item.id === page)?.label ?? 'Overview';
 }
 
-function NavButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return <button className={`nav-button ${active ? 'active' : ''}`} onClick={onClick} aria-current={active ? 'page' : undefined}>{icon}<span>{label}</span>{active && <span className="nav-active-marker" />}</button>;
+function NavButton({ active, icon, label, onClick, className = '' }: { active: boolean; icon: ReactNode; label: string; onClick: () => void; className?: string }) {
+  return <button type="button" className={`nav-button ${className} ${active ? 'active' : ''}`} onClick={onClick} aria-current={active ? 'page' : undefined}>{icon}<span>{label}</span>{active && <span className="nav-active-marker" />}</button>;
 }
 
 function Dashboard({
@@ -424,7 +474,7 @@ function Dashboard({
           <div className="eyebrow accent-eyebrow"><span className="sparkle-dot"><Sparkles size={13} /></span> YOUR PRIVATE WORKSPACE</div>
           <h1>{greeting}, <span className="gradient-text">let’s make room</span><br className="desktop-break" /> for focused work.</h1>
           <p className="welcome-subtitle">A calm place for your ideas, documents, and next steps.</p>
-          <div className="welcome-actions"><button className="button-primary" onClick={onCreateDocument}><Plus size={17} /> New document</button><button className="button-secondary" onClick={onCreateWorkspace}><BriefcaseBusiness size={16} /> Create Office space</button></div>
+          <div className="welcome-actions"><button className="button-primary" onClick={onCreateDocument}><Plus size={17} /> New document</button><button className="button-secondary" onClick={() => onNavigate('industry')}><Building2 size={16} /> Choose an industry</button><button className="button-secondary" onClick={onCreateWorkspace}><BriefcaseBusiness size={16} /> Create Office space</button></div>
         </div>
         <div className="hero-brand-card glass-card"><div className="hero-orbit orbit-one" /><div className="hero-orbit orbit-two" /><img src="/brand/cocce-office-squircle-icon-512.png" alt="COCCE Office squircle app icon" /><div className="hero-brand-caption"><span className="live-pip" />{activeWorkspace}<small>Saved privately on this device</small></div></div>
       </section>
@@ -443,16 +493,17 @@ function Dashboard({
         <div className="panel quick-panel glass-card">
           <div className="panel-heading"><div><span className="eyebrow">QUICK START</span><h2>Make a little progress</h2></div><span className="small-star"><Sparkles size={15} /></span></div>
           <button className="quick-action" onClick={onCreateDocument}><span className="quick-icon quick-doc"><FileText size={17} /></span><span><strong>Start a document</strong><small>Write and save locally</small></span><ArrowUpRight size={15} /></button>
+          <button className="quick-action" onClick={() => onNavigate('industry')}><span className="quick-icon quick-space"><Building2 size={17} /></span><span><strong>Set up an industry office</strong><small>Choose a sector and work flow</small></span><ArrowUpRight size={15} /></button>
           <button className="quick-action" onClick={onCreateWorkspace}><span className="quick-icon quick-space"><BriefcaseBusiness size={17} /></span><span><strong>Create an Office space</strong><small>Separate work by organization</small></span><ArrowUpRight size={15} /></button>
           <div className="quick-note"><LockKeyhole size={15} /><p><strong>Private by design.</strong> Personal drafts and local workspace labels stay in this browser and are not synced or backed up. Office Team collaboration uses a separate service.</p></div>
         </div>
       </section>
 
       <section className="module-section">
-        <div className="panel-heading module-heading"><div><span className="eyebrow">THE OFFICE TOOLKIT</span><h2>Explore your workspace</h2></div><span className="module-caption">Open a module to see its current connection status</span></div>
-        <div className="module-grid">{moduleNav.map((module) => {
+        <div className="panel-heading module-heading"><div><span className="eyebrow">THE OFFICE TOOLKIT</span><h2>Explore your workspace</h2></div><span className="module-caption">Documents, industry work and team collaboration</span></div>
+        <div className="module-grid">{toolkitNav.map((module) => {
           const Icon = module.icon;
-              return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.id === 'team' ? 'Local planner · collaboration separate' : module.id === 'docs' || module.id === 'drive' || module.id === 'sheets' || module.id === 'slides' || module.id === 'vault' ? 'Available locally' : 'Service not connected'}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
+          return <button key={module.id} className={`module-card module-${module.id}`} onClick={() => onNavigate(module.id)}><span className="module-icon"><Icon size={18} /></span><span><strong>{module.label}</strong><small>{module.detail}</small></span><ArrowUpRight size={15} className="module-arrow" /></button>;
         })}</div>
       </section>
     </div>
@@ -530,18 +581,6 @@ function SettingsPage({ state, surfaceStyle, onSurfaceStyle, onTheme, onAccent }
 
 function ConnectionRow({ label, value }: { label: string; value: string }) {
   return <div className="connection-row"><span>{label}</span><span><span className="connection-dot" />{value}</span></div>;
-}
-
-const unavailableCopy: Record<Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'team' | 'settings'>, { kicker: string; title: string; description: string; reason: string }> = {
-  pdf: { kicker: 'COCCE PDF', title: 'PDF tools run locally', description: 'View PDFs, search text, and save browser-local annotations. Cloud processing and file uploads are not connected.', reason: 'PDF files stay in this browser.' },
-  automations: { kicker: 'COCCE AI AUTOMATIONS', title: 'Background automation is not enabled', description: 'Docs AI provides user-triggered writing actions and browser-local recipes. Scheduled/background jobs, external app integrations, and a server-side automation runner are not connected.', reason: 'No unattended model calls or automated workflow runs occur.' },
-};
-
-function UnavailablePage({ page }: { page: Exclude<PageId, 'home' | 'docs' | 'drive' | 'sheets' | 'slides' | 'vault' | 'team' | 'settings'> }) {
-  const module = moduleNav.find((item) => item.id === page);
-  const content = unavailableCopy[page];
-  const Icon = module?.icon ?? CloudOff;
-  return <div className="page module-status-page"><div className="module-status-card glass-card"><div className={`status-illustration status-${page}`}><div className="status-glow" /><span><Icon size={27} /></span><div className="status-orbit status-orbit-one" /><div className="status-orbit status-orbit-two" /></div><span className="eyebrow">{content.kicker} · CONNECTION REQUIRED</span><h1>{content.title}</h1><p className="status-description">{content.description}</p><div className="status-reason"><CloudOff size={16} /><span>{content.reason}</span></div><div className="status-boundary"><ShieldCheck size={15} /><span>This build makes no network calls for this module. Its navigation is informational, not a claim that a service is connected.</span></div></div></div>;
 }
 
 function WorkspaceDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string, kind: WorkspaceKind, country: string) => void }) {

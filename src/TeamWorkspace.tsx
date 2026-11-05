@@ -13,6 +13,8 @@ import {
 import type {
   LocalTeamItem, LocalTeamItemType, LocalTeamTask, LocalTeamTaskPriority, LocalTeamTaskStatus,
 } from './lib/teamStore';
+import { getIndustryDefinition, linkIndustryTeam, readIndustryState, writeIndustryState } from './lib/industryWorkspaces';
+import type { IndustryTeamSetup } from './lib/industryWorkspaces';
 import './team.css';
 import OfficeTeamCollaboration from './OfficeTeamCollaboration';
 
@@ -32,7 +34,13 @@ function itemTypeLabel(type: LocalTeamItemType) {
   return itemTypes.find((item) => item.id === type)?.label ?? 'Item';
 }
 
-export default function TeamWorkspace({ workspaceId, workspaceName, query }: { workspaceId: string | null; workspaceName: string; query: string }) {
+export default function TeamWorkspace({ workspaceId, workspaceName, query, industryTeamSetup = null, onIndustryTeamLinked }: {
+  workspaceId: string | null;
+  workspaceName: string;
+  query: string;
+  industryTeamSetup?: IndustryTeamSetup | null;
+  onIndustryTeamLinked?: () => void;
+}) {
   const [state, setState] = useState(() => readLocalTeamState(window.localStorage));
   const [feedback, setFeedback] = useState('');
   const [itemFormOpen, setItemFormOpen] = useState(false);
@@ -66,6 +74,9 @@ export default function TeamWorkspace({ workspaceId, workspaceName, query }: { w
   const activeProjects = scoped.items.filter((item) => item.type === 'project' && !item.archived).sort((a, b) => a.name.localeCompare(b.name));
   const activeItems = scoped.items.filter((item) => !item.archived);
   const openTaskCount = scoped.tasks.filter((task) => task.status !== 'done').length;
+  const suggestedIndustryTeamName = industryTeamSetup
+    ? `${industryTeamSetup.officeName} · ${getIndustryDefinition(industryTeamSetup.industryId).shortLabel}`.slice(0, 80)
+    : undefined;
 
   const commit = (next: ReturnType<typeof readLocalTeamState>, successMessage: string) => {
     try {
@@ -76,6 +87,23 @@ export default function TeamWorkspace({ workspaceId, workspaceName, query }: { w
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Planner changes could not be saved in this browser.');
       return false;
+    }
+  };
+
+  const handleIndustryTeamCreated = (teamWorkspaceId: string, teamName: string) => {
+    if (!industryTeamSetup) return;
+    try {
+      const current = readIndustryState(window.localStorage);
+      if (current.issue) throw new Error(current.issue);
+      const next = linkIndustryTeam(current.state, industryTeamSetup.officeId, teamWorkspaceId);
+      if (next === current.state) throw new Error('The industry office no longer exists in this browser.');
+      writeIndustryState(window.localStorage, next);
+      setFeedback(`Office Team “${teamName}” created. Its workspace ID is linked locally; industry work items remain on this device and are not shared.`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Local browser storage is unavailable.';
+      setFeedback(`Office Team “${teamName}” was created, but its ID could not be linked to the local industry office: ${detail}`);
+    } finally {
+      onIndustryTeamLinked?.();
     }
   };
 
@@ -223,7 +251,8 @@ export default function TeamWorkspace({ workspaceId, workspaceName, query }: { w
       </div>
 
       <div className="team-local-notice" role="note"><LockKeyhole size={16} /><span><strong>Local planning only.</strong> The structure and tasks below stay in this browser; they are not linked to Office memberships or conversations in the separate collaboration panel.</span></div>
-      <OfficeTeamCollaboration />
+      {industryTeamSetup && <div className="team-industry-setup" role="note"><Building2 size={17} /><span><strong>Creating a team for {industryTeamSetup.officeName}</strong><small>{getIndustryDefinition(industryTeamSetup.industryId).label} · the server-backed team is separate from this device-local industry work register.</small></span></div>}
+      <OfficeTeamCollaboration initialWorkspaceName={suggestedIndustryTeamName} onWorkspaceCreated={handleIndustryTeamCreated} />
       {feedback && <div className="team-feedback" role={/could not|not saved|invalid|limit|larger|malformed|conflict|move or|resolve active|storage|quota|write failed/i.test(feedback) ? 'alert' : 'status'}><CircleAlert size={15} />{feedback}<button className="team-feedback-close" onClick={() => setFeedback('')} aria-label="Dismiss message"><X size={14} /></button></div>}
 
       <div className="team-planner-grid">
