@@ -33,14 +33,15 @@ describe('industry office workbench', () => {
     writeIndustryState(window.localStorage, linked);
     render(<IndustrySuitesWorkspace preferredIndustryId="government" onCreateTeam={vi.fn()} />);
 
-    expect(await screen.findByRole('heading', { name: 'Local government preview item' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: 'Shared team' }));
-
     const governmentModule = await screen.findByTestId('government-correspondence-preview');
     expect(governmentModule.textContent ?? '').toContain('Kijiji Council');
     expect(screen.getByRole('tab', { name: 'Correspondence' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: 'Shared work items' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Local government preview item' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'This device preview' }));
+    expect(await screen.findByRole('heading', { name: 'Local government preview item' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared team' }));
+    expect(await screen.findByTestId('government-correspondence-preview')).toBeTruthy();
     expect(JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!).offices[0].items[0].title)
       .toBe('Local government preview item');
   });
@@ -56,12 +57,13 @@ describe('industry office workbench', () => {
     writeIndustryState(window.localStorage, linked);
     render(<IndustrySuitesWorkspace preferredIndustryId="school" onCreateTeam={vi.fn()} />);
 
-    expect(await screen.findByRole('heading', { name: 'Local timetable mockup' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: 'Shared team' }));
     expect(await screen.findByTestId('school-management-preview')).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'School Management' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByRole('heading', { name: 'Local timetable mockup' })).toBeNull();
 
+    fireEvent.click(screen.getByRole('tab', { name: 'This device preview' }));
+    expect(await screen.findByRole('heading', { name: 'Local timetable mockup' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared team' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Shared work items' }));
     expect(await screen.findByText('Shared workbench is unavailable')).toBeTruthy();
     const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);
@@ -88,7 +90,7 @@ describe('industry office workbench', () => {
     });
   });
 
-  it('keeps linked offices in device mode by default and never copies their existing local tasks', async () => {
+  it('opens linked industry offices in the shared workspace first and never copies their existing local tasks', async () => {
     const office = createIndustryOffice(emptyIndustryState(), {
       industryId: 'business', name: 'Kijiji Studio', country: 'Tanzania',
     }).office!;
@@ -99,12 +101,10 @@ describe('industry office workbench', () => {
     writeIndustryState(window.localStorage, linked);
     render(<IndustrySuitesWorkspace preferredIndustryId="business" onCreateTeam={vi.fn()} />);
 
-    expect(await screen.findByRole('heading', { name: 'Local-only item' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'This device preview' }).getAttribute('aria-selected')).toBe('true');
-    fireEvent.click(screen.getByRole('tab', { name: 'Shared team' }));
-
     expect(await screen.findByText('Shared workbench is unavailable')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Local-only item' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'This device preview' }));
+    expect(await screen.findByRole('heading', { name: 'Local-only item' })).toBeTruthy();
     const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);
     expect(persisted.offices[0].items[0].title).toBe('Local-only item');
     expect(persisted.offices[0].teamWorkspaceId).toBe('server-team-id');
@@ -116,6 +116,9 @@ describe('industry office workbench', () => {
 
     fireEvent.change(screen.getByLabelText('Office or organization name'), { target: { value: 'Kijiji Factory' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Manufacturing office' }));
+    expect(onCreateTeam).toHaveBeenCalledWith(expect.objectContaining({ officeName: 'Kijiji Factory', industryId: 'manufacturing', teamWorkspaceId: null }));
+    expect(await screen.findByRole('heading', { name: 'Connect Kijiji Factory to its shared workspace' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Open device-local preview' }));
     expect(await screen.findByRole('heading', { name: 'Kijiji Factory' })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Work item'), { target: { value: 'Review machine maintenance plan' } });
@@ -138,10 +141,9 @@ describe('industry office workbench', () => {
     expect(onCreateTeam).toHaveBeenCalledWith(expect.objectContaining({ officeName: 'Kijiji Factory', industryId: 'manufacturing' }));
   });
 
-  it('shows the healthcare privacy boundary and never implies clinical records are supported', () => {
+  it('shows the healthcare-specific privacy boundary during office setup', () => {
     render(<IndustrySuitesWorkspace preferredIndustryId="healthcare-admin" onCreateTeam={vi.fn()} />);
     expect(screen.getByText(/administrative only: no patient names, diagnoses, clinical records, or prescriptions/i)).toBeTruthy();
-    expect(screen.getByText(/not an accounting or payroll system, clinical record, approved government system/i)).toBeTruthy();
   });
 
   it('keeps an unreadable local store intact and disables register edits', () => {

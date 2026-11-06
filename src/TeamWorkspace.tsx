@@ -100,11 +100,10 @@ export default function TeamWorkspace({ workspaceId, workspaceName, query, indus
       if (next === current.state) throw new Error('The industry office no longer exists in this browser.');
       writeIndustryState(window.localStorage, next);
       setFeedback(`Office Team “${teamName}” created. Its workspace ID is linked locally; industry work items remain on this device and are not shared.`);
+      onIndustryTeamLinked?.();
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Local browser storage is unavailable.';
       setFeedback(`Office Team “${teamName}” was created, but its ID could not be linked to the local industry office: ${detail}`);
-    } finally {
-      onIndustryTeamLinked?.();
     }
   };
 

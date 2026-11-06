@@ -87,7 +87,7 @@ function App() {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [documentsExpanded, setDocumentsExpanded] = useState(false);
-  const [officeSuitesExpanded, setOfficeSuitesExpanded] = useState(false);
+  const [officeSuitesExpanded, setOfficeSuitesExpanded] = useState(true);
   const [industryFocus, setIndustryFocus] = useState<IndustryId | null>(null);
   const [industryTeamSetup, setIndustryTeamSetup] = useState<IndustryTeamSetup | null>(null);
   const [query, setQuery] = useState('');
@@ -198,6 +198,19 @@ function App() {
   const openIndustryTeam = (setup: IndustryTeamSetup) => {
     setIndustryTeamSetup(setup);
     goTo('team');
+  };
+
+  const returnToIndustryOffice = () => {
+    const setup = industryTeamSetup;
+    setIndustryTeamSetup(null);
+    if (!setup) return;
+    setIndustryFocus(setup.industryId);
+    setPage('industry');
+    setOfficeSuitesExpanded(true);
+    setDocumentsExpanded(false);
+    setSelectedDocumentId(null);
+    setMobileMenuOpen(false);
+    setQuery('');
   };
 
   const createDocument = () => {
@@ -433,7 +446,7 @@ function App() {
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
           {page === 'vault' && <VaultWorkspace />}
           {page === 'industry' && <IndustrySuitesWorkspace key={industryFocus ?? 'all'} preferredIndustryId={industryFocus} onCreateTeam={openIndustryTeam} />}
-          {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={() => setIndustryTeamSetup(null)} /></Suspense>}
+          {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 

@@ -88,7 +88,7 @@ describe('industry office to Office Team handoff', () => {
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toMatch(/was created, but its ID could not be linked/i);
     expect(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)).toBe(corrupt);
-    expect(onIndustryTeamLinked).toHaveBeenCalledTimes(1);
+    expect(onIndustryTeamLinked).not.toHaveBeenCalled();
     expect(window.localStorage.getItem(LOCAL_TEAM_KEY)).toBeNull();
   });
 });

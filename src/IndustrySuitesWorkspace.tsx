@@ -41,10 +41,11 @@ export default function IndustrySuitesWorkspace({
   const [initial] = useState(readInitialState);
   const [state, setState] = useState<IndustryState>(initial.state);
   const [storageIssue, setStorageIssue] = useState(initial.issue);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<string | null>(() => {
-    if (preferredIndustryId) return initial.state.offices.find((office) => office.industryId === preferredIndustryId)?.id ?? null;
-    return initial.state.offices[0]?.id ?? null;
-  });
+  const officesForEntry = preferredIndustryId
+    ? initial.state.offices.filter((office) => office.industryId === preferredIndustryId)
+    : initial.state.offices;
+  const initialOffice = officesForEntry.find((office) => Boolean(office.teamWorkspaceId)) ?? officesForEntry[0] ?? null;
+  const [selectedOfficeId, setSelectedOfficeId] = useState<string | null>(initialOffice?.id ?? null);
   const [createOpen, setCreateOpen] = useState(() => preferredIndustryId
     ? !initial.state.offices.some((office) => office.industryId === preferredIndustryId)
     : initial.state.offices.length === 0);
@@ -58,13 +59,16 @@ export default function IndustrySuitesWorkspace({
   const [notes, setNotes] = useState('');
   const [recordSearch, setRecordSearch] = useState('');
   const [feedback, setFeedback] = useState('');
-  const [dataMode, setDataMode] = useState<'device' | 'shared'>('device');
+  const [dataMode, setDataMode] = useState<'device' | 'shared'>('shared');
   const [governmentPanel, setGovernmentPanel] = useState<'correspondence' | 'tasks'>('correspondence');
   const [schoolPanel, setSchoolPanel] = useState<'management' | 'tasks'>('management');
 
   const activeOffice = state.offices.find((office) => office.id === selectedOfficeId) ?? null;
   const definition = activeOffice ? getIndustryDefinition(activeOffice.industryId) : null;
   const accent = activeOffice ? accentByIndustry[activeOffice.industryId] : accentByIndustry[industryId];
+  const sharedWorkspaceLabel = definition?.id === 'school' ? 'School Management system'
+    : definition?.id === 'government' ? 'Government Correspondence workspace'
+      : `${definition?.shortLabel ?? 'industry'} shared work-item workspace`;
   const visibleItems = useMemo(() => {
     if (!activeOffice) return [];
     const normalized = recordSearch.trim().toLocaleLowerCase();
@@ -95,14 +99,15 @@ export default function IndustrySuitesWorkspace({
       setFeedback('Enter an office name and country, or check the local industry workspace limit.');
       return;
     }
-    if (persist(created.state, `${getIndustryDefinition(industryId).shortLabel} office created on this device.`)) {
+    if (persist(created.state, `${getIndustryDefinition(industryId).shortLabel} office profile saved. Opening Office Team setup.`)) {
       setSelectedOfficeId(created.office.id);
-      setDataMode('device');
+      setDataMode('shared');
       setGovernmentPanel('correspondence');
       setSchoolPanel('management');
       setOfficeName('');
       setCreateOpen(false);
       setRecordSearch('');
+      onCreateTeam({ officeId: created.office.id, officeName: created.office.name, industryId: created.office.industryId, teamWorkspaceId: created.office.teamWorkspaceId });
     }
   };
 
@@ -145,11 +150,11 @@ export default function IndustrySuitesWorkspace({
   return <div className="page subpage industry-page" style={{ '--industry-accent': accent } as CSSProperties}>
     <div className="industry-page-heading">
       <div>
-        <span className="eyebrow industry-eyebrow"><Sparkles size={13} /> OFFICE SUITES · {dataMode === 'shared' ? 'SHARED TEAM WORKBENCH' : 'DEVICE-LOCAL PREVIEW'}</span>
+        <span className="eyebrow industry-eyebrow"><Sparkles size={13} /> OFFICE SUITES · {activeOffice?.teamWorkspaceId && dataMode === 'shared' ? 'SHARED OFFICE TEAM' : dataMode === 'shared' ? 'TEAM SETUP REQUIRED' : 'DEVICE-LOCAL PREVIEW'}</span>
         <h1>Work for your industry</h1>
         <p className="page-lede">Choose a sector and track operational work in its sector-specific register. Device-local preview and shared Office Team tasks stay separate.</p>
       </div>
-      <button className="button-primary" onClick={() => { setIndustryId(preferredIndustryId ?? 'business'); setDataMode('device'); setCreateOpen(true); }}><Plus size={16} /> New office</button>
+      <button className="button-primary" onClick={() => { setIndustryId(preferredIndustryId ?? 'business'); setDataMode('shared'); setCreateOpen(true); }}><Plus size={16} /> New office</button>
     </div>
 
     {dataMode === 'device' && <div className="industry-boundary-note" role="note">
@@ -163,7 +168,7 @@ export default function IndustrySuitesWorkspace({
     {state.offices.length > 0 && <div className="industry-office-picker" role="group" aria-label="Your industry offices">
       {state.offices.map((office) => {
         const officeIndustry = getIndustryDefinition(office.industryId);
-        return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setDataMode('device'); setGovernmentPanel('correspondence'); setSchoolPanel('management'); setRecordSearch(''); }}>
+        return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setDataMode('shared'); setGovernmentPanel('correspondence'); setSchoolPanel('management'); setRecordSearch(''); }}>
           <span className="industry-chip-dot" style={{ background: accentByIndustry[office.industryId] }} />
           <span><strong>{office.name}</strong><small>{officeIndustry.shortLabel}</small></span>
         </button>;
@@ -171,7 +176,7 @@ export default function IndustrySuitesWorkspace({
     </div>}
 
     {createOpen && <section className="industry-create-card glass-card" aria-labelledby="industry-create-title">
-      <div className="industry-section-heading"><div className="industry-heading-icon"><Building2 size={19} /></div><div><span className="eyebrow">START WITH A SECTOR</span><h2 id="industry-create-title">Create an industry office</h2><p>This creates a private local office profile and an empty work register.</p></div></div>
+      <div className="industry-section-heading"><div className="industry-heading-icon"><Building2 size={19} /></div><div><span className="eyebrow">START WITH A SECTOR</span><h2 id="industry-create-title">Create an industry office</h2><p>This saves the office profile locally, then opens Office Team setup for the shared industry workspace. Existing local preview items are never copied.</p></div></div>
       <div className="industry-catalog-grid" role="group" aria-label="Choose an industry">
         {industryCatalog.map((industry) => <button type="button" key={industry.id} className={`industry-option-card ${industryId === industry.id ? 'is-selected' : ''}`} style={{ '--option-accent': accentByIndustry[industry.id] } as CSSProperties} aria-pressed={industryId === industry.id} onClick={() => setIndustryId(industry.id)}>
           <span className="industry-option-orb">{industry.shortLabel.slice(0, 1)}</span><span><strong>{industry.label}</strong><small>{industry.summary}</small></span><span className="industry-option-check"><Check size={15} /></span>
@@ -190,6 +195,14 @@ export default function IndustrySuitesWorkspace({
       <button type="button" role="tab" aria-selected={dataMode === 'shared'} className={dataMode === 'shared' ? 'is-active' : ''} onClick={() => setDataMode('shared')}><Users size={14} /> Shared team</button>
       <span>Local items are never copied automatically.</span>
     </div>}
+
+    {activeOffice && definition && !createOpen && !activeOffice.teamWorkspaceId && dataMode === 'shared' && <section className="industry-team-gate glass-card" aria-labelledby="industry-team-gate-title">
+      <div className="industry-heading-icon"><Users size={19} /></div>
+      <span className="eyebrow">OFFICE TEAM REQUIRED</span>
+      <h2 id="industry-team-gate-title">Connect {activeOffice.name} to its shared workspace</h2>
+      <p>Create an Office Team workspace to open the {sharedWorkspaceLabel}. This office profile and any existing device-local preview items stay separate; nothing is imported automatically.</p>
+      <div className="industry-form-actions"><button type="button" className="button-primary" onClick={openTeam}><Users size={15} /> Create or link Office Team</button><button type="button" className="button-secondary" onClick={() => setDataMode('device')}>Open device-local preview</button></div>
+    </section>}
 
     {activeOffice && definition && !createOpen && dataMode === 'device' && <>
       <section className="industry-office-hero glass-card">

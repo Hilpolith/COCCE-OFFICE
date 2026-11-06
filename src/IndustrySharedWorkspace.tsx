@@ -393,6 +393,7 @@ export default function IndustrySharedWorkspace({
 
     {status === 'ready' && space && <>
       {(space.office_name !== officeName || space.country !== country) && <div className="industry-shared-profile-note" role="note">The shared team uses its existing profile “{space.office_name}” ({space.country}). Your device-local office profile remains unchanged.</div>}
+      <div className="industry-shared-profile-note industry-specialist-status-note" role="note"><strong>{definition.label} shared work-item system</strong><span>This workspace supports shared assignments, stages, due dates and history. Dedicated specialist workflows for this industry are not yet released; this page does not represent a complete sector-management suite.</span></div>
       <div className="industry-shared-metrics" aria-label="Shared work summary">
         <div className="industry-metric-card industry-metric-total"><span>Loaded work items</span><strong>{items.length}</strong><small>{hasMore ? `Page ${dataPageCount} · load more for complete list` : 'All available items loaded'}</small></div>
         <div className="industry-metric-card industry-metric-active"><span>Not closed</span><strong>{activeCount}</strong><small>Across loaded items</small></div>

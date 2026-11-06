@@ -119,6 +119,8 @@ describe('local Docs recovery integration', () => {
   it('keeps document destinations under one tab and exposes industry suites separately', () => {
     render(<App />);
     expect(screen.queryByRole('button', { name: 'Docs' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Government' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Schools' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     expect(screen.getByRole('button', { name: 'Docs' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Sheets' })).toBeTruthy();

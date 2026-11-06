@@ -75,7 +75,7 @@ describe('shared industry workbench', () => {
     renderShared();
 
     expect(await screen.findByRole('heading', { name: 'Shared Business work items' })).toBeTruthy();
-    expect(screen.getByRole('note').textContent).toMatch(/do not enter sensitive/i);
+    expect(screen.getByText(/Shared team data · operational notes only/).parentElement?.textContent).toMatch(/do not enter sensitive/i);
     expect(screen.queryByText('Never upload this local item')).toBeNull();
     expect(window.localStorage.getItem('cocce-office-industry-workspaces-v1')).toBe(localBytes);
     expect(mocks.getSpace).toHaveBeenCalledWith(expect.anything(), workspaceId);
