@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   route: vi.fn(),
   transition: vi.fn(),
   listEvents: vi.fn(),
+  accessProfile: vi.fn(),
 }));
 
 vi.mock('./lib/officeTeamSupabase', () => ({
@@ -33,6 +34,9 @@ vi.mock('./lib/officeGovernmentCorrespondence', () => ({
     list: mocks.list, create: mocks.create, update: mocks.update, register: mocks.register,
     route: mocks.route, transition: mocks.transition, listEvents: mocks.listEvents,
   },
+}));
+vi.mock('./lib/officeGovernmentWorkspace', () => ({
+  officeGovernmentWorkspaceApi: { accessProfile: mocks.accessProfile },
 }));
 
 const workspaceId = 'government-team-id';
@@ -86,6 +90,7 @@ beforeEach(() => {
   mocks.route.mockResolvedValue(5);
   mocks.transition.mockResolvedValue(2);
   mocks.listEvents.mockResolvedValue([]);
+  mocks.accessProfile.mockResolvedValue({ is_admin: true, roles: [] });
 });
 
 describe('Government correspondence workspace', () => {
@@ -95,8 +100,8 @@ describe('Government correspondence workspace', () => {
     mocks.list.mockRejectedValue(new Error('Could not find the function public.office_gov_correspondence_list in the schema cache'));
     renderGovernment();
 
-    expect(await screen.findByText('Government register schema is not available')).toBeTruthy();
-    expect(screen.getByText(/proposed database migration is separate/i)).toBeTruthy();
+    expect(await screen.findByText('Government workspace schema is not available')).toBeTruthy();
+    expect(screen.getByText(/required Government workspace migration is not installed/i)).toBeTruthy();
     expect(screen.queryByText('Browser-only draft')).toBeNull();
     expect(window.localStorage.getItem('cocce-office-industry-workspaces-v1')).toBe(localBytes);
     expect(mocks.create).not.toHaveBeenCalled();
@@ -106,8 +111,8 @@ describe('Government correspondence workspace', () => {
     const localBytes = JSON.stringify({ offices: [{ items: [{ title: 'Stay local' }] }] });
     window.localStorage.setItem('cocce-office-industry-workspaces-v1', localBytes);
     renderGovernment();
-    expect(await screen.findByRole('heading', { name: 'Kijiji District Office correspondence' })).toBeTruthy();
-    expect(screen.getByRole('note').textContent).toMatch(/never enter citizen names or IDs/i);
+    expect(await screen.findByRole('heading', { name: 'Kijiji District Office workspace' })).toBeTruthy();
+    expect(screen.getByRole('note').textContent).toMatch(/do not store citizen names or IDs/i);
 
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Synthetic short label' } });
     fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'No\ncontrol chars' } });

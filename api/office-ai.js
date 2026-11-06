@@ -7,6 +7,10 @@ const MAX_DOCUMENT_SUMMARY_CHARS = 20_000;
 const MAX_SELECTION_CHARS = 8_000;
 const MAX_PROMPT_CHARS = 1_200;
 const MAX_OUTPUT_CHARS = 12_000;
+const GOVERNMENT_REVIEW_ACTIONS = new Set(['summarize', 'proofread', 'quality_check']);
+const GOVERNMENT_ELIGIBLE_STATUSES = new Set(['registered', 'routed', 'in_progress', 'changes_requested']);
+const GOVERNMENT_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const OBVIOUS_PII_PATTERN = /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|(?:\+?\d[\d ()-]{7,}\d)|\b\d{8,}\b/;
 const DEFAULT_WINDOW_MS = 10 * 60 * 1_000;
 const DEFAULT_REQUESTS_PER_WINDOW = 12;
 const MAX_RATE_LIMIT_ENTRIES = 10_000;
@@ -136,7 +140,9 @@ function readBody(req) {
   } catch {
     return { error: 'INVALID_BODY' };
   }
-  const allowed = new Set(['action', 'selectedText', 'prompt', 'documentText']);
+  const allowed = value.action === 'government_review'
+    ? new Set(['action', 'workspaceId', 'correspondenceId', 'selectedText', 'reviewAction', 'nonSensitiveConfirmed'])
+    : new Set(['action', 'selectedText', 'prompt', 'documentText']);
   if (Object.keys(value).some((key) => !allowed.has(key))) return { error: 'UNSUPPORTED_FIELDS' };
   return { body: value };
 }
@@ -150,6 +156,16 @@ function declaredBodyTooLarge(req) {
 
 function validateBody(body) {
   const action = body.action;
+  if (action === 'government_review') {
+    if (typeof body.workspaceId !== 'string' || !body.workspaceId.trim() || typeof body.correspondenceId !== 'string' || !body.correspondenceId.trim()) return { error: 'GOVERNMENT_CONTEXT_REQUIRED' };
+    if (!GOVERNMENT_UUID_PATTERN.test(body.workspaceId) || !GOVERNMENT_UUID_PATTERN.test(body.correspondenceId)) return { error: 'GOVERNMENT_CONTEXT_INVALID' };
+    if (typeof body.selectedText !== 'string' || !body.selectedText.trim()) return { error: 'SELECTION_REQUIRED' };
+    if (body.selectedText.length > MAX_SELECTION_CHARS) return { error: 'SELECTION_TOO_LONG' };
+    if (!GOVERNMENT_REVIEW_ACTIONS.has(body.reviewAction)) return { error: 'GOVERNMENT_ACTION_INVALID' };
+    if (body.nonSensitiveConfirmed !== true) return { error: 'GOVERNMENT_CONFIRMATION_REQUIRED' };
+    if (OBVIOUS_PII_PATTERN.test(body.selectedText)) return { error: 'GOVERNMENT_PII_DETECTED' };
+    return { action: body.reviewAction, prompt: ACTION_INSTRUCTIONS[body.reviewAction], selectedText: body.selectedText, government: { workspaceId: body.workspaceId, correspondenceId: body.correspondenceId } };
+  }
   const knownAction = action === 'draft' || action === 'custom' || Object.hasOwn(ACTION_INSTRUCTIONS, action);
   if (!knownAction) return { error: 'UNSUPPORTED_ACTION' };
 
@@ -179,6 +195,25 @@ function validateBody(body) {
 
   if (Object.hasOwn(body, 'prompt')) return { error: 'UNEXPECTED_PROMPT' };
   return { action, prompt: ACTION_INSTRUCTIONS[action], selectedText: body.selectedText };
+}
+
+async function readGovernmentControl({ workspaceId, correspondenceId, token, anonKey, fetchImpl }) {
+  if (!publicSupabaseKey(anonKey)) return { kind: 'configuration-error' };
+  try {
+    const upstream = await fetchImpl(`${COCCE_SUPABASE_URL}/rest/v1/rpc/office_gov_record_control_read`, {
+      method: 'POST',
+      headers: { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_workspace_id: workspaceId, p_correspondence_id: correspondenceId }),
+      cache: 'no-store', signal: AbortSignal.timeout(8_000),
+    });
+    if (!upstream.ok) return { kind: 'unavailable' };
+    const raw = await upstream.json(); const record = Array.isArray(raw) ? raw[0] : raw;
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return { kind: 'unavailable' };
+    if (typeof record.workspace_id === 'string' && record.workspace_id !== workspaceId) return { kind: 'denied' };
+    if (typeof record.correspondence_id === 'string' && record.correspondence_id !== correspondenceId) return { kind: 'denied' };
+    if (!['public', 'internal'].includes(record.classification) || !GOVERNMENT_ELIGIBLE_STATUSES.has(record.status)) return { kind: 'denied' };
+    return { kind: 'ok' };
+  } catch { return { kind: 'unavailable' }; }
 }
 
 async function verifyExistingCocceUser(token, env, fetchImpl) {
@@ -321,6 +356,11 @@ export function createOfficeAiHandler({
           ? 'This document exceeds the full-document summary limit. Shorten it or use selected-text summaries instead; no content was processed.'
           : 'Select a shorter excerpt or review the prompt and try again.',
       });
+    }
+
+    if (validated.government) {
+      const control = await readGovernmentControl({ ...validated.government, token, anonKey: env.VITE_COCCE_SUPABASE_ANON_KEY, fetchImpl });
+      if (control.kind !== 'ok') return response(res, control.kind === 'denied' ? 403 : 503, { error: control.kind === 'denied' ? 'GOVERNMENT_RECORD_NOT_ELIGIBLE' : 'GOVERNMENT_CONTROL_UNAVAILABLE', message: 'Government AI review is unavailable for this record.' });
     }
 
     if (typeof env.OPENROUTER_API_KEY !== 'string' || !env.OPENROUTER_API_KEY.trim()) {

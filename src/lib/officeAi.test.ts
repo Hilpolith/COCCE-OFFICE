@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildOfficeAiDocumentSummaryRequest,
   buildOfficeAiRequest,
+  buildGovernmentReviewRequest,
   checkOfficeAiStatus,
   extractOfficeAiDocumentText,
   extractOfficeAiSelection,
@@ -33,6 +34,12 @@ describe('Office AI request boundaries', () => {
     const doc = { content: { size: 42 }, textBetween: vi.fn(() => 'Synthetic heading\nSynthetic body') };
     expect(extractOfficeAiDocumentText(doc)).toBe('Synthetic heading\nSynthetic body');
     expect(doc.textBetween).toHaveBeenCalledWith(0, 42, '\n');
+  });
+
+  it('builds a dedicated Government review payload with only approved fields', () => {
+    expect(buildGovernmentReviewRequest('workspace-1', 'record-1', 'Public excerpt.', 'quality_check')).toEqual({
+      action: 'government_review', workspaceId: 'workspace-1', correspondenceId: 'record-1', selectedText: 'Public excerpt.', reviewAction: 'quality_check', nonSensitiveConfirmed: true,
+    });
   });
 
   it('builds a selection request without document metadata or unrelated content', () => {

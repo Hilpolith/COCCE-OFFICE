@@ -25,7 +25,16 @@ export type OfficeAiSelectionRequest = {
   prompt?: string;
 };
 export type OfficeAiDocumentSummaryRequest = { action: 'document_summary'; documentText: string };
-export type OfficeAiRequest = OfficeAiSelectionRequest | OfficeAiDocumentSummaryRequest;
+export type GovernmentReviewAction = 'summarize' | 'proofread' | 'quality_check';
+export type GovernmentReviewRequest = {
+  action: 'government_review';
+  workspaceId: string;
+  correspondenceId: string;
+  selectedText: string;
+  reviewAction: GovernmentReviewAction;
+  nonSensitiveConfirmed: true;
+};
+export type OfficeAiRequest = OfficeAiSelectionRequest | OfficeAiDocumentSummaryRequest | GovernmentReviewRequest;
 export type OfficeAiWorkflow = {
   id: string;
   name: string;
@@ -126,6 +135,14 @@ export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: strin
   }
 
   return action === 'custom' ? { action, selectedText, prompt: cleanPrompt } : { action, selectedText };
+}
+
+export function buildGovernmentReviewRequest(workspaceId: string, correspondenceId: string, selectedText: string, reviewAction: GovernmentReviewAction): GovernmentReviewRequest {
+  if (!workspaceId.trim() || !correspondenceId.trim()) throw new OfficeAiError('GOVERNMENT_CONTEXT_REQUIRED', 'Government review requires a workspace and correspondence context.');
+  if (!['summarize', 'proofread', 'quality_check'].includes(reviewAction)) throw new OfficeAiError('GOVERNMENT_ACTION_INVALID', 'That Government review action is not available.');
+  if (!selectedText.trim()) throw new OfficeAiError('SELECTION_REQUIRED', 'Select some text in the document first.');
+  if (selectedText.length > OFFICE_AI_MAX_SELECTION_CHARS) throw new OfficeAiError('SELECTION_TOO_LONG', `Select no more than ${OFFICE_AI_MAX_SELECTION_CHARS.toLocaleString()} characters at a time.`);
+  return { action: 'government_review', workspaceId, correspondenceId, selectedText, reviewAction, nonSensitiveConfirmed: true };
 }
 
 function readJson(response: Response): Promise<unknown> {

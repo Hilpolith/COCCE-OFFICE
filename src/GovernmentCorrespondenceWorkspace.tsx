@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import {
-  ArrowRight, CalendarDays, Check, CircleAlert, FileText, History, LockKeyhole,
-  Plus, RefreshCw, Send, ShieldAlert, Users, X,
+  Archive, ArrowRight, CalendarDays, Check, CircleAlert, FileText, History, LockKeyhole,
+  Mail, Plus, RefreshCw, Send, Settings2, ShieldAlert, Users, X,
 } from 'lucide-react';
+import GovernmentWorkspacePanels from './GovernmentWorkspacePanels';
 import { officeTeamApi } from './lib/officeTeamApi';
 import type { OfficeMember, OfficeWorkspace } from './lib/officeTeamApi';
 import { officeIndustryTasksApi } from './lib/officeIndustryTasks';
 import type { OfficeIndustrySpace } from './lib/officeIndustryTasks';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
-import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
+import type { OfficeTeamConfigState, OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import {
   officeGovernmentCorrespondenceApi,
 } from './lib/officeGovernmentCorrespondence';
+import { officeGovernmentWorkspaceApi } from './lib/officeGovernmentWorkspace';
 import type {
   GovernmentCorrespondence, GovernmentCorrespondenceAction, GovernmentCorrespondenceCursor,
   GovernmentCorrespondenceDirection, GovernmentCorrespondenceEvent, GovernmentCorrespondenceInput,
   GovernmentCorrespondenceStatus, GovernmentCorrespondenceType, GovernmentDispatchMethod,
 } from './lib/officeGovernmentCorrespondence';
+import type { GovernmentAccessProfile } from './lib/officeGovernmentWorkspace';
 
 const PAGE_SIZE = 100;
 const HISTORY_PAGE_SIZE = 50;
@@ -33,6 +36,7 @@ const dispatchMethods: GovernmentDispatchMethod[] = ['email', 'courier', 'hand_d
 type ViewStatus = 'loading' | 'signed-out' | 'not-member' | 'setup-required' | 'profile-conflict' | 'schema-missing' | 'error' | 'ready';
 type DirectionFilter = 'all' | GovernmentCorrespondenceDirection;
 type StatusFilter = 'all' | GovernmentCorrespondenceStatus;
+type GovernmentModuleTab = 'register' | 'records' | 'outbound' | 'archives' | 'settings';
 type GovernmentForm = Omit<GovernmentCorrespondenceInput, 'workspaceId'>;
 type HistoryState = {
   events: GovernmentCorrespondenceEvent[];
@@ -52,8 +56,8 @@ const emptyForm = (direction: GovernmentCorrespondenceDirection = 'incoming'): G
 
 function friendlyError(error: unknown) {
   const message = error instanceof Error ? error.message : 'The Government correspondence request could not be completed.';
-  if (/PGRST202|schema cache|office_gov_correspondence|could not find the function/i.test(message)) {
-    return 'The Government correspondence schema is not installed in this project yet. No shared correspondence was changed.';
+  if (/PGRST202|schema cache|office_gov_|could not find the function/i.test(message)) {
+    return 'The Government workspace schema is not available in this project yet. No shared Government data was changed.';
   }
   return message;
 }
@@ -132,6 +136,8 @@ export default function GovernmentCorrespondenceWorkspace({
   const [workspace, setWorkspace] = useState<OfficeWorkspace | null>(null);
   const [members, setMembers] = useState<OfficeMember[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [accessProfile, setAccessProfile] = useState<GovernmentAccessProfile | null>(null);
+  const [moduleTab, setModuleTab] = useState<GovernmentModuleTab>('register');
   const [records, setRecords] = useState<GovernmentCorrespondence[]>([]);
   const [cursor, setCursor] = useState<GovernmentCorrespondenceCursor | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -154,6 +160,18 @@ export default function GovernmentCorrespondenceWorkspace({
   const [historyBusyId, setHistoryBusyId] = useState<string | null>(null);
   const loadGenerationRef = useRef(0);
   const canAdminister = workspace?.role === 'owner' || workspace?.role === 'admin';
+  const roles = accessProfile?.roles ?? [];
+  const canManageRecords = canAdminister || roles.includes('records_manager');
+  const canAudit = canAdminister || roles.includes('auditor');
+  const canUseOutbound = canAdminister || roles.includes('outbound_dispatcher');
+  const allowedTabs: GovernmentModuleTab[] = [
+    'register',
+    ...(canManageRecords || canAudit ? ['records' as const] : []),
+    ...(canUseOutbound ? ['outbound' as const] : []),
+    ...(canManageRecords || canAudit ? ['archives' as const] : []),
+    ...(canAdminister ? ['settings' as const] : []),
+  ];
+  const activeTab = allowedTabs.includes(moduleTab) ? moduleTab : 'register';
   const activeMembers = useMemo(() => members.filter((member) => member.status === 'active'), [members]);
   const memberById = useMemo(() => new Map(activeMembers.map((member) => [member.user_id, member])), [activeMembers]);
 
@@ -217,6 +235,9 @@ export default function GovernmentCorrespondenceWorkspace({
         setStatus('profile-conflict');
         return;
       }
+      const roleProfile = await officeGovernmentWorkspaceApi.accessProfile(client, workspaceId);
+      if (!isCurrent()) return;
+      setAccessProfile(roleProfile);
       await loadFirstPage(client, generation);
       if (!isCurrent()) return;
       setStatus('ready');
@@ -224,7 +245,7 @@ export default function GovernmentCorrespondenceWorkspace({
     } catch (error) {
       if (!isCurrent()) return;
       const message = friendlyError(error);
-      setStatus(/schema is not installed/i.test(message) ? 'schema-missing' : 'error');
+      setStatus(/schema is not installed|schema is not available/i.test(message) ? 'schema-missing' : 'error');
       setFeedback(message);
     }
   }, [client, config, loadFirstPage, workspaceId]);
@@ -244,6 +265,7 @@ export default function GovernmentCorrespondenceWorkspace({
     setSpace(null);
     setWorkspace(null);
     setMembers([]);
+    setAccessProfile(null);
     setCursor(null);
     setHasMore(false);
     setHistoryById({});
@@ -265,6 +287,7 @@ export default function GovernmentCorrespondenceWorkspace({
         setStatus('profile-conflict');
         return;
       }
+      setAccessProfile(await officeGovernmentWorkspaceApi.accessProfile(client, workspaceId));
       await loadFirstPage(client, generation);
       if (generation !== loadGenerationRef.current) return;
       setStatus('ready');
@@ -521,23 +544,23 @@ export default function GovernmentCorrespondenceWorkspace({
       || record.direction === 'outgoing' && ['draft', 'changes_requested'].includes(record.status))
     && (canAdminister || record.created_by === currentUserId || record.assigned_user_id === currentUserId);
 
-  return <section className="industry-shared-workspace government-correspondence" style={{ '--industry-accent': accent } as CSSProperties} aria-label="Government correspondence register">
+  return <section className="industry-shared-workspace government-correspondence" style={{ '--industry-accent': accent } as CSSProperties} aria-label="Government workspace">
     <div className="industry-shared-boundary government-register-boundary" role="note">
       <LockKeyhole size={18} />
-      <div><strong>Government workflow prototype · non-sensitive operational metadata only</strong><span>Never enter citizen names or IDs, case narratives, classified/confidential content, or sensitive records. Current assignees can see a record's subject, summary and event history. This is not an approved government records system: no files, retention, archives, official integrations, email sending, or reference-number generation. Dispatch is logged only; local preview items are never imported.</span></div>
+      <div><strong>Government workspace · keep shared records non-sensitive</strong><span>Do not store citizen names or IDs, case narratives, classified/confidential content, or other sensitive data. Attachments are limited to Public/Internal records and remain shared with active Office Team members in Bunny storage. External email sends and CMIS archive transfers are explicit actions; provider acceptance does not prove delivery, and archive behavior depends on the configured repository. This is not a certified statutory records system. Device-local preview items are never imported.</span></div>
     </div>
 
     {feedback && <div className="industry-shared-feedback" role={/could not|invalid|denied|changed elsewhere|refresh|not loaded|unavailable|not configured|not enabled|not installed|cannot|not available|not changed/i.test(feedback) ? 'alert' : 'status'}><CircleAlert size={15} />{feedback}<button type="button" aria-label="Dismiss message" onClick={() => setFeedback('')}><X size={14} /></button></div>}
 
     <header className="industry-shared-heading">
-      <div><span className="eyebrow">GOVERNMENT · SHARED OFFICE TEAM</span><h2>{space?.office_name ?? officeName} correspondence</h2><p>{space?.country ?? country} · institution-issued references · manual workflow</p></div>
+      <div><span className="eyebrow">GOVERNMENT · SHARED OFFICE TEAM</span><h2>{space?.office_name ?? officeName} workspace</h2><p>{space?.country ?? country} · role-based correspondence, records controls and explicit provider actions</p></div>
       <button type="button" className="button-secondary" onClick={refresh} disabled={status === 'loading'}><RefreshCw size={14} /> Refresh</button>
     </header>
 
     {status === 'loading' && <div className="industry-shared-state" role="status"><RefreshCw size={16} className="industry-spin" /> Checking Office sign-in, membership, Government profile and schema…</div>}
     {status === 'signed-out' && <div className="industry-shared-state" role="status"><Users size={17} /><div><strong>Sign in to Office Team</strong><span>Open the linked team above, sign in to your existing COCCE account, then return here. No register data was changed.</span></div></div>}
     {status === 'not-member' && <div className="industry-shared-state is-alert" role="alert"><CircleAlert size={17} /><div><strong>This team is not available to this account</strong><span>Check the signed-in Office account or ask to join this team. No shared correspondence was returned.</span></div></div>}
-    {status === 'schema-missing' && <div className="industry-shared-state is-alert" role="alert"><CircleAlert size={17} /><div><strong>Government register schema is not available</strong><span>The proposed database migration is separate from this UI and remains unapplied. Review and explicit approval are required before the shared register can be enabled; no records were changed.</span></div></div>}
+    {status === 'schema-missing' && <div className="industry-shared-state is-alert" role="alert"><CircleAlert size={17} /><div><strong>Government workspace schema is not available</strong><span>The required Government workspace migration is not installed in this database. No shared Government data was changed.</span></div></div>}
     {status === 'error' && <div className="industry-shared-state is-alert" role="alert"><CircleAlert size={17} /><div><strong>Government register unavailable</strong><span>{feedback || 'The Office Team connection is not ready. Device-local preview data remains separate.'}</span></div></div>}
 
     {status === 'setup-required' && <div className="industry-shared-setup glass-card">
@@ -549,6 +572,29 @@ export default function GovernmentCorrespondenceWorkspace({
     {status === 'profile-conflict' && <div className="industry-shared-state is-alert" role="alert"><CircleAlert size={17} /><div><strong>This team is set up for a different industry</strong><span>The existing profile is “{space?.industry_id}”. It has not been changed, and Government correspondence is not shown.</span></div></div>}
 
     {status === 'ready' && <>
+      <nav className="government-module-tabs government-workspace-tabs" role="tablist" aria-label="Government workspace modules">
+        <button type="button" role="tab" aria-selected={activeTab === 'register'} className={activeTab === 'register' ? 'is-active' : ''} onClick={() => setModuleTab('register')}><FileText size={14} /> Register</button>
+        {(canManageRecords || canAudit) && <button type="button" role="tab" aria-selected={activeTab === 'records'} className={activeTab === 'records' ? 'is-active' : ''} onClick={() => setModuleTab('records')}><Archive size={14} /> Records Management</button>}
+        {canUseOutbound && <button type="button" role="tab" aria-selected={activeTab === 'outbound'} className={activeTab === 'outbound' ? 'is-active' : ''} onClick={() => setModuleTab('outbound')}><Mail size={14} /> Outbound</button>}
+        {(canManageRecords || canAudit) && <button type="button" role="tab" aria-selected={activeTab === 'archives'} className={activeTab === 'archives' ? 'is-active' : ''} onClick={() => setModuleTab('archives')}><History size={14} /> Archives</button>}
+        {canAdminister && <button type="button" role="tab" aria-selected={activeTab === 'settings'} className={activeTab === 'settings' ? 'is-active' : ''} onClick={() => setModuleTab('settings')}><Settings2 size={14} /> Settings</button>}
+      </nav>
+
+      {activeTab !== 'register' && client && currentUserId && accessProfile && <GovernmentWorkspacePanels
+        client={client}
+        config={config as OfficeTeamConfigState}
+        workspaceId={workspaceId}
+        currentUserId={currentUserId}
+        members={activeMembers}
+        records={records}
+        accessProfile={accessProfile}
+        canAdminister={Boolean(canAdminister)}
+        activeTab={activeTab}
+        onRefresh={refresh}
+        accent={accent}
+      />}
+
+      {activeTab === 'register' && <>
       <div className="government-register-toolbar">
         <div className="government-register-filters" role="group" aria-label="Filter correspondence">
           <label>Direction<select value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value as DirectionFilter)}><option value="all">All directions</option><option value="incoming">Incoming</option><option value="outgoing">Outgoing</option></select></label>
@@ -656,9 +702,10 @@ export default function GovernmentCorrespondenceWorkspace({
             </form>
             <p className="industry-stage-help"><CalendarDays size={13} /> References are entered by an owner/admin after checking the institution's process. Registered content is frozen.</p>
           </section>
-          <section className="industry-privacy-card glass-card"><div className="industry-privacy-icon"><ShieldAlert size={18} /></div><strong>Keep this register non-sensitive</strong><p>Do not enter names, IDs, case details, legal or confidential text. No document attachment or archive is provided. A record reference and dispatch log are not official transmission or records-management services.</p></section>
+          <section className="industry-privacy-card glass-card"><div className="industry-privacy-icon"><ShieldAlert size={18} /></div><strong>Keep this register non-sensitive</strong><p>Do not enter names, IDs, case details, legal or confidential text. Use Records Management for Public/Internal file links and lifecycle controls. Institution-issued references must be checked with the responsible office.</p></section>
         </aside>}
       </div>
+      </>}
     </>}
   </section>;
 }
