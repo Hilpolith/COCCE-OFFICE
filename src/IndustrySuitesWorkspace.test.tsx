@@ -9,6 +9,9 @@ import {
 vi.mock('./GovernmentCorrespondenceWorkspace', () => ({
   default: ({ officeName }: { officeName: string }) => <div data-testid="government-correspondence-preview">Government correspondence for {officeName}</div>,
 }));
+vi.mock('./SchoolManagementWorkspace', () => ({
+  default: ({ officeName }: { officeName: string }) => <div data-testid="school-management-preview">School Management for {officeName}</div>,
+}));
 
 afterEach(() => {
   cleanup();
@@ -40,6 +43,30 @@ describe('industry office workbench', () => {
     expect(screen.queryByRole('heading', { name: 'Local government preview item' })).toBeNull();
     expect(JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!).offices[0].items[0].title)
       .toBe('Local government preview item');
+  });
+
+  it('opens the full School Management system as a separate Shared team module and preserves all local preview records', async () => {
+    const office = createIndustryOffice(emptyIndustryState(), {
+      industryId: 'school', name: 'Kijiji School', country: 'Tanzania',
+    }).office!;
+    const localWork = addIndustryWorkItem({ version: 1, offices: [office] }, office.id, {
+      title: 'Local timetable mockup', notes: 'Synthetic local preview only.',
+    });
+    const linked = linkIndustryTeam(localWork.state, office.id, 'school-server-team');
+    writeIndustryState(window.localStorage, linked);
+    render(<IndustrySuitesWorkspace preferredIndustryId="school" onCreateTeam={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Local timetable mockup' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared team' }));
+    expect(await screen.findByTestId('school-management-preview')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'School Management' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('heading', { name: 'Local timetable mockup' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared work items' }));
+    expect(await screen.findByText('Shared workbench is unavailable')).toBeTruthy();
+    const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);
+    expect(persisted.offices[0].items[0].title).toBe('Local timetable mockup');
+    expect(persisted.offices[0].teamWorkspaceId).toBe('school-server-team');
   });
 
   it('passes the existing Office Team ID when an office user chooses Open team', async () => {
