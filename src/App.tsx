@@ -45,7 +45,7 @@ const documentNav = [
 
 const toolkitNav = [
   { id: 'docs', label: 'Documents', icon: FileText, detail: 'Docs, Sheets, Slides, PDF, Drive and Vault' },
-  { id: 'industry', label: 'Industry suites', icon: Building2, detail: 'Sector-specific local work registers' },
+  { id: 'industry', label: 'Industry suites', icon: Building2, detail: 'Industry workspaces with local preview or shared team tasks' },
   { id: 'team', label: 'Team & collaboration', icon: MessageCircle, detail: 'Local planner and separate Office Team' },
 ] as const;
 
@@ -437,7 +437,7 @@ function App() {
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
-        <footer className="app-footer"><span><ShieldCheck size={13} /> Team collaboration is server-backed; documents and the first industry registers remain browser-local.</span><span>COCCE OFFICE · INDUSTRY WORKBENCH PREVIEW</span></footer>
+        <footer className="app-footer"><span><ShieldCheck size={13} /> Docs/Sheets/Slides offer manual cloud copies only (no auto-sync); Drive/PDF/Vault and Industry previews stay local. Shared Industry tasks require a linked team.</span><span>COCCE OFFICE · INDUSTRY WORKBENCH PREVIEW</span></footer>
       </section>
 
       {feedback && <div className="toast" role={/could not save|not saved|preserved/i.test(feedback) ? 'alert' : 'status'}><Check size={16} />{feedback}</div>}

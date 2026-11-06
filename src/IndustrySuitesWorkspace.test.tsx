@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import IndustrySuitesWorkspace from './IndustrySuitesWorkspace';
 import {
-  INDUSTRY_STORAGE_KEY, createIndustryOffice, emptyIndustryState, linkIndustryTeam, writeIndustryState,
+  INDUSTRY_STORAGE_KEY, addIndustryWorkItem, createIndustryOffice, emptyIndustryState, linkIndustryTeam, writeIndustryState,
 } from './lib/industryWorkspaces';
 
 afterEach(() => {
@@ -32,6 +32,28 @@ describe('industry office workbench', () => {
       industryId: 'school',
       teamWorkspaceId: 'server-team-id',
     });
+  });
+
+  it('keeps linked offices in device mode by default and never copies their existing local tasks', async () => {
+    const office = createIndustryOffice(emptyIndustryState(), {
+      industryId: 'business', name: 'Kijiji Studio', country: 'Tanzania',
+    }).office!;
+    const localTask = addIndustryWorkItem({ version: 1, offices: [office] }, office.id, {
+      title: 'Local-only item', notes: 'This old browser record stays here.',
+    });
+    const linked = linkIndustryTeam(localTask.state, office.id, 'server-team-id');
+    writeIndustryState(window.localStorage, linked);
+    render(<IndustrySuitesWorkspace preferredIndustryId="business" onCreateTeam={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Local-only item' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'This device preview' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared team' }));
+
+    expect(await screen.findByText('Shared workbench is unavailable')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Local-only item' })).toBeNull();
+    const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);
+    expect(persisted.offices[0].items[0].title).toBe('Local-only item');
+    expect(persisted.offices[0].teamWorkspaceId).toBe('server-team-id');
   });
 
   it('creates a sector edition, persists work stages locally, and hands team creation to Office collaboration', async () => {

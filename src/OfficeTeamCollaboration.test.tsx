@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import OfficeTeamCollaboration from './OfficeTeamCollaboration';
 
 const mocks = vi.hoisted(() => {
@@ -110,7 +110,7 @@ describe('linked industry team selection', () => {
 
     expect(await screen.findByText('Opened the existing team linked to this industry office.')).toBeTruthy();
     expect((screen.getByLabelText('Office space') as HTMLSelectElement).value).toBe('linked-team-id');
-    expect(mocks.officeApiCall).toHaveBeenCalledWith('listMembers', expect.anything(), 'linked-team-id');
+    await waitFor(() => expect(mocks.officeApiCall).toHaveBeenCalledWith('listMembers', expect.anything(), 'linked-team-id'));
     expect(mocks.officeApiCall.mock.calls.some(([method]) => method === 'createWorkspace')).toBe(false);
     expect(onWorkspaceCreated).not.toHaveBeenCalled();
   });

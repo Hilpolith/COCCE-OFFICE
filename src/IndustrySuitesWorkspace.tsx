@@ -10,6 +10,7 @@ import {
   returnIndustryWorkItem, writeIndustryState,
 } from './lib/industryWorkspaces';
 import type { IndustryId, IndustryState, IndustryTeamSetup } from './lib/industryWorkspaces';
+import IndustrySharedWorkspace from './IndustrySharedWorkspace';
 import './industrySuites.css';
 
 const accentByIndustry: Record<IndustryId, string> = {
@@ -55,6 +56,7 @@ export default function IndustrySuitesWorkspace({
   const [notes, setNotes] = useState('');
   const [recordSearch, setRecordSearch] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [dataMode, setDataMode] = useState<'device' | 'shared'>('device');
 
   const activeOffice = state.offices.find((office) => office.id === selectedOfficeId) ?? null;
   const definition = activeOffice ? getIndustryDefinition(activeOffice.industryId) : null;
@@ -91,6 +93,7 @@ export default function IndustrySuitesWorkspace({
     }
     if (persist(created.state, `${getIndustryDefinition(industryId).shortLabel} office created on this device.`)) {
       setSelectedOfficeId(created.office.id);
+      setDataMode('device');
       setOfficeName('');
       setCreateOpen(false);
       setRecordSearch('');
@@ -136,17 +139,17 @@ export default function IndustrySuitesWorkspace({
   return <div className="page subpage industry-page" style={{ '--industry-accent': accent } as CSSProperties}>
     <div className="industry-page-heading">
       <div>
-        <span className="eyebrow industry-eyebrow"><Sparkles size={13} /> OFFICE SUITES · LOCAL PREVIEW</span>
+        <span className="eyebrow industry-eyebrow"><Sparkles size={13} /> OFFICE SUITES · {dataMode === 'shared' ? 'SHARED TEAM WORKBENCH' : 'DEVICE-LOCAL PREVIEW'}</span>
         <h1>Work for your industry</h1>
-        <p className="page-lede">Choose a sector, create a local office profile, and track non-sensitive administrative work in its sector-specific register.</p>
+        <p className="page-lede">Choose a sector and track operational work in its sector-specific register. Device-local preview and shared Office Team tasks stay separate.</p>
       </div>
-      <button className="button-primary" onClick={() => { setIndustryId(preferredIndustryId ?? 'business'); setCreateOpen(true); }}><Plus size={16} /> New office</button>
+      <button className="button-primary" onClick={() => { setIndustryId(preferredIndustryId ?? 'business'); setDataMode('device'); setCreateOpen(true); }}><Plus size={16} /> New office</button>
     </div>
 
-      <div className="industry-boundary-note" role="note">
+    {dataMode === 'device' && <div className="industry-boundary-note" role="note">
         <LockKeyhole size={17} />
         <div><strong>Prototype only · use non-sensitive data.</strong><span>This is not a complete sector suite or secure cloud workspace. Office records are saved in this browser, not encrypted, shared with team members, or backed up. Team membership and chat use a separate server-backed feature. This preview is not an accounting or payroll system, clinical record, approved government system, or statutory integration.</span></div>
-    </div>
+    </div>}
 
     {storageIssue && <div className="industry-alert" role="alert"><CircleAlert size={16} />{storageIssue}</div>}
     {feedback && <div className="industry-feedback" role={/could not|unreadable|unsupported|not saved|limit/i.test(feedback) ? 'alert' : 'status'}><Check size={15} />{feedback}<button type="button" aria-label="Dismiss message" onClick={() => setFeedback('')}><X size={14} /></button></div>}
@@ -154,7 +157,7 @@ export default function IndustrySuitesWorkspace({
     {state.offices.length > 0 && <div className="industry-office-picker" role="group" aria-label="Your industry offices">
       {state.offices.map((office) => {
         const officeIndustry = getIndustryDefinition(office.industryId);
-        return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setRecordSearch(''); }}>
+        return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setDataMode('device'); setRecordSearch(''); }}>
           <span className="industry-chip-dot" style={{ background: accentByIndustry[office.industryId] }} />
           <span><strong>{office.name}</strong><small>{officeIndustry.shortLabel}</small></span>
         </button>;
@@ -176,7 +179,13 @@ export default function IndustrySuitesWorkspace({
       <p className="industry-sector-note"><ShieldAlert size={14} />{getIndustryDefinition(industryId).dataNote}</p>
     </section>}
 
-    {activeOffice && definition && !createOpen && <>
+    {activeOffice && definition && !createOpen && activeOffice.teamWorkspaceId && <div className="industry-data-mode" role="tablist" aria-label="Industry workbench storage mode">
+      <button type="button" role="tab" aria-selected={dataMode === 'device'} className={dataMode === 'device' ? 'is-active' : ''} onClick={() => setDataMode('device')}><LockKeyhole size={14} /> This device preview</button>
+      <button type="button" role="tab" aria-selected={dataMode === 'shared'} className={dataMode === 'shared' ? 'is-active' : ''} onClick={() => setDataMode('shared')}><Users size={14} /> Shared team</button>
+      <span>Local items are never copied automatically.</span>
+    </div>}
+
+    {activeOffice && definition && !createOpen && dataMode === 'device' && <>
       <section className="industry-office-hero glass-card">
         <div className="industry-office-hero-main"><span className="industry-office-mark"><Building2 size={22} /></span><div><span className="eyebrow">{definition.label.toUpperCase()} · {activeOffice.country.toUpperCase()}</span><h2>{activeOffice.name}</h2><p>{definition.workArea} · Local workspace</p></div></div>
         <div className="industry-office-actions"><span className={`industry-team-status ${activeOffice.teamWorkspaceId ? 'is-linked' : ''}`}><Users size={14} />{activeOffice.teamWorkspaceId ? 'Team linked' : 'No team yet'}</span><button className="button-secondary industry-team-button" onClick={openTeam}><Users size={15} />{activeOffice.teamWorkspaceId ? 'Open team' : 'Create team'}</button></div>
@@ -230,6 +239,22 @@ export default function IndustrySuitesWorkspace({
           {activeOffice.teamWorkspaceId && <section className="industry-linked-card glass-card"><div><Users size={15} /><strong>Office Team is linked</strong></div><p>Only the team workspace ID is linked locally. These work items are not shared with its members.</p></section>}
         </aside>
       </div>
+    </>}
+
+    {activeOffice && definition && !createOpen && dataMode === 'shared' && activeOffice.teamWorkspaceId && <>
+      <section className="industry-office-hero glass-card">
+        <div className="industry-office-hero-main"><span className="industry-office-mark"><Building2 size={22} /></span><div><span className="eyebrow">{definition.label.toUpperCase()} · {activeOffice.country.toUpperCase()}</span><h2>{activeOffice.name}</h2><p>{definition.workArea} · Shared team workspace</p></div></div>
+        <div className="industry-office-actions"><span className="industry-team-status is-linked"><Users size={14} />Team linked</span><button className="button-secondary industry-team-button" onClick={openTeam}><Users size={15} />Open team</button></div>
+      </section>
+      <IndustrySharedWorkspace
+        key={activeOffice.teamWorkspaceId}
+        workspaceId={activeOffice.teamWorkspaceId}
+        officeName={activeOffice.name}
+        country={activeOffice.country}
+        industryId={activeOffice.industryId}
+        definition={definition}
+        accent={accent}
+      />
     </>}
 
     {!activeOffice && !createOpen && <section className="industry-empty-office glass-card"><div className="industry-empty-icon"><Building2 size={21} /></div><h2>Create your first industry office</h2><p>Choose an industry to get its working register and stage flow.</p><button className="button-primary" onClick={() => setCreateOpen(true)}><Plus size={15} /> Choose an industry</button></section>}
