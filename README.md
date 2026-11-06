@@ -1,6 +1,6 @@
 # COCCE Office — collaboration workspace
 
-This private, isolated React/TypeScript project is the COCCE Office browser app. Most productivity data remains browser-local; Office Team collaboration is server-backed for existing COCCE accounts, and the Docs AI studio contacts its server route only after a user-triggered action.
+This private, isolated React/TypeScript project is the COCCE Office browser app. Most productivity data remains browser-local; Office Team collaboration is server-backed for existing COCCE accounts, and the Docs AI studio contacts its server route only after a user-triggered action
 
 ## What works
 
