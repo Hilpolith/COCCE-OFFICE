@@ -5,8 +5,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import GovernmentWorkspacePanels from './GovernmentWorkspacePanels';
 
 const mocks = vi.hoisted(() => ({
-  listRecordControls: vi.fn(), listControlEvents: vi.fn(), listAttachments: vi.fn(), readRecordControl: vi.fn(),
+  listRecordControls: vi.fn(), listControlEvents: vi.fn(), listAttachments: vi.fn(), readRecordControl: vi.fn(), listMemberRoles: vi.fn(),
   checkOfficeAiStatus: vi.fn(), requestOfficeAi: vi.fn(), buildGovernmentReviewRequest: vi.fn(),
+  connectorApi: vi.fn(), connectorStatus: vi.fn(), checkConnectorStatus: vi.fn(), configureGraph: vi.fn(), configureCmis: vi.fn(), disconnect: vi.fn(),
 }));
 vi.mock('./lib/officeGovernmentWorkspace', () => ({
   officeGovernmentWorkspaceApi: {
@@ -14,9 +15,10 @@ vi.mock('./lib/officeGovernmentWorkspace', () => ({
     listControlEvents: mocks.listControlEvents,
     listAttachments: mocks.listAttachments,
     readRecordControl: mocks.readRecordControl,
+    listMemberRoles: mocks.listMemberRoles,
   },
 }));
-vi.mock('./lib/officeGovernmentConnectors', () => ({ createOfficeGovernmentConnectorApi: vi.fn() }));
+vi.mock('./lib/officeGovernmentConnectors', () => ({ createOfficeGovernmentConnectorApi: mocks.connectorApi }));
 vi.mock('./lib/officeCloudFiles', () => ({ createOfficeCloudApi: vi.fn() }));
 vi.mock('./lib/officeAi', () => ({
   checkOfficeAiStatus: mocks.checkOfficeAiStatus,
@@ -57,8 +59,46 @@ beforeEach(() => {
   mocks.listControlEvents.mockResolvedValue([]);
   mocks.listAttachments.mockResolvedValue([]);
   mocks.readRecordControl.mockResolvedValue(control);
+  mocks.listMemberRoles.mockResolvedValue([]);
   mocks.checkOfficeAiStatus.mockResolvedValue(true);
   mocks.requestOfficeAi.mockResolvedValue('Reviewed suggestion.');
+  mocks.connectorStatus.mockResolvedValue({ graph: { state: 'not_configured', lastCheckedAt: null, errorCode: null }, cmis: { state: 'not_configured', lastCheckedAt: null, errorCode: null } });
+  mocks.checkConnectorStatus.mockResolvedValue({ graph: { state: 'ready', lastCheckedAt: '2026-11-06T12:00:00Z', errorCode: null }, cmis: { state: 'not_configured', lastCheckedAt: null, errorCode: null } });
+  mocks.configureGraph.mockResolvedValue({ graph: { state: 'ready', lastCheckedAt: '2026-11-06T12:00:00Z', errorCode: null }, cmis: { state: 'not_configured', lastCheckedAt: null, errorCode: null } });
+  mocks.connectorApi.mockReturnValue({ status: mocks.connectorStatus, checkStatus: mocks.checkConnectorStatus, configureGraph: mocks.configureGraph, configureCmis: mocks.configureCmis, disconnect: mocks.disconnect });
+});
+
+function renderSettings(isAdmin: boolean) {
+  return render(<GovernmentWorkspacePanels client={client} config={config} workspaceId={workspaceId} currentUserId={userId} members={[]} records={[]}
+    accessProfile={{ is_admin: isAdmin, roles: isAdmin ? [] : ['auditor'] }} canAdminister={isAdmin} activeTab="settings" onRefresh={vi.fn()} />);
+}
+
+describe('Government connector administration', () => {
+  it('shows setup only to administrators and clears the client secret after success', async () => {
+    renderSettings(true);
+    expect(await screen.findByText('Microsoft Graph')).toBeTruthy();
+    const secret = screen.getByLabelText('Client secret');
+    fireEvent.change(screen.getByLabelText('Tenant ID'), { target: { value: 'tenant' } });
+    fireEvent.change(screen.getByLabelText('Client ID'), { target: { value: 'client' } });
+    fireEvent.change(secret, { target: { value: 'never-display-me' } });
+    fireEvent.change(screen.getByLabelText('Sender mailbox'), { target: { value: 'sender@example.test' } });
+    fireEvent.click(screen.getByRole('button', { name: /test and save graph/i }));
+    await waitFor(() => expect(mocks.configureGraph).toHaveBeenCalledWith(workspaceId, expect.objectContaining({ tenantId: 'tenant', clientId: 'client', clientSecret: 'never-display-me' })));
+    expect((secret as HTMLInputElement).value).toBe('');
+    expect(screen.queryByText('never-display-me')).toBeNull();
+  });
+
+  it('does not mount connector setup for non-administrators', async () => {
+    renderSettings(false);
+    await waitFor(() => expect(screen.queryByText('Microsoft Graph')).toBeNull());
+    expect(screen.queryByRole('button', { name: /test and save graph/i })).toBeNull();
+  });
+
+  it('runs a live connector test only from the administrator status action', async () => {
+    renderSettings(true);
+    fireEvent.click(await screen.findByRole('button', { name: /check status/i }));
+    await waitFor(() => expect(mocks.checkConnectorStatus).toHaveBeenCalledWith(workspaceId));
+  });
 });
 
 describe('Government review-only AI panel', () => {

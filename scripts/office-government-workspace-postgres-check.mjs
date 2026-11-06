@@ -10,6 +10,7 @@ const cloudLookup = await readFile(new URL('../supabase/migrations/2026110411220
 const cloudRevisions = await readFile(new URL('../supabase/migrations/20261106180419_office_cloud_sync_revisions_20261106.sql', import.meta.url), 'utf8');
 const correspondence = await readFile(new URL('../supabase/migrations/20261106171236_office_government_correspondence_20261106.sql', import.meta.url), 'utf8');
 const expansion = await readFile(new URL('../docs/proposals/office-government-workspace-20261106.sql', import.meta.url), 'utf8');
+const connectors = await readFile(new URL('../supabase/migrations/20261106210842_office_government_connector_setup.sql', import.meta.url), 'utf8');
 const owner = '11111111-1111-4111-8111-111111111111';
 const recordsManager = '22222222-2222-4222-8222-222222222222';
 const dispatcher = '33333333-3333-4333-8333-333333333333';
@@ -23,7 +24,17 @@ before(async () => {
   db = new PGlite();
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
-    CREATE SCHEMA auth; CREATE SCHEMA office_private;
+    CREATE SCHEMA auth; CREATE SCHEMA office_private; CREATE SCHEMA vault;
+    CREATE TABLE vault.secrets (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), secret text NOT NULL,
+      name text, description text, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+    CREATE VIEW vault.decrypted_secrets AS SELECT id, name, description, secret AS decrypted_secret, created_at, updated_at FROM vault.secrets;
+    CREATE FUNCTION vault.create_secret(p_secret text, p_name text DEFAULT NULL, p_description text DEFAULT NULL, p_key_id uuid DEFAULT NULL) RETURNS uuid
+      LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ DECLARE new_id uuid; BEGIN
+        INSERT INTO vault.secrets(secret,name,description) VALUES (p_secret,p_name,p_description) RETURNING id INTO new_id; RETURN new_id; END $$;
+    CREATE FUNCTION vault.update_secret(p_id uuid, p_secret text DEFAULT NULL, p_name text DEFAULT NULL, p_description text DEFAULT NULL, p_key_id uuid DEFAULT NULL) RETURNS void
+      LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN
+        UPDATE vault.secrets SET secret=p_secret,name=coalesce(p_name,name),description=coalesce(p_description,description),updated_at=now() WHERE id=p_id;
+        IF NOT FOUND THEN RAISE EXCEPTION 'secret not found'; END IF; END $$;
     CREATE TABLE auth.users (id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
       SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
@@ -57,6 +68,7 @@ before(async () => {
   await db.exec(cloudRevisions);
   await db.exec(correspondence);
   await db.exec(expansion);
+  await db.exec(connectors);
   await db.query('INSERT INTO auth.users(id) VALUES ($1),($2),($3),($4)', [owner,recordsManager,dispatcher,outsider]);
   await db.query('INSERT INTO public.office_workspaces(id,name,created_by) VALUES ($1,$2,$3),($4,$5,$6)',
     [workspace,'Synthetic Government A',owner,otherWorkspace,'Synthetic Government B',outsider]);
@@ -92,6 +104,18 @@ async function rpc(name, args = []) {
 }
 async function userRpc(userId, name, args = []) {
   return as(userId, () => rpc(name, args));
+}
+async function serviceRpc(name, args = []) {
+  await db.exec('SAVEPOINT service_scope');
+  await db.exec('SET LOCAL ROLE service_role');
+  try {
+    const result = await rpc(name, args);
+    await db.exec('RESET ROLE; RELEASE SAVEPOINT service_scope');
+    return result;
+  } catch (error) {
+    await db.exec('ROLLBACK TO SAVEPOINT service_scope; RELEASE SAVEPOINT service_scope');
+    throw error;
+  }
 }
 async function userRows(userId, name, args = []) {
   const params = args.map((_, index) => `$${index + 1}`).join(',');
@@ -276,4 +300,59 @@ test('Microsoft Graph outbound attempt metadata is idempotent, role-gated, and m
   await expectSqlState(() => userRpc(dispatcher,'office_gov_outbound_begin',[workspace,recordId,5,crypto.randomUUID(),digest,[]]),'55000');
   const columns = await db.query(`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='office_gov_outbound_attempts'`);
   assert.ok(!columns.rows.some((row)=>['recipient','subject','body','message_body','recipient_email'].includes(row.column_name)));
+});
+
+test('connector config is private, RLS-protected, and has no direct grants', async () => {
+  const table = (await db.query(`SELECT relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='office_private' AND c.relname='office_gov_connector_configs'`)).rows[0];
+  assert.equal(table.relrowsecurity, true);
+  for (const role of ['anon','authenticated','service_role']) {
+    assert.equal((await db.query('SELECT has_table_privilege($1,$2,$3) AS allowed',[role,'office_private.office_gov_connector_configs','SELECT'])).rows[0].allowed,false);
+  }
+  await expectSqlState(() => userRpc(owner,'office_gov_connector_config_store',[
+    workspace,'graph',{tenant_id:'tenant-a'},{client_secret:'secret-a'},owner]),'42501');
+  const functions = await db.query(`SELECT p.proname, p.prosecdef, coalesce(p.proconfig,'{}') AS config
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname LIKE 'office_gov_connector_config_%'`);
+  assert.equal(functions.rows.length,5);
+  assert.ok(functions.rows.every((row) => row.prosecdef && row.config.some((item) => item === 'search_path=""')));
+});
+
+test('connector store is Government/admin scoped, rotates the same Vault secret, and decrypted get is service-role-only', async () => {
+  await expectSqlState(() => serviceRpc('office_gov_connector_config_store',[
+    workspace,'graph',{tenant_id:'tenant-a'},{client_secret:'secret-a'},recordsManager]),'42501');
+  const stored = await serviceRpc('office_gov_connector_config_store',[
+    workspace,'graph',{tenant_id:'tenant-a'},{client_secret:'secret-a'},owner]);
+  assert.equal(stored.provider,'graph');
+  const first = (await db.query('SELECT config_id,vault_secret_id,public_config FROM office_private.office_gov_connector_configs WHERE workspace_id=$1',[workspace])).rows[0];
+  assert.deepEqual(first.public_config,{tenant_id:'tenant-a'});
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM vault.secrets')).rows[0].count,1);
+  await expectSqlState(() => userRpc(owner,'office_gov_connector_config_get',[workspace,'graph']),'42501');
+  await expectSqlState(() => userRpc(owner,'office_gov_connector_config_status',[workspace]),'42501');
+  const read = await serviceRpc('office_gov_connector_config_get',[workspace,'graph']);
+  assert.deepEqual(read.secret_config,{client_secret:'secret-a'});
+  const safeStatus = await serviceRpc('office_gov_connector_config_status',[workspace]);
+  assert.equal(safeStatus.graph.configured,true);
+  assert.equal(safeStatus.graph.sender_configured,false);
+  assert.equal(safeStatus.graph.state,'configured');
+  assert.doesNotMatch(JSON.stringify(safeStatus),/secret-a|tenant-a|vault_secret_id|public_config/i);
+  const rotated = await serviceRpc('office_gov_connector_config_store',[
+    workspace,'graph',{tenant_id:'tenant-b'},{client_secret:'secret-b'},owner]);
+  assert.equal(rotated.provider,'graph');
+  const second = (await db.query('SELECT vault_secret_id FROM office_private.office_gov_connector_configs WHERE workspace_id=$1',[workspace])).rows[0];
+  assert.equal(second.vault_secret_id,first.vault_secret_id);
+  assert.equal((await db.query('SELECT secret FROM vault.secrets WHERE id=$1',[first.vault_secret_id])).rows[0].secret,'{"client_secret": "secret-b"}');
+  assert.deepEqual((await serviceRpc('office_gov_connector_config_get',[workspace,'graph'])).secret_config,{client_secret:'secret-b'});
+});
+
+test('connector test update is member-scoped and delete removes the Vault secret', async () => {
+  await serviceRpc('office_gov_connector_config_store',[workspace,'cmis',{base_url:'https://cmis.invalid'},{token:'token-a'},owner]);
+  const secretId = (await db.query('SELECT vault_secret_id FROM office_private.office_gov_connector_configs WHERE workspace_id=$1 AND provider=$2',[workspace,'cmis'])).rows[0].vault_secret_id;
+  assert.equal(await serviceRpc('office_gov_connector_config_test_update',[workspace,'cmis','healthy','',dispatcher]),true);
+  assert.equal((await serviceRpc('office_gov_connector_config_get',[workspace,'cmis'])).state,'healthy');
+  assert.equal((await serviceRpc('office_gov_connector_config_status',[workspace])).cmis.state,'healthy');
+  await expectSqlState(() => serviceRpc('office_gov_connector_config_delete',[workspace,'cmis',dispatcher]),'42501');
+  assert.equal(await serviceRpc('office_gov_connector_config_delete',[workspace,'cmis',owner]),true);
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM vault.secrets WHERE id=$1',[secretId])).rows[0].count,0);
+  assert.equal(await serviceRpc('office_gov_connector_config_delete',[workspace,'cmis',owner]),false);
+  await expectSqlState(() => serviceRpc('office_gov_connector_config_test_update',[workspace,'graph','error','bad code',owner]),'22023');
 });
