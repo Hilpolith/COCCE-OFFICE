@@ -4,7 +4,9 @@
 
 The integrated School Management schema is applied to the COCCE Super App database as migration `20261106214240_office_school_management` (version `20261106214240`). The exact applied SQL is in `office-school-management-20261106.sql`; its SHA-256 is `76c5afe9328f18e8928c33ff9eaed33bd1feed377009f820175379e7a9e485e3`.
 
-The first attempt rolled back before commit because the draft referenced a nonexistent `office_workspaces.workspace_id`. The live Office workspace table uses `id`; all six School foreign keys and the disposable fixture were corrected and revalidated before the successful application. The failed attempt left no School objects or migration-history entry.
+The School dashboard is deployed to the selected Vercel project `cocce-office` at [cocce-office.vercel.app](https://cocce-office.vercel.app). The verified production deployment is `dpl_CpMLB9NDEquSXWMUS7zWKNDzo5v5`, built from application commit `488291bdcfab58dbcdc8838b9cc15ecf70ece42c`. The public alias returned HTTP 200, and its shipped JavaScript includes the School Management, Admissions, Attendance, Fees, Timetable, and School RPC integration.
+
+The first database attempt rolled back before commit because the draft referenced a nonexistent `office_workspaces.workspace_id`. The live Office workspace table uses `id`; all six School foreign keys and the disposable fixture were corrected and revalidated before the successful application. The failed attempt left no School objects or migration-history entry.
 
 ## Included workflows
 
@@ -25,5 +27,3 @@ Production verification confirmed the migration history row, RLS on all 21 table
 ## Storage and delivery limits
 
 This School record path does not upload student/guardian records to Bunny.net. The separate Docs/Sheets/Slides cloud auto-sync path is opt-in per item, but live Bunny transfers remain unverified while Bunny credits are exhausted. No automatic migration of device-local documents or student records is performed.
-
-The School UI release to Vercel is being finalized separately from this database migration.
