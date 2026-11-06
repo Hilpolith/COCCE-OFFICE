@@ -6,6 +6,10 @@ import {
   INDUSTRY_STORAGE_KEY, addIndustryWorkItem, createIndustryOffice, emptyIndustryState, linkIndustryTeam, writeIndustryState,
 } from './lib/industryWorkspaces';
 
+vi.mock('./GovernmentCorrespondenceWorkspace', () => ({
+  default: ({ officeName }: { officeName: string }) => <div data-testid="government-correspondence-preview">Government correspondence for {officeName}</div>,
+}));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -15,6 +19,29 @@ afterEach(() => {
 beforeEach(() => window.localStorage.clear());
 
 describe('industry office workbench', () => {
+  it('opens a separate Government Correspondence module without importing local preview records', async () => {
+    const office = createIndustryOffice(emptyIndustryState(), {
+      industryId: 'government', name: 'Kijiji Council', country: 'Tanzania',
+    }).office!;
+    const localTask = addIndustryWorkItem({ version: 1, offices: [office] }, office.id, {
+      title: 'Local government preview item', notes: 'Non-sensitive local example.',
+    });
+    const linked = linkIndustryTeam(localTask.state, office.id, 'government-server-team');
+    writeIndustryState(window.localStorage, linked);
+    render(<IndustrySuitesWorkspace preferredIndustryId="government" onCreateTeam={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Local government preview item' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared team' }));
+
+    const governmentModule = await screen.findByTestId('government-correspondence-preview');
+    expect(governmentModule.textContent ?? '').toContain('Kijiji Council');
+    expect(screen.getByRole('tab', { name: 'Correspondence' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Shared work items' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Local government preview item' })).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!).offices[0].items[0].title)
+      .toBe('Local government preview item');
+  });
+
   it('passes the existing Office Team ID when an office user chooses Open team', async () => {
     const office = createIndustryOffice(emptyIndustryState(), {
       industryId: 'school', name: 'Kijiji School', country: 'Tanzania',
