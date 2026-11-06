@@ -127,7 +127,7 @@ test('Edge Function pins the project, zone, region and Office prefix; never expo
   assert.match(core, /const STORAGE_ZONE = 'cocce-kyc'/);
   assert.match(core, /const STORAGE_REGION = 'de'/);
   assert.match(core, /const STORAGE_PREFIX = 'office\/v1'/);
-  assert.match(core, /office_cloud_\(begin_upload\|get_upload\|find_upload\|note_object_absent/);
+  assert.match(core, /office_cloud_\(begin_upload\|begin_revision\|get_sync_state\|get_upload\|find_upload\|note_object_absent/);
   assert.match(core, /!isOfficeObjectKey\(objectKey/);
   assert.doesNotMatch(core, /console\.(?:log|info|warn|error)\s*\(/);
   assert.doesNotMatch(core, /import\.meta\.env|process\.env/);

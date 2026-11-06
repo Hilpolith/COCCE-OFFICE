@@ -514,4 +514,46 @@ describe('non-mutating upload recovery and transfer boundaries', () => {
     });
     expect(fetcher).toHaveBeenCalledOnce();
   });
+
+  it('reads a strict sync-state record and rejects storage-key or cross-file metadata', async () => {
+    const syncState = {
+      fileId, workspaceId, displayName: 'Synthetic.cocce-docs.json',
+      currentRevisionId: revisionId, revisionNumber: 3, sizeBytes: 12,
+      sha256Hex: 'a'.repeat(64), updatedAt: '2026-11-06T12:00:00Z',
+    };
+    const fetcher = vi.fn().mockResolvedValue(json({ syncState }));
+    await expect(api(fetcher).getSyncState(fileId)).resolves.toEqual(syncState);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+      action: 'get_sync_state', fileId,
+    });
+    for (const bad of [
+      { ...syncState, fileId: workspaceId },
+      { ...syncState, revisionNumber: 0 },
+      { ...syncState, sha256Hex: 'invalid' },
+      { ...syncState, objectKey: 'private/path' },
+    ]) {
+      await expect(api(vi.fn().mockResolvedValue(json({ syncState: bad }))).getSyncState(fileId)).rejects.toThrow();
+    }
+  });
+
+  it('begins a new immutable revision bound to the selected file and expected base', async () => {
+    const data = new Uint8Array([4, 5, 6]);
+    const fetcher = vi.fn().mockResolvedValue(json({
+      status: 'finalized', fileId, revisionId, uploadSessionId: sessionId,
+    }));
+    await expect(api(fetcher).beginRevision(
+      workspaceId, fileId, revisionId, data, sessionId,
+    )).resolves.toEqual({
+      status: 'finalized', fileId, revisionId, uploadSessionId: sessionId,
+    });
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+      action: 'begin_revision', workspaceId, fileId,
+      expectedRevisionId: revisionId, idempotencyKey: sessionId,
+      sizeBytes: data.length, sha256Hex: await hashBytes(data),
+    });
+    const conflict = vi.fn().mockResolvedValue(json({ error: 'CONFLICT' }, 409));
+    await expect(api(conflict).beginRevision(
+      workspaceId, fileId, revisionId, data, crypto.randomUUID(),
+    )).rejects.toMatchObject({ status: 409 });
+  });
 });

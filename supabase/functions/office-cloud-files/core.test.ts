@@ -141,6 +141,42 @@ describe('Office cloud Edge Function', () => {
     expect(response.headers.get('referrer-policy')).toBe('no-referrer');
   });
 
+  it('creates a conflict-bound revision grant for the exact file without transferring bytes', async () => {
+    const bytes = new TextEncoder().encode('revision payload');
+    const checksum = await sha256Hex(bytes);
+    const baseRevisionId = '77777777-7777-4777-8777-777777777777';
+    const { fetchImpl, calls } = routedFetch((url, init) => {
+      expect(url.pathname).toBe('/rest/v1/rpc/office_cloud_begin_revision');
+      expect(JSON.parse(String(init.body))).toEqual({
+        p_actor_id: actorId, p_workspace_id: workspaceId, p_file_id: fileId,
+        p_expected_revision_id: baseRevisionId, p_idempotency_key: idempotencyKey,
+        p_expected_size_bytes: bytes.length, p_expected_sha256_hex: checksum,
+      });
+      return Response.json(sessionRecord({
+        declared_content_type: 'application/octet-stream',
+        expected_size_bytes: bytes.length, expected_sha256_hex: checksum,
+        display_name: 'sync.cocce-docs.json',
+      }));
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const response = await handler(request({
+      action: 'begin_revision', workspaceId, fileId,
+      expectedRevisionId: baseRevisionId, idempotencyKey,
+      sizeBytes: bytes.length, sha256Hex: checksum,
+    }));
+    const result = await response.json();
+    expect(response.status).toBe(200);
+    expect(result.status).toBe('upload_pending');
+    expect(result.fileId).toBe(fileId);
+    expect(result.revisionId).toBe(revisionId);
+    expect(new URL(result.uploadUrl).pathname).toBe(`/cocce-kyc/${objectKey}`);
+    expect(result.requiredHeaders['x-amz-meta-office-sha256']).toBe(checksum);
+    expect(JSON.stringify(result)).not.toContain('objectKey');
+    expect(JSON.stringify(result)).not.toContain('synthetic-bunny-secret-not-real');
+    expect(calls).toHaveLength(2);
+    expect(calls.some((call) => call.url.startsWith('https://de-s3.storage.bunnycdn.com/'))).toBe(false);
+  });
+
   it('caps the signed PUT URL to the fixed session expiry and refuses an expired begin-upload session', async () => {
     const soonExpiresAt = new Date(fixedNow + 30_000).toISOString();
     const { fetchImpl } = routedFetch((url) => {
@@ -538,6 +574,32 @@ describe('Office cloud Edge Function', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).files).toHaveLength(1);
     expect(calls).toHaveLength(2);
+  });
+
+  it('returns only authorized sync metadata and never signs or exposes the object key', async () => {
+    const { fetchImpl, calls } = routedFetch((url) => {
+      expect(url.pathname).toBe('/rest/v1/rpc/office_cloud_get_sync_state');
+      return Response.json({
+        file_id: fileId, workspace_id: workspaceId,
+        display_name: 'sync.cocce-docs.json', current_revision_id: revisionId,
+        revision_number: 4, verified_size_bytes: 123,
+        verified_sha256_hex: 'a'.repeat(64), updated_at: '2026-11-04T10:00:00Z',
+        object_key: objectKey,
+      });
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const response = await handler(request({ action: 'get_sync_state', fileId }));
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result).toEqual({ syncState: {
+      fileId, workspaceId, displayName: 'sync.cocce-docs.json',
+      currentRevisionId: revisionId, revisionNumber: 4, sizeBytes: 123,
+      sha256Hex: 'a'.repeat(64), updatedAt: '2026-11-04T10:00:00Z',
+    } });
+    const rpc = calls.find((call) => call.url.endsWith('/office_cloud_get_sync_state'))!;
+    expect(rpcPayload(rpc)).toEqual({ p_actor_id: actorId, p_file_id: fileId });
+    expect(JSON.stringify(result)).not.toContain(objectKey);
+    expect(calls.some((call) => call.url.startsWith('https://de-s3.storage.bunnycdn.com/'))).toBe(false);
   });
 
   it.each([

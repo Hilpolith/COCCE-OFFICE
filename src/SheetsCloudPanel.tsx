@@ -21,6 +21,7 @@ import {
   savePendingCloudCopy,
 } from './lib/officeCloudPending';
 import type { PendingCloudCopy } from './lib/officeCloudPending';
+import OfficeCloudSyncControl from './OfficeCloudSyncControl';
 import type { OfficeWorkbook } from './lib/localStore';
 import './docsCloud.css';
 
@@ -382,8 +383,8 @@ export default function SheetsCloudPanel({
     <section className="docs-cloud-panel glass-card" aria-labelledby="sheets-cloud-title">
       <div className="docs-cloud-heading">
         <div>
-          <span className="eyebrow">EXPLICIT CLOUD COPIES · NOT LIVE SYNC</span>
-          <h2 id="sheets-cloud-title">Sheets cloud copies</h2>
+          <span className="eyebrow">CLOUD COPIES · OPT-IN ITEM SYNC</span>
+          <h2 id="sheets-cloud-title">Sheets cloud storage</h2>
         </div>
         <button className="button-secondary small-button" onClick={onGoToTeam} disabled={busy}>Manage Office account in Team</button>
       </div>
@@ -418,6 +419,19 @@ export default function SheetsCloudPanel({
               <button className="button-secondary small-button" disabled={busy} onClick={() => { void run(load); }}>Refresh cloud list</button>
               <button className="button-secondary small-button" disabled={busy} onClick={() => changeScope(workspaceId, !trash)}>{trash ? 'Show active cloud copies' : 'Show cloud trash'}</button>
             </div>
+            <OfficeCloudSyncControl
+              actorId={actorId}
+              workspaceId={workspaceId}
+              module="sheets"
+              localRecordId={workbook.id}
+              displayName={safeSheetsCloudFilename(workbook.title)}
+              sourceKey={workbook.updatedAt}
+              hasUnsavedChanges={hasUnsavedChanges}
+              busy={busy}
+              execute={run}
+              onPendingUpdate={setPending}
+              snapshot={() => createSheetsCloudSnapshot(currentWorkbook.current)}
+            />
             {hasUnsavedChanges && <p role="status">Finish the open cell edit or retry local save before uploading or restoring a cloud copy.</p>}
             {pending.map((record) => <div className="docs-cloud-pending" key={`${record.actorId}/${record.idempotencyKey}`}>
               <strong>Pending: {record.displayName}</strong>

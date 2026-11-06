@@ -8,6 +8,7 @@ import { PGlite } from '@electric-sql/pglite';
 const foundation = await readFile(new URL('../supabase/migrations/20261104080000_office_cloud_files.sql', import.meta.url), 'utf8');
 const correction = await readFile(new URL('../supabase/migrations/20261104102000_office_cloud_list_conflict_fix.sql', import.meta.url), 'utf8');
 const lookup = await readFile(new URL('../supabase/migrations/20261104112200_office_cloud_upload_lookup.sql', import.meta.url), 'utf8');
+const syncRevision = await readFile(new URL('../docs/proposals/office-cloud-sync-revisions-20261106.sql', import.meta.url), 'utf8');
 const actor = '11111111-1111-4111-8111-111111111111';
 const outsider = '22222222-2222-4222-8222-222222222222';
 const workspace = '33333333-3333-4333-8333-333333333333';
@@ -46,6 +47,7 @@ before(async () => {
   }
   await db.exec(correction);
   await db.exec(lookup);
+  await db.exec(syncRevision);
 });
 beforeEach(async () => { await db.exec('BEGIN'); });
 afterEach(async () => { await db.exec('ROLLBACK'); });
@@ -209,4 +211,81 @@ test('lookup enforces actor/workspace membership and service-role-only execution
     assert.equal((await db.query('SELECT has_function_privilege($1,$2,$3) AS allowed', [role, 'public.office_cloud_find_upload(uuid,uuid,uuid)', 'EXECUTE'])).rows[0].allowed, false);
   }
   assert.equal((await db.query('SELECT has_function_privilege($1,$2,$3) AS allowed', ['service_role', 'public.office_cloud_find_upload(uuid,uuid,uuid)', 'EXECUTE'])).rows[0].allowed, true);
+});
+
+test('sync revisions advance linearly, retain immutable bases and return exact state', async () => {
+  const first = await makeAvailable('sync.txt', 110);
+  const initial = await rpc('office_cloud_get_sync_state', [actor, first.file_id]);
+  assert.equal(initial.file_id, first.file_id);
+  assert.equal(initial.current_revision_id, first.revision_id);
+  assert.equal(initial.revision_number, 1);
+  assert.equal(initial.verified_sha256_hex, 'a'.repeat(64));
+
+  const key = crypto.randomUUID();
+  const revision = await rpc('office_cloud_begin_revision', [
+    actor, workspace, first.file_id, first.revision_id, key, 220, 'b'.repeat(64),
+  ]);
+  assert.equal(revision.status, 'pending');
+  assert.equal(revision.file_id, first.file_id);
+  assert.equal(revision.display_name, 'sync.txt');
+  assert.equal(revision.expected_size_bytes, 220);
+  assert.equal(revision.expected_sha256_hex, 'b'.repeat(64));
+  assert.equal(revision.object_key, `office/v1/workspaces/${workspace}/files/${first.file_id}/revisions/${revision.revision_id}/payload`);
+  const stored = (await db.query('SELECT revision_number, base_revision_id FROM public.office_cloud_revisions WHERE revision_id=$1', [revision.revision_id])).rows[0];
+  assert.equal(stored.revision_number, 2);
+  assert.equal(stored.base_revision_id, first.revision_id);
+
+  const replay = await rpc('office_cloud_begin_revision', [
+    actor, workspace, first.file_id, first.revision_id, key, 220, 'b'.repeat(64),
+  ]);
+  assert.equal(replay.upload_session_id, revision.upload_session_id);
+  await expectError(() => rpc('office_cloud_begin_revision', [
+    actor, workspace, first.file_id, first.revision_id, key, 220, 'c'.repeat(64),
+  ]), '22023');
+  await expectError(() => rpc('office_cloud_begin_revision', [
+    actor, workspace, first.file_id, first.revision_id, crypto.randomUUID(), 1, 'd'.repeat(64),
+  ]), '55000');
+
+  await rpc('office_cloud_finalize_upload', [actor, revision.upload_session_id, 220, 'b'.repeat(64), 'application/octet-stream']);
+  const next = await rpc('office_cloud_get_sync_state', [actor, first.file_id]);
+  assert.equal(next.current_revision_id, revision.revision_id);
+  assert.equal(next.revision_number, 2);
+  assert.equal(next.verified_size_bytes, 220);
+  assert.equal(next.verified_sha256_hex, 'b'.repeat(64));
+  await expectError(() => rpc('office_cloud_begin_revision', [
+    actor, workspace, first.file_id, first.revision_id, crypto.randomUUID(), 220, 'c'.repeat(64),
+  ]), '55000');
+  const usage = await rpc('office_cloud_get_usage', [actor, workspace]);
+  assert.equal(usage.active_stored_bytes, 330);
+});
+
+test('revision RPCs are membership-scoped, bounded and service-role-only', async () => {
+  const first = await makeAvailable('private-sync.txt', 10);
+  for (const [who, where, file, base, size, digest, expectedCode] of [
+    [outsider, workspace, first.file_id, first.revision_id, 10, 'a'.repeat(64), '42501'],
+    [actor, otherWorkspace, first.file_id, first.revision_id, 10, 'a'.repeat(64), '42501'],
+    [actor, workspace, first.file_id, crypto.randomUUID(), 10, 'a'.repeat(64), '55000'],
+    [actor, workspace, first.file_id, first.revision_id, 26214401, 'a'.repeat(64), '22023'],
+    [actor, workspace, first.file_id, first.revision_id, 10, 'invalid', '22023'],
+  ]) {
+    await expectError(() => rpc('office_cloud_begin_revision', [who, where, file, base, crypto.randomUUID(), size, digest]), expectedCode);
+  }
+  const stateSignature = 'public.office_cloud_get_sync_state(uuid,uuid)';
+  const revisionSignature = 'public.office_cloud_begin_revision(uuid,uuid,uuid,uuid,uuid,bigint,text)';
+  for (const signature of [stateSignature, revisionSignature]) {
+    for (const [role, expected] of [['anon', false], ['authenticated', false], ['service_role', true]]) {
+      const allowed = (await db.query('SELECT has_function_privilege($1,$2,$3) AS allowed', [role, signature, 'EXECUTE'])).rows[0].allowed;
+      assert.equal(allowed, expected);
+    }
+  }
+});
+
+test('revision pointer trigger refuses a stale or unavailable child revision', async () => {
+  const first = await makeAvailable('guard.txt', 10);
+  const second = await rpc('office_cloud_begin_revision', [
+    actor, workspace, first.file_id, first.revision_id, crypto.randomUUID(), 11, 'b'.repeat(64),
+  ]);
+  await rpc('office_cloud_finalize_upload', [actor, second.upload_session_id, 11, 'b'.repeat(64), 'application/octet-stream']);
+  await expectError(() => db.query('UPDATE public.office_cloud_files SET current_revision_id=$1 WHERE file_id=$2', [first.revision_id, first.file_id]), '55000');
+  assert.equal((await rpc('office_cloud_get_sync_state', [actor, first.file_id])).current_revision_id, second.revision_id);
 });

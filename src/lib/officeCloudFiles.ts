@@ -52,6 +52,16 @@ export type CloudUsage = {
   usagePercent: number;
   warningAtPercent: 0 | 80 | 90 | 100;
 };
+export type CloudSyncState = {
+  fileId: string;
+  workspaceId: string;
+  displayName: string;
+  currentRevisionId: string;
+  revisionNumber: number;
+  sizeBytes: number;
+  sha256Hex: string;
+  updatedAt: string;
+};
 export type CloudUploadGrant = {
   workspaceId: string;
   status: 'upload_pending';
@@ -420,6 +430,27 @@ export function createOfficeCloudApi(
         (item) => parseFile(item, workspaceId, trashed) as CloudFile,
       );
     },
+    async getSyncState(fileId: string): Promise<CloudSyncState | null> {
+      if (!uuid(fileId)) throw stableError(400);
+      const result = await call('get_sync_state', { fileId });
+      if (result.syncState === null) return null;
+      const item = result.syncState;
+      const expectedKeys = [
+        'fileId', 'workspaceId', 'displayName', 'currentRevisionId',
+        'revisionNumber', 'sizeBytes', 'sha256Hex', 'updatedAt',
+      ];
+      if (
+        !record(item) || Object.keys(item).length !== expectedKeys.length ||
+        Object.keys(item).some((key) => !expectedKeys.includes(key)) ||
+        !uuid(item.fileId) || item.fileId.toLowerCase() !== fileId.toLowerCase() ||
+        !uuid(item.workspaceId) || typeof item.displayName !== 'string' ||
+        !item.displayName.trim() || item.displayName.length > 255 ||
+        !uuid(item.currentRevisionId) || !Number.isSafeInteger(item.revisionNumber) ||
+        (item.revisionNumber as number) < 1 || !fileBytes(item.sizeBytes) ||
+        !sha(item.sha256Hex) || !date(item.updatedAt)
+      ) throw stableError();
+      return { ...item, sha256Hex: item.sha256Hex.toLowerCase() } as CloudSyncState;
+    },
     async usage(workspaceId: string): Promise<CloudUsage> {
       if (!uuid(workspaceId)) throw stableError(400);
       const item = (await call('get_usage', { workspaceId })).usage;
@@ -581,6 +612,41 @@ export function createOfficeCloudApi(
       }
       const grant = parseGrant(result, workspaceId, data.byteLength, sha256Hex);
       if (!grant) throw stableError();
+      return grant;
+    },
+    async beginRevision(
+      workspaceId: string,
+      fileId: string,
+      expectedRevisionId: string,
+      data: Uint8Array,
+      idempotencyKey: string,
+    ): Promise<CloudUploadGrant | {
+      status: 'finalized'; fileId: string; revisionId: string; uploadSessionId: string;
+    }> {
+      if (
+        !uuid(workspaceId) || !uuid(fileId) || !uuid(expectedRevisionId) ||
+        !uuid(idempotencyKey) || !(data instanceof Uint8Array) ||
+        !fileBytes(data.byteLength)
+      ) throw stableError(400);
+      const sha256Hex = await hashBytes(data);
+      const result = await call('begin_revision', {
+        workspaceId, fileId, expectedRevisionId, idempotencyKey,
+        sizeBytes: data.byteLength, sha256Hex,
+      });
+      if (
+        result.status === 'finalized' && uuid(result.fileId) &&
+        result.fileId.toLowerCase() === fileId.toLowerCase() &&
+        uuid(result.revisionId) && uuid(result.uploadSessionId) &&
+        Object.keys(result).every((key) =>
+          ['status', 'fileId', 'revisionId', 'uploadSessionId'].includes(key),
+        )
+      ) return {
+        status: 'finalized', fileId: result.fileId,
+        revisionId: result.revisionId, uploadSessionId: result.uploadSessionId,
+      };
+      const grant = parseGrant(result, workspaceId, data.byteLength, sha256Hex);
+      if (!grant || grant.fileId.toLowerCase() !== fileId.toLowerCase())
+        throw stableError();
       return grant;
     },
     async upload(grant: CloudUploadGrant, data: Uint8Array): Promise<void> {

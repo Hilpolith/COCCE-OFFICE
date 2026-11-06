@@ -23,6 +23,7 @@ import {
   savePendingCloudCopy,
 } from './lib/officeCloudPending';
 import type { PendingCloudCopy } from './lib/officeCloudPending';
+import OfficeCloudSyncControl from './OfficeCloudSyncControl';
 import './docsCloud.css';
 
 type CloudApi = ReturnType<typeof createOfficeCloudApi>;
@@ -508,8 +509,8 @@ export default function DocsCloudPanel({
     >
       <div className="docs-cloud-heading">
         <div>
-          <span className="eyebrow">EXPLICIT CLOUD COPIES · NOT LIVE SYNC</span>
-          <h2 id="docs-cloud-title">Docs cloud copies</h2>
+          <span className="eyebrow">CLOUD COPIES · OPT-IN ITEM SYNC</span>
+          <h2 id="docs-cloud-title">Docs cloud storage</h2>
         </div>
         <button
           className="button-secondary small-button"
@@ -622,6 +623,27 @@ export default function DocsCloudPanel({
                   {trash ? 'Show active cloud copies' : 'Show cloud trash'}
                 </button>
               </div>
+              <OfficeCloudSyncControl
+                actorId={actorId}
+                workspaceId={workspaceId}
+                module="docs"
+                localRecordId={document.id}
+                displayName={safeDocsCloudFilename(document.title)}
+                sourceKey={document.updatedAt}
+                hasUnsavedChanges={hasUnsavedChanges}
+                busy={busy}
+                execute={run}
+                onPendingUpdate={setPending}
+                snapshot={() => {
+                  const source = currentDocument.current;
+                  const comments = listDocsReviewComments(
+                    window.localStorage,
+                    source.workspaceId,
+                    source.id,
+                  );
+                  return createDocsCloudSnapshot(source, comments.length);
+                }}
+              />
               {hasUnsavedChanges && (
                 <p role="status">
                   Retry local save before uploading or restoring a cloud copy.

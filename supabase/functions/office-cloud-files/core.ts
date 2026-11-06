@@ -315,7 +315,7 @@ async function verifyUser(config: CloudConfig, token: string, fetcher: Fetcher):
 }
 
 async function officeRpc(config: CloudConfig, name: string, payload: Record<string, unknown>, fetcher: Fetcher): Promise<unknown> {
-  if (!/^office_cloud_(begin_upload|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload)$/.test(name)) {
+  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload)$/.test(name)) {
     throw new Error('Office RPC not allowed');
   }
   const response = await fetcher(`${config.supabaseUrl}/rest/v1/rpc/${name}`, {
@@ -611,6 +611,58 @@ export function createOfficeCloudHandler({
         });
       }
 
+      if (body.action === 'begin_revision') {
+        if (!onlyKeys(body, ['action', 'workspaceId', 'fileId', 'expectedRevisionId', 'idempotencyKey', 'sizeBytes', 'sha256Hex'])
+          || !uuid(body.workspaceId) || !uuid(body.fileId) || !uuid(body.expectedRevisionId)
+          || !uuid(body.idempotencyKey)) return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        const sha256Hex = normalizeSha256Hex(body.sha256Hex);
+        if (!sha256Hex || typeof body.sizeBytes !== 'number' || !Number.isSafeInteger(body.sizeBytes) || body.sizeBytes < 1)
+          return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        if (body.sizeBytes > MAX_FILE_BYTES) return jsonResponse(origin, 413, { error: 'FILE_TOO_LARGE', message: errorMessage(413) });
+        const rpc = rpcObject(await officeRpc(config, 'office_cloud_begin_revision', {
+          p_actor_id: actorId,
+          p_workspace_id: body.workspaceId.toLowerCase(),
+          p_file_id: body.fileId.toLowerCase(),
+          p_expected_revision_id: body.expectedRevisionId.toLowerCase(),
+          p_idempotency_key: body.idempotencyKey.toLowerCase(),
+          p_expected_size_bytes: body.sizeBytes,
+          p_expected_sha256_hex: sha256Hex,
+        }, fetchImpl));
+        if (!rpc) throw new Error('Invalid Office revision response');
+        if (rpc.status === 'finalized') {
+          if (!uuid(rpc.file_id) || !uuid(rpc.revision_id) || !uuid(rpc.upload_session_id)
+            || rpc.file_id.toLowerCase() !== body.fileId.toLowerCase()) throw new Error('Invalid finalized Office revision response');
+          return jsonResponse(origin, 200, {
+            status: 'finalized', fileId: rpc.file_id, revisionId: rpc.revision_id,
+            uploadSessionId: rpc.upload_session_id,
+          });
+        }
+        const session = assertSession(rpc, actorId);
+        if (!session || session.workspaceId.toLowerCase() !== body.workspaceId.toLowerCase()
+          || session.fileId.toLowerCase() !== body.fileId.toLowerCase()) throw new Error('Invalid Office revision response');
+        if (session.status !== 'pending') return jsonResponse(origin, 409, { error: 'UPLOAD_NOT_PENDING', message: errorMessage(409) });
+        const remainingSeconds = Math.floor((Date.parse(session.expiresAt) - now()) / 1000);
+        if (remainingSeconds < 1) return jsonResponse(origin, 409, { error: 'UPLOAD_EXPIRED', message: errorMessage(409) });
+        const uploadExpiresInSeconds = Math.min(UPLOAD_URL_TTL_SECONDS, remainingSeconds);
+        const checksumBase64 = sha256Base64FromHex(session.sha256Hex);
+        const uploadUrl = await createPresignedS3Url(config.zonePassword, {
+          method: 'PUT', objectKey: session.objectKey, expiresSeconds: uploadExpiresInSeconds,
+          nowMs: now(), contentType: session.contentType, contentLengthBytes: session.sizeBytes,
+          checksumBase64, checksumHex: session.sha256Hex, uploadSessionId: session.sessionId,
+        });
+        return jsonResponse(origin, 200, {
+          status: 'upload_pending', fileId: session.fileId, revisionId: session.revisionId,
+          uploadSessionId: session.sessionId, expiresAt: session.expiresAt,
+          uploadUrl, uploadUrlExpiresInSeconds: uploadExpiresInSeconds,
+          requiredHeaders: {
+            'Content-Type': session.contentType,
+            'x-amz-checksum-sha256': checksumBase64,
+            'x-amz-meta-office-session': session.sessionId,
+            'x-amz-meta-office-sha256': session.sha256Hex,
+          },
+        });
+      }
+
       if (body.action === 'finalize_upload') {
         if (!onlyKeys(body, ['action', 'uploadSessionId']) || !uuid(body.uploadSessionId)) return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
         const rpc = rpcObject(await officeRpc(config, 'office_cloud_get_upload', {
@@ -740,6 +792,36 @@ export function createOfficeCloudHandler({
         }, fetchImpl));
         if (!recovered || !['recovered', 'already_finalized'].includes(String(recovered.status))) throw new Error('Office recovery was not accepted');
         return jsonResponse(origin, 200, { status: 'recovered', fileId: session.fileId, revisionId: session.revisionId, sizeBytes: verified.size });
+      }
+
+      if (body.action === 'get_sync_state') {
+        if (!onlyKeys(body, ['action', 'fileId']) || !uuid(body.fileId)) return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        const record = rpcObject(await officeRpc(config, 'office_cloud_get_sync_state', {
+          p_actor_id: actorId, p_file_id: body.fileId.toLowerCase(),
+        }, fetchImpl));
+        if (!record) return jsonResponse(origin, 200, { syncState: null });
+        const sizeBytes = safeByteCount(record.verified_size_bytes);
+        const revisionNumber = safeByteCount(record.revision_number);
+        const syncState = {
+          fileId: record.file_id,
+          workspaceId: record.workspace_id,
+          displayName: record.display_name,
+          currentRevisionId: record.current_revision_id,
+          revisionNumber,
+          sizeBytes,
+          sha256Hex: typeof record.verified_sha256_hex === 'string' ? record.verified_sha256_hex.toLowerCase() : null,
+          updatedAt: record.updated_at,
+        };
+        if (!uuid(syncState.fileId) || !uuid(syncState.workspaceId) || !uuid(syncState.currentRevisionId)
+          || syncState.fileId.toLowerCase() !== body.fileId.toLowerCase()
+          || typeof syncState.displayName !== 'string' || !safeDisplayName(syncState.displayName)
+          || revisionNumber === null || revisionNumber < 1
+          || sizeBytes === null || sizeBytes < 1 || sizeBytes > MAX_FILE_BYTES
+          || !normalizeSha256Hex(syncState.sha256Hex)
+          || typeof syncState.updatedAt !== 'string' || !Number.isFinite(Date.parse(syncState.updatedAt))) {
+          throw new Error('Invalid Office sync state response');
+        }
+        return jsonResponse(origin, 200, { syncState });
       }
 
       if (body.action === 'get_usage') {

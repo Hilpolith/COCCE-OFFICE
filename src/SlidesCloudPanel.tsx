@@ -25,6 +25,7 @@ import {
   savePendingCloudCopy,
 } from './lib/officeCloudPending';
 import type { PendingCloudCopy } from './lib/officeCloudPending';
+import OfficeCloudSyncControl from './OfficeCloudSyncControl';
 import './docsCloud.css';
 
 type CloudApi = ReturnType<typeof createOfficeCloudApi>;
@@ -439,8 +440,8 @@ export default function SlidesCloudPanel({
     <section className="docs-cloud-panel glass-card" aria-labelledby="slides-cloud-title">
       <div className="docs-cloud-heading">
         <div>
-          <span className="eyebrow">EXPLICIT CLOUD COPIES · NOT LIVE SYNC</span>
-          <h2 id="slides-cloud-title">Slides cloud copies</h2>
+          <span className="eyebrow">CLOUD COPIES · OPT-IN ITEM SYNC</span>
+          <h2 id="slides-cloud-title">Slides cloud storage</h2>
         </div>
         <button className="button-secondary small-button" onClick={onGoToTeam} disabled={busy}>Manage Office account in Team</button>
       </div>
@@ -475,6 +476,26 @@ export default function SlidesCloudPanel({
               <button className="button-secondary small-button" disabled={busy} onClick={() => { void run(load); }}>Refresh cloud list</button>
               <button className="button-secondary small-button" disabled={busy} onClick={() => changeScope(workspaceId, !trash)}>{trash ? 'Show active Slides copies' : 'Show Slides cloud trash'}</button>
             </div>
+            {deck && <OfficeCloudSyncControl
+              actorId={actorId}
+              workspaceId={workspaceId}
+              module="slides"
+              localRecordId={deck.id}
+              displayName={safeSlidesCloudFilename(deck.title)}
+              sourceKey={deck.updatedAt}
+              hasUnsavedChanges={hasUnsavedChanges}
+              busy={busy}
+              execute={run}
+              onPendingUpdate={setPending}
+              snapshot={async () => {
+                const source = currentDeck.current;
+                if (!source) throw new Error('Open a local presentation before syncing.');
+                const prepared = await readCurrentPackage(source, () => true);
+                if (!prepared || source !== currentDeck.current)
+                  throw new Error('The local presentation changed during snapshot preparation.');
+                return prepared.bytes;
+              }}
+            />}
             {hasUnsavedChanges && <p role="status">Save local changes or retry local save before uploading or restoring a cloud copy.</p>}
             {pending.map((record) => <div className="docs-cloud-pending" key={`${record.actorId}/${record.idempotencyKey}`}>
               <strong>Pending: {record.displayName}</strong>
