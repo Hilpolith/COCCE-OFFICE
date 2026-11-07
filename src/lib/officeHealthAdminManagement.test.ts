@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HEALTH_ADMIN_ACTIONS, HEALTH_ADMIN_CAPABILITIES, HEALTH_ADMIN_RESOURCES, HEALTH_ADMIN_PURPOSES, officeHealthAdminApi, isHealthAdminBootstrap, isHealthAdminPage } from "./officeHealthAdminManagement";
+import { HEALTH_ADMIN_ACTIONS, HEALTH_ADMIN_CAPABILITIES, HEALTH_ADMIN_RESOURCES, HEALTH_ADMIN_PURPOSES, officeHealthAdminApi, officeHealthAdminResidencyApi, isHealthAdminBootstrap, isHealthAdminPage } from "./officeHealthAdminManagement";
 const W = "10000000-0000-4000-8000-000000000001"; const ID = "10000000-0000-4000-8000-000000000002"; const K = "10000000-0000-4000-8000-000000000003";
 const page = (rows: Record<string, unknown>[] = [], offset = 0, limit = 100) => ({ rows, total_count: offset + rows.length, offset, limit, has_more: false });
 const client = (data: unknown) => ({ rpc: vi.fn(async () => ({ data, error: null })) });
@@ -16,4 +16,19 @@ describe("clinical Health Administration API contract", () => {
   it("enforces idempotency, optimistic versions, exact decimals, and ciphertext-only private fields", async () => { const c = client(confirmation); await expect(officeHealthAdminApi.command(c, W, "record_stock_movement", { id: ID, expected_version: 1, quantity: "1.250000", idempotency_key: K })).resolves.toMatchObject(confirmation); await expect(officeHealthAdminApi.command(c, W, "record_stock_movement", { expected_version: 1, quantity: 1.2, idempotency_key: K })).rejects.toThrow("decimal"); await expect(officeHealthAdminApi.command(c, W, "save_clinical_record", { id: ID, expected_version: 1, nonce: btoa("n".repeat(12)), ciphertext: btoa("c".repeat(32)), idempotency_key: K, narrative: "private" })).rejects.toThrow(/unsupported|encrypted/); await expect(officeHealthAdminApi.command(c, W, "save_clinical_record", { id: ID, expected_version: 1, nonce: btoa("n".repeat(12)), ciphertext: btoa("c".repeat(32)), idempotency_key: K })).resolves.toMatchObject(confirmation); });
   it("supports exact patient lookup without accepting raw identifiers", async () => { const c = client(page([{ id: ID }])); await officeHealthAdminApi.patientLookup(c, W, "phone", btoa("d".repeat(32)), "registration"); expect(c.rpc).toHaveBeenCalledWith("office_health_admin_read", expect.objectContaining({ p_resource: "patient_matches", p_purpose_code: "registration", p_filter: { index_type: "phone", digest: btoa("d".repeat(32)) } })); await expect(officeHealthAdminApi.patientLookup(c, W, "phone", "not-base64", "registration")).rejects.toThrow("lookup"); });
   it("audits exports before returning and limits selection", async () => { const c = client(confirmation); await officeHealthAdminApi.auditExport(c, W, "clinical_report", [ID], "csv", "authorized_export"); expect(c.rpc).toHaveBeenCalledWith("office_health_admin_command", { p_workspace_id: W, p_action: "audit_sensitive_export", p_payload: { resource: "clinical_report", entity_ids: [ID], format: "csv", purpose_code: "authorized_export", idempotency_key: expect.any(String) } }); await expect(officeHealthAdminApi.auditExport(c, W, "patients", [ID], "csv", "registration")).rejects.toThrow("export"); });
+  it("routes the dedicated residency actions with exact payload keys", async () => {
+    const c = client(confirmation);
+    await officeHealthAdminResidencyApi.command(c, W, "record_approval", { reference: "MOH-APP-2026-001", expected_version: 3, idempotency_key: K });
+    await officeHealthAdminResidencyApi.command(c, W, "verify_approval", { decision: "approved", expected_version: 4, idempotency_key: K });
+    await officeHealthAdminResidencyApi.command(c, W, "set_clinical_gate", { enabled: false, expected_version: 5, idempotency_key: K });
+    expect(c.rpc).toHaveBeenLastCalledWith("office_health_admin_residency_command", { p_workspace_id: W, p_action: "set_clinical_gate", p_payload: { enabled: false, expected_version: 5, idempotency_key: K } });
+  });
+  it("rejects malformed residency references, versions, UUIDs, and extra keys", async () => {
+    const c = client(confirmation);
+    await expect(officeHealthAdminResidencyApi.command(c, W, "record_approval", { reference: "", expected_version: 1, idempotency_key: K })).rejects.toThrow(/reference/);
+    await expect(officeHealthAdminResidencyApi.command(c, W, "verify_approval", { decision: "pending" as never, expected_version: 1, idempotency_key: K })).rejects.toThrow(/decision/);
+    await expect(officeHealthAdminResidencyApi.command(c, W, "set_clinical_gate", { enabled: false, expected_version: -1, idempotency_key: K })).rejects.toThrow(/version/);
+    await expect(officeHealthAdminResidencyApi.command(c, "not-a-uuid", "set_clinical_gate", { enabled: false, expected_version: 1, idempotency_key: K })).rejects.toThrow(/workspace/);
+    await expect(officeHealthAdminResidencyApi.command(c, W, "set_clinical_gate", { enabled: false, expected_version: 1, idempotency_key: K, extra: true } as never)).rejects.toThrow(/unsupported/);
+  });
 });

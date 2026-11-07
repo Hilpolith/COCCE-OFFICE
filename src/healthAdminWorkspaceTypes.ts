@@ -6,6 +6,9 @@ import type {
   HealthAdminRecord,
   HealthAdminResource,
   HealthAdminRole,
+  HealthAdminResidencyAction,
+  HealthAdminResidencyPayload,
+  HealthAdminSettings,
 } from "./lib/officeHealthAdminManagement";
 
 export type HealthAdminPrivateScope =
@@ -58,6 +61,7 @@ export type HealthAdminWorkspaceContext = {
   capabilities: HealthAdminCapabilities;
   storageReady: boolean;
   storageState: string;
+  settings: HealthAdminSettings | null;
   keyConfig: HealthAdminKeyConfig;
   recordsKey: CryptoKey | null;
   indexKey: CryptoKey | null;
@@ -73,6 +77,10 @@ export type HealthAdminWorkspaceContext = {
   command(
     action: HealthAdminAction,
     payload: HealthAdminRecord,
+  ): Promise<HealthAdminRecord>;
+  residencyCommand(
+    action: HealthAdminResidencyAction,
+    payload: HealthAdminResidencyPayload,
   ): Promise<HealthAdminRecord>;
   sealPrivate<T extends Record<string, unknown>>(
     recordId: string,

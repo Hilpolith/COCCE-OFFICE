@@ -53,28 +53,24 @@ export const HEALTH_ADMIN_COMMAND_FIELDS = fields;
 export type HealthAdminRecord = Record<string, unknown>;
 export interface HealthAdminPage<T extends HealthAdminRecord = HealthAdminRecord> { rows: T[]; total_count: number; offset: number; limit: number; has_more: boolean }
 export type HealthAdminStorageReviewState = "unverified" | "approved";
+export type HealthAdminResidencyApprovalStatus = "unrecorded" | "pending" | "approved" | "rejected";
 export interface HealthAdminSettings {
-  jurisdiction: string;
-  display_name: string;
-  timezone_name: string;
-  clinical_data_enabled: boolean;
-  storage_review_state: HealthAdminStorageReviewState;
-  version: number;
-}
-export interface HealthAdminBootstrap {
-  role: HealthAdminRole;
-  clinical_data_enabled: boolean;
-  storage_review_state: HealthAdminStorageReviewState;
-  storage_ready: boolean;
-  /** Compatibility projection for consumers; never accepted from bootstrap RPC data. */
-  storage_state?: string;
-  settings?: HealthAdminSettings | null;
+  jurisdiction: string; display_name: string; timezone_name: string; clinical_data_enabled: boolean;
+  storage_review_state: HealthAdminStorageReviewState; version: number;
+  clinical_data_region?: string | null; residency_approval_status?: HealthAdminResidencyApprovalStatus | null;
+  residency_approval_reference?: string | null; residency_approval_recorded_by?: string | null; residency_approval_recorded_at?: string | null;
+  residency_approval_verified_by?: string | null; residency_approval_verified_at?: string | null;
   key_config?: import("./officeHealthAdminCrypto").HealthAdminKeyConfig | null;
-  capabilities?: HealthAdminCapabilities;
-  summary?: Record<string, number>;
 }
+export interface HealthAdminBootstrap { role: HealthAdminRole; clinical_data_enabled: boolean; storage_review_state: HealthAdminStorageReviewState; storage_ready: boolean; storage_state?: string; settings?: HealthAdminSettings | null; key_config?: import("./officeHealthAdminCrypto").HealthAdminKeyConfig | null; capabilities?: HealthAdminCapabilities; summary?: Record<string, number> }
 export interface HealthAdminRpcClient { rpc(name: string, params?: Record<string, unknown>): Promise<{ data: unknown; error: { message: string; code?: string } | null }> }
 export type HealthAdminClient = HealthAdminRpcClient | SupabaseClient;
+
+export type HealthAdminResidencyAction = "record_approval" | "verify_approval" | "set_clinical_gate";
+export type HealthAdminResidencyPayload =
+  | { reference: string; expected_version: number; idempotency_key: string }
+  | { decision: "approved" | "rejected"; expected_version: number; idempotency_key: string }
+  | { enabled: boolean; expected_version: number; idempotency_key: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -99,6 +95,22 @@ const scanPrivate = (action: HealthAdminAction, v: unknown): void => { if (Array
 function validateCipher(v: unknown): void { if (typeof v !== "string" || !BASE64.test(v)) throw new Error("Encrypted private fields are malformed."); }
 function validatePrivate(action: HealthAdminAction, p: HealthAdminRecord): void { if (!privateActions.has(action)) return; if (action === "configure_private_key") return; if (typeof p.nonce === "string" || typeof p.ciphertext === "string") { validateCipher(p.nonce); validateCipher(p.ciphertext); if (typeof p.nonce !== "string" || typeof p.ciphertext !== "string" || decodedLength(p.nonce) !== 12 || decodedLength(p.ciphertext) < 16) throw new Error("Encrypted private fields are malformed."); } else if (action !== "audit_sensitive_export" && action !== "register_patient") throw new Error("Encrypted private fields are required."); }
 function validateDecimals(p: HealthAdminRecord): void { for (const [k, v] of Object.entries(p)) if (["amount_tzs", "total_amount_tzs", "paid_amount_tzs"].includes(k) && (typeof v !== "string" || !MONEY.test(v))) throw new Error("Amounts must be exact decimal strings."); else if (["quantity", "requested_quantity", "received_quantity", "available_quantity"].includes(k) && (typeof v !== "string" || !QUANTITY.test(v))) throw new Error("Quantities must be exact decimal strings."); }
+
+export const officeHealthAdminResidencyApi = {
+  async command<T extends HealthAdminRecord = HealthAdminRecord>(client: HealthAdminClient, workspaceId: string, action: HealthAdminResidencyAction, payload: HealthAdminResidencyPayload): Promise<T> {
+    checkWorkspace(workspaceId);
+    const keys = action === "record_approval" ? ["reference", "expected_version", "idempotency_key"] : action === "verify_approval" ? ["decision", "expected_version", "idempotency_key"] : ["enabled", "expected_version", "idempotency_key"];
+    if (Object.keys(payload).sort().join(",") !== [...keys].sort().join(",")) throw new Error("Residency command has unsupported fields.");
+    if (!Number.isSafeInteger(payload.expected_version) || payload.expected_version < 0) throw new Error("A valid expected version is required.");
+    if (typeof payload.idempotency_key !== "string" || !UUID.test(payload.idempotency_key)) throw new Error("A valid Health Administration request key is required.");
+    if (action === "record_approval") { const reference = (payload as Extract<HealthAdminResidencyPayload, { reference: string }>).reference; if (typeof reference !== "string" || reference.trim().length < 1 || reference.length > 500) throw new Error("A real approval document reference is required."); }
+    if (action === "verify_approval") { const decision = (payload as Extract<HealthAdminResidencyPayload, { decision: string }>).decision; if (decision !== "approved" && decision !== "rejected") throw new Error("A valid approval decision is required."); }
+    if (action === "set_clinical_gate" && typeof (payload as Extract<HealthAdminResidencyPayload, { enabled: boolean }>).enabled !== "boolean") throw new Error("A boolean clinical gate value is required.");
+    const data = await rpc(client, "office_health_admin_residency_command", { p_workspace_id: workspaceId, p_action: action, p_payload: payload });
+    if (!isRecord(data) || !Number.isSafeInteger(data.version) || (data.version as number) < 1) throw new Error("Health Administration returned a malformed residency confirmation.");
+    return data as T;
+  },
+};
 
 export const officeHealthAdminApi = {
   async read<T extends HealthAdminRecord = HealthAdminRecord>(client: HealthAdminClient, workspaceId: string, resource: HealthAdminResource, filter: HealthAdminRecord = {}, limit = 100, offset = 0, purpose?: HealthAdminAccessPurpose): Promise<HealthAdminPage<T> | HealthAdminBootstrap> {
