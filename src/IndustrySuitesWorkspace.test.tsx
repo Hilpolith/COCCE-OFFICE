@@ -12,6 +12,9 @@ vi.mock('./GovernmentCorrespondenceWorkspace', () => ({
 vi.mock('./SchoolManagementWorkspace', () => ({
   default: ({ officeName }: { officeName: string }) => <div data-testid="school-management-preview">School Management for {officeName}</div>,
 }));
+vi.mock('./UniversityManagementWorkspace', () => ({
+  default: ({ officeName }: { officeName: string }) => <div data-testid="university-management-preview">University Management for {officeName}</div>,
+}));
 
 afterEach(() => {
   cleanup();
@@ -108,6 +111,17 @@ describe('industry office workbench', () => {
     const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);
     expect(persisted.offices[0].items[0].title).toBe('Local-only item');
     expect(persisted.offices[0].teamWorkspaceId).toBe('server-team-id');
+  });
+
+  it('opens University Management as the default shared module beside shared work items', async () => {
+    const office = createIndustryOffice(emptyIndustryState(), {
+      industryId: 'university', name: 'Synthetic University', country: 'Tanzania',
+    }).office!;
+    writeIndustryState(window.localStorage, linkIndustryTeam({ version: 1, offices: [office] }, office.id, 'university-team'));
+    render(<IndustrySuitesWorkspace preferredIndustryId="university" onCreateTeam={vi.fn()} />);
+    expect(await screen.findByTestId('university-management-preview')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'University Management' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Shared work items' })).toBeTruthy();
   });
 
   it('creates a sector edition, persists work stages locally, and hands team creation to Office collaboration', async () => {

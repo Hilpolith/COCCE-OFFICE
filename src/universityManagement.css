@@ -1,0 +1,363 @@
+.university-workspace {
+  display: grid;
+  gap: 14px;
+  margin: 14px 0 24px;
+  color: var(--text);
+  --uni-glass: var(--glass-surface, var(--surface, #fff));
+}
+.university-hero,
+.university-panel,
+.university-metric,
+.university-key-panel {
+  border: 1px solid color-mix(in srgb, var(--border, #d9dce8) 78%, white);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--uni-glass) 94%, white),
+    color-mix(in srgb, var(--industry-accent) 4%, var(--uni-glass))
+  );
+  box-shadow: 0 14px 38px rgba(73, 63, 89, 0.08);
+
+}
+.university-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 19px;
+  border-radius: 22px;
+}
+.university-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  color: var(--industry-accent);
+  background: color-mix(in srgb, var(--industry-accent) 14%, var(--glass-solid, #fff));
+  border: 1px solid
+    color-mix(in srgb, var(--industry-accent) 38%, var(--border));
+}
+.university-hero h2 {
+  margin: 4px 0;
+  font-size: 21px;
+}
+.university-hero p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 790px;
+}
+.university-hero > .button-secondary {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.university-boundary,
+.university-feedback {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 11px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, #e6a85c 42%, var(--border));
+  background: rgba(255, 239, 208, 0.42);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.university-boundary svg {
+  color: #b77a25;
+  flex: none;
+}
+.university-feedback {
+  border-color: color-mix(in srgb, var(--industry-accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--industry-accent) 8%, var(--surface));
+}
+.university-tabs {
+  display: flex;
+  gap: 5px;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: var(--uni-glass);
+  scrollbar-width: thin;
+}
+.university-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.university-tabs button:hover,
+.university-tabs button:focus-visible,
+.university-tabs button.is-active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--industry-accent) 46%, var(--border));
+  background: color-mix(in srgb, var(--industry-accent) 12%, var(--glass-solid, #fff));
+  outline: none;
+}
+.university-tabs button svg {
+  color: var(--industry-accent);
+}
+.university-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+.university-metric,
+.university-panel,
+.university-key-panel {
+  padding: 15px;
+  border-radius: 17px;
+}
+.university-metric {
+  display: grid;
+  gap: 5px;
+}
+.university-metric span,
+.university-metric small,
+.university-workspace .muted,
+.university-workspace .panel-heading span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.university-metric strong {
+  font-size: 25px;
+  color: var(--industry-accent);
+}
+.university-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.university-panel {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.university-panel h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.university-panel p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.university-panel a {
+  color: var(--industry-accent);
+  font-size: 12px;
+  text-decoration: none;
+  padding: 5px 0;
+}
+.university-panel a:hover {
+  text-decoration: underline;
+}
+.university-workspace .panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.university-workspace .panel-heading h3 {
+  margin: 0;
+}
+.university-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.university-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.university-form input,
+.university-form select {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--background, var(--surface));
+  color: var(--text);
+  font-size: 12px;
+}
+.university-form input:focus-visible,
+.university-form select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--industry-accent) 65%, white);
+  outline-offset: 1px;
+}
+.university-form button {
+  grid-column: 1/-1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.university-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.university-row:last-child {
+  border-bottom: 0;
+}
+.university-row > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.university-row strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.university-row span,
+.university-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.university-workspace .row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.university-workspace .row-actions button,
+.university-workspace .load-more {
+  font-size: 12px;
+  padding: 6px 9px;
+}
+.university-workspace .load-more {
+  justify-self: start;
+}
+.university-empty,
+.university-state {
+  padding: 20px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+.university-state {
+  display: grid;
+  place-items: center;
+  gap: 9px;
+  margin: 20px 0;
+}
+.university-state h2,
+.university-state p {
+  margin: 0;
+}
+.university-state .button-primary,
+.university-state .button-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.university-key-panel {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.university-key-panel > div {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+}
+.university-key-panel > div span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.university-key-panel svg {
+  color: var(--industry-accent);
+}
+.university-key-panel form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.university-key-panel input {
+  min-height: 31px;
+  max-width: 210px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+.university-key-panel button {
+  white-space: nowrap;
+}
+@media (max-width: 980px) {
+  .university-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .university-metrics,
+  .university-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .university-hero {
+    flex-wrap: wrap;
+  }
+  .university-hero > .button-secondary {
+    margin-left: 62px;
+  }
+  .university-key-panel {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .university-key-panel form {
+    width: 100%;
+  }
+}
+@media (max-width: 520px) {
+  .university-metrics,
+  .university-grid,
+  .university-form {
+    grid-template-columns: 1fr;
+  }
+  .university-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .university-workspace .row-actions {
+    justify-content: flex-start;
+  }
+  .university-row .row-actions button {
+    width: auto;
+  }
+  .university-hero > .button-secondary {
+    margin-left: 0;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .university-hero,
+  .university-panel,
+  .university-metric,
+  .university-key-panel,
+  .university-tabs {
+
+    background: var(--surface, #fff);
+  }
+}
