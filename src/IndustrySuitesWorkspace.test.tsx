@@ -15,6 +15,9 @@ vi.mock('./SchoolManagementWorkspace', () => ({
 vi.mock('./UniversityManagementWorkspace', () => ({
   default: ({ officeName }: { officeName: string }) => <div data-testid="university-management-preview">University Management for {officeName}</div>,
 }));
+vi.mock('./BusinessManagementWorkspace', () => ({
+  default: ({ officeName }: { officeName: string }) => <div data-testid="business-management-preview">Business Management for {officeName}</div>,
+}));
 
 afterEach(() => {
   cleanup();
@@ -104,8 +107,11 @@ describe('industry office workbench', () => {
     writeIndustryState(window.localStorage, linked);
     render(<IndustrySuitesWorkspace preferredIndustryId="business" onCreateTeam={vi.fn()} />);
 
-    expect(await screen.findByText('Shared workbench is unavailable')).toBeTruthy();
+    expect(await screen.findByTestId('business-management-preview')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Business Management' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByRole('heading', { name: 'Local-only item' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared work items' }));
+    expect(await screen.findByText('Shared workbench is unavailable')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'This device preview' }));
     expect(await screen.findByRole('heading', { name: 'Local-only item' })).toBeTruthy();
     const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);

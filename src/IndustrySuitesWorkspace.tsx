@@ -14,6 +14,7 @@ import IndustrySharedWorkspace from './IndustrySharedWorkspace';
 import GovernmentCorrespondenceWorkspace from './GovernmentCorrespondenceWorkspace';
 import SchoolManagementWorkspace from './SchoolManagementWorkspace';
 import UniversityManagementWorkspace from './UniversityManagementWorkspace';
+import BusinessManagementWorkspace from './BusinessManagementWorkspace';
 import './industrySuites.css';
 
 const accentByIndustry: Record<IndustryId, string> = {
@@ -64,12 +65,15 @@ export default function IndustrySuitesWorkspace({
   const [governmentPanel, setGovernmentPanel] = useState<'correspondence' | 'tasks'>('correspondence');
   const [schoolPanel, setSchoolPanel] = useState<'management' | 'tasks'>('management');
   const [universityPanel, setUniversityPanel] = useState<'management' | 'tasks'>('management');
+  const [businessPanel, setBusinessPanel] = useState<'management' | 'tasks'>('management');
 
   const activeOffice = state.offices.find((office) => office.id === selectedOfficeId) ?? null;
   const definition = activeOffice ? getIndustryDefinition(activeOffice.industryId) : null;
   const accent = activeOffice ? accentByIndustry[activeOffice.industryId] : accentByIndustry[industryId];
   const sharedWorkspaceLabel = definition?.id === 'school' ? 'School Management system'
     : definition?.id === 'government' ? 'Government Correspondence workspace'
+      : definition?.id === 'university' ? 'University Management system'
+        : definition?.id === 'business' ? 'Business Management system'
       : `${definition?.shortLabel ?? 'industry'} shared work-item workspace`;
   const visibleItems = useMemo(() => {
     if (!activeOffice) return [];
@@ -107,6 +111,7 @@ export default function IndustrySuitesWorkspace({
       setGovernmentPanel('correspondence');
       setSchoolPanel('management');
       setUniversityPanel('management');
+      setBusinessPanel('management');
       setOfficeName('');
       setCreateOpen(false);
       setRecordSearch('');
@@ -171,7 +176,7 @@ export default function IndustrySuitesWorkspace({
     {state.offices.length > 0 && <div className="industry-office-picker" role="group" aria-label="Your industry offices">
       {state.offices.map((office) => {
         const officeIndustry = getIndustryDefinition(office.industryId);
-        return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setDataMode('shared'); setGovernmentPanel('correspondence'); setSchoolPanel('management'); setUniversityPanel('management'); setRecordSearch(''); }}>
+        return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setDataMode('shared'); setGovernmentPanel('correspondence'); setSchoolPanel('management'); setUniversityPanel('management'); setBusinessPanel('management'); setRecordSearch(''); }}>
           <span className="industry-chip-dot" style={{ background: accentByIndustry[office.industryId] }} />
           <span><strong>{office.name}</strong><small>{officeIndustry.shortLabel}</small></span>
         </button>;
@@ -280,6 +285,10 @@ export default function IndustrySuitesWorkspace({
         <button type="button" role="tab" aria-selected={universityPanel === 'management'} className={universityPanel === 'management' ? 'is-active' : ''} onClick={() => setUniversityPanel('management')}><GraduationCap size={14} /> University Management</button>
         <button type="button" role="tab" aria-selected={universityPanel === 'tasks'} className={universityPanel === 'tasks' ? 'is-active' : ''} onClick={() => setUniversityPanel('tasks')}><Check size={14} /> Shared work items</button>
       </div>}
+      {activeOffice.industryId === 'business' && <div className="government-module-tabs business-module-tabs" role="tablist" aria-label="Business office modules">
+        <button type="button" role="tab" aria-selected={businessPanel === 'management'} className={businessPanel === 'management' ? 'is-active' : ''} onClick={() => setBusinessPanel('management')}><Building2 size={14} /> Business Management</button>
+        <button type="button" role="tab" aria-selected={businessPanel === 'tasks'} className={businessPanel === 'tasks' ? 'is-active' : ''} onClick={() => setBusinessPanel('tasks')}><Check size={14} /> Shared work items</button>
+      </div>}
       {activeOffice.industryId === 'government' && governmentPanel === 'correspondence'
         ? <GovernmentCorrespondenceWorkspace
           key={`government-${activeOffice.teamWorkspaceId}`}
@@ -304,6 +313,15 @@ export default function IndustrySuitesWorkspace({
               country={activeOffice.country}
               accent={accent}
             />
+            : activeOffice.industryId === 'business' && businessPanel === 'management'
+              ? <BusinessManagementWorkspace
+                key={`business-management-${activeOffice.teamWorkspaceId}`}
+                workspaceId={activeOffice.teamWorkspaceId}
+                officeName={activeOffice.name}
+                country={activeOffice.country}
+                accent={accent}
+                onOpenTeam={openTeam}
+              />
           : <IndustrySharedWorkspace
           key={`industry-${activeOffice.teamWorkspaceId}`}
           workspaceId={activeOffice.teamWorkspaceId}

@@ -144,6 +144,10 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
+  :root :is(.business-hero, .business-panel, .business-metric, .business-key-panel, .business-tabs) {
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
   :root .office-editor-page :is(.editor-toolbar, .sheet-editor-topline, .slides-editor-toolbar) {
     -webkit-backdrop-filter: var(--glass-mini-filter);
     backdrop-filter: var(--glass-mini-filter);
