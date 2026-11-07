@@ -18,6 +18,9 @@ vi.mock('./UniversityManagementWorkspace', () => ({
 vi.mock('./BusinessManagementWorkspace', () => ({
   default: ({ officeName }: { officeName: string }) => <div data-testid="business-management-preview">Business Management for {officeName}</div>,
 }));
+vi.mock('./HealthAdminManagementWorkspace', () => ({
+  default: ({ officeName }: { officeName: string }) => <div data-testid="health-admin-management-preview">Health Administration for {officeName}</div>,
+}));
 
 afterEach(() => {
   cleanup();
@@ -164,6 +167,26 @@ describe('industry office workbench', () => {
   it('shows the healthcare-specific privacy boundary during office setup', () => {
     render(<IndustrySuitesWorkspace preferredIndustryId="healthcare-admin" onCreateTeam={vi.fn()} />);
     expect(screen.getByText(/administrative only: no patient names, diagnoses, clinical records, or prescriptions/i)).toBeTruthy();
+  });
+
+  it('opens Health Administration in a linked Team and keeps local preview records separate', async () => {
+    const office = createIndustryOffice(emptyIndustryState(), {
+      industryId: 'healthcare-admin', name: 'Synthetic District Facility', country: 'Tanzania',
+    }).office!;
+    const local = addIndustryWorkItem({ version: 1, offices: [office] }, office.id, {
+      title: 'Old local-only checklist', notes: 'Synthetic local preview.',
+    });
+    writeIndustryState(window.localStorage, linkIndustryTeam(local.state, office.id, 'health-admin-server-team'));
+    render(<IndustrySuitesWorkspace preferredIndustryId="healthcare-admin" onCreateTeam={vi.fn()} />);
+
+    expect(await screen.findByTestId('health-admin-management-preview')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Health Administration' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Shared work items' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Old local-only checklist' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'This device preview' }));
+    expect(await screen.findByRole('heading', { name: 'Old local-only checklist' })).toBeTruthy();
+    const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);
+    expect(persisted.offices[0].items[0].title).toBe('Old local-only checklist');
   });
 
   it('keeps an unreadable local store intact and disables register edits', () => {

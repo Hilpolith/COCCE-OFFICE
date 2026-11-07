@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import {
   ArrowLeft, ArrowRight, Building2, CalendarDays, Check,
-  CircleAlert, Clock3, Factory, FileText, GraduationCap, LockKeyhole, Plus, Scale, ShieldAlert, Sparkles, Users, X,
+  CircleAlert, Clock3, Factory, FileText, GraduationCap, HeartPulse, LockKeyhole, Plus, Scale, ShieldAlert, Sparkles, Users, X,
 } from 'lucide-react';
 import {
   addIndustryWorkItem, advanceIndustryWorkItem, createIndustryOffice,
@@ -17,6 +17,7 @@ import UniversityManagementWorkspace from './UniversityManagementWorkspace';
 import BusinessManagementWorkspace from './BusinessManagementWorkspace';
 import AccountingManagementWorkspace from './AccountingManagementWorkspace';
 import ManufacturingManagementWorkspace from './ManufacturingManagementWorkspace';
+import HealthAdminManagementWorkspace from './HealthAdminManagementWorkspace';
 import './industrySuites.css';
 
 const accentByIndustry: Record<IndustryId, string> = {
@@ -70,6 +71,7 @@ export default function IndustrySuitesWorkspace({
   const [businessPanel, setBusinessPanel] = useState<'management' | 'tasks'>('management');
   const [accountingPanel, setAccountingPanel] = useState<'management' | 'tasks'>('management');
   const [manufacturingPanel, setManufacturingPanel] = useState<'management' | 'tasks'>('management');
+  const [healthAdminPanel, setHealthAdminPanel] = useState<'management' | 'tasks'>('management');
 
   const activeOffice = state.offices.find((office) => office.id === selectedOfficeId) ?? null;
   const definition = activeOffice ? getIndustryDefinition(activeOffice.industryId) : null;
@@ -79,7 +81,8 @@ export default function IndustrySuitesWorkspace({
         : definition?.id === 'university' ? 'University Management system'
           : definition?.id === 'business' ? 'Business Management system'
             : definition?.id === 'accounting' ? 'Accounting Management system'
-              : definition?.id === 'manufacturing' ? 'Manufacturing Management system'
+          : definition?.id === 'manufacturing' ? 'Manufacturing Management system'
+                : definition?.id === 'healthcare-admin' ? 'Health Administration system'
           : `${definition?.shortLabel ?? 'industry'} shared work-item workspace`;
   const visibleItems = useMemo(() => {
     if (!activeOffice) return [];
@@ -120,6 +123,7 @@ export default function IndustrySuitesWorkspace({
       setBusinessPanel('management');
       setAccountingPanel('management');
       setManufacturingPanel('management');
+      setHealthAdminPanel('management');
       setOfficeName('');
       setCreateOpen(false);
       setRecordSearch('');
@@ -184,7 +188,7 @@ export default function IndustrySuitesWorkspace({
     {state.offices.length > 0 && <div className="industry-office-picker" role="group" aria-label="Your industry offices">
       {state.offices.map((office) => {
         const officeIndustry = getIndustryDefinition(office.industryId);
-        return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setDataMode('shared'); setGovernmentPanel('correspondence'); setSchoolPanel('management'); setUniversityPanel('management'); setBusinessPanel('management'); setAccountingPanel('management'); setManufacturingPanel('management'); setRecordSearch(''); }}>
+        return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setDataMode('shared'); setGovernmentPanel('correspondence'); setSchoolPanel('management'); setUniversityPanel('management'); setBusinessPanel('management'); setAccountingPanel('management'); setManufacturingPanel('management'); setHealthAdminPanel('management'); setRecordSearch(''); }}>
           <span className="industry-chip-dot" style={{ background: accentByIndustry[office.industryId] }} />
           <span><strong>{office.name}</strong><small>{officeIndustry.shortLabel}</small></span>
         </button>;
@@ -305,6 +309,10 @@ export default function IndustrySuitesWorkspace({
         <button type="button" role="tab" aria-selected={manufacturingPanel === 'management'} className={manufacturingPanel === 'management' ? 'is-active' : ''} onClick={() => setManufacturingPanel('management')}><Factory size={14} /> Manufacturing Management</button>
         <button type="button" role="tab" aria-selected={manufacturingPanel === 'tasks'} className={manufacturingPanel === 'tasks' ? 'is-active' : ''} onClick={() => setManufacturingPanel('tasks')}><Check size={14} /> Shared work items</button>
       </div>}
+      {activeOffice.industryId === 'healthcare-admin' && <div className="government-module-tabs health-admin-module-tabs" role="tablist" aria-label="Health Administration modules">
+        <button type="button" role="tab" aria-selected={healthAdminPanel === 'management'} className={healthAdminPanel === 'management' ? 'is-active' : ''} onClick={() => setHealthAdminPanel('management')}><HeartPulse size={14} /> Health Administration</button>
+        <button type="button" role="tab" aria-selected={healthAdminPanel === 'tasks'} className={healthAdminPanel === 'tasks' ? 'is-active' : ''} onClick={() => setHealthAdminPanel('tasks')}><Check size={14} /> Shared work items</button>
+      </div>}
       {activeOffice.industryId === 'government' && governmentPanel === 'correspondence'
         ? <GovernmentCorrespondenceWorkspace
           key={`government-${activeOffice.teamWorkspaceId}`}
@@ -355,8 +363,17 @@ export default function IndustrySuitesWorkspace({
                     country={activeOffice.country}
                     accent={accent}
                     onOpenTeam={openTeam}
-                  />
-          : <IndustrySharedWorkspace
+                    />
+                  : activeOffice.industryId === 'healthcare-admin' && healthAdminPanel === 'management'
+                    ? <HealthAdminManagementWorkspace
+                      key={`health-admin-management-${activeOffice.teamWorkspaceId}`}
+                      workspaceId={activeOffice.teamWorkspaceId}
+                      officeName={activeOffice.name}
+                      country={activeOffice.country}
+                      accent={accent}
+                      onOpenTeam={openTeam}
+                    />
+                  : <IndustrySharedWorkspace
           key={`industry-${activeOffice.teamWorkspaceId}`}
           workspaceId={activeOffice.teamWorkspaceId}
           officeName={activeOffice.name}

@@ -156,6 +156,10 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
+  :root :is(.health-admin-hero, .health-admin-panel, .health-admin-metric, .health-admin-tabs, .health-admin-key-panel, .health-admin-dock) {
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
   :root .office-editor-page :is(.editor-toolbar, .sheet-editor-topline, .slides-editor-toolbar) {
     -webkit-backdrop-filter: var(--glass-mini-filter);
     backdrop-filter: var(--glass-mini-filter);
