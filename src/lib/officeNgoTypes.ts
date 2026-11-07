@@ -1,0 +1,23 @@
+import type { OfficeRecordsKeyConfig } from './officePrivateRecordsCrypto';
+
+export const NGO_RESOURCES = ['bootstrap','members','roles','private_keys','donors','grants','projects','budget_lines','disbursements','expenses','procurements','partners','subgrants','activities','indicators','measurements','beneficiaries','beneficiary_private','safeguarding','staff_assignments','assets','obligations','governance','evidence','reports','audit'] as const;
+export type NgoResource = typeof NGO_RESOURCES[number];
+export type NgoDataResource = Exclude<NgoResource, 'bootstrap' | 'private_keys'>;
+export const NGO_SAVE_RESOURCES = ['donors','grants','projects','budget_lines','disbursements','expenses','procurements','partners','subgrants','activities','indicators','measurements','beneficiaries','beneficiary_private','safeguarding','staff_assignments','assets','obligations','governance','evidence','reports'] as const;
+export type NgoSaveResource = typeof NGO_SAVE_RESOURCES[number];
+export const NGO_ACTIONS = ['initialize','assign_role','save_settings','configure_private_key','review_storage','set_private_gate','enroll_beneficiary','save_record','transition_record','audit_export'] as const;
+export type NgoAction = typeof NGO_ACTIONS[number];
+export const NGO_CAPABILITIES = ['manage','programmes','finance','approve_finance','procurement','delivery','monitoring','beneficiary_private','safeguarding','people_assets','compliance','reports','audit'] as const;
+export type NgoCapability = typeof NGO_CAPABILITIES[number];
+export type NgoCapabilities = Record<NgoCapability, boolean>;
+export const NGO_ROLES = ['ngo_admin','programme_manager','finance_officer','procurement_officer','field_officer','monitoring_officer','safeguarding_officer','compliance_officer','ngo_viewer'] as const;
+export type NgoRole = typeof NGO_ROLES[number] | 'unassigned';
+export type NgoRow = Record<string, unknown> & { id?: string; version?: number; status?: string };
+export type NgoPage = { rows: NgoRow[]; total_count: number; limit: number; offset: number; has_more: boolean };
+export type NgoSettings = { base_currency: string; jurisdiction: 'mainland' | 'zanzibar'; private_data_enabled: boolean; storage_review_state: 'unverified' | 'pending' | 'approved' | 'rejected'; version: number; initialized?: boolean; storage_review_reference?: string; [key: string]: unknown };
+export type NgoBootstrap = { actor_id: string; role: NgoRole; capabilities: NgoCapabilities; summary: Record<string, number | string>; settings: NgoSettings };
+export type NgoMutationResult = { id: string; version: number; status: string };
+export type NgoPrivateKind = 'beneficiary' | 'safeguarding';
+export type NgoKeyConfigs = Record<NgoPrivateKind, OfficeRecordsKeyConfig>;
+export type NgoPurpose = 'direct_service' | 'record_correction' | 'safeguarding_response' | 'compliance_review';
+export type NgoFilter = { id?: string; project_id?: string; grant_id?: string; status?: string; purpose?: NgoPurpose };

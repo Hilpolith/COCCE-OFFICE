@@ -18,6 +18,7 @@ import BusinessManagementWorkspace from './BusinessManagementWorkspace';
 import AccountingManagementWorkspace from './AccountingManagementWorkspace';
 import ManufacturingManagementWorkspace from './ManufacturingManagementWorkspace';
 import HealthAdminManagementWorkspace from './HealthAdminManagementWorkspace';
+import NgoManagementWorkspace from './NgoManagementWorkspace';
 import './industrySuites.css';
 
 const accentByIndustry: Record<IndustryId, string> = {
@@ -208,6 +209,7 @@ export default function IndustrySuitesWorkspace({
         <div className="industry-form-actions">{state.offices.length > 0 && <button type="button" className="button-secondary" onClick={() => setCreateOpen(false)}>Cancel</button>}<button type="submit" className="button-primary" disabled={Boolean(storageIssue)}><Plus size={15} /> Create {getIndustryDefinition(industryId).shortLabel} office</button></div>
       </form>
       <p className="industry-sector-note"><ShieldAlert size={14} />{getIndustryDefinition(industryId).dataNote}</p>
+      {industryId === 'healthcare-admin' && <p className="industry-sector-note">Administrative only: no patient names, diagnoses, clinical records, or prescriptions.</p>}
     </section>}
 
     {activeOffice && definition && !createOpen && activeOffice.teamWorkspaceId && <div className="industry-data-mode" role="tablist" aria-label="Industry workbench storage mode">
@@ -367,6 +369,15 @@ export default function IndustrySuitesWorkspace({
                   : activeOffice.industryId === 'healthcare-admin' && healthAdminPanel === 'management'
                     ? <HealthAdminManagementWorkspace
                       key={`health-admin-management-${activeOffice.teamWorkspaceId}`}
+                      workspaceId={activeOffice.teamWorkspaceId}
+                      officeName={activeOffice.name}
+                      country={activeOffice.country}
+                      accent={accent}
+                      onOpenTeam={openTeam}
+                    />
+                  : activeOffice.industryId === 'ngo'
+                    ? <NgoManagementWorkspace
+                      key={`ngo-management-${activeOffice.teamWorkspaceId}`}
                       workspaceId={activeOffice.teamWorkspaceId}
                       officeName={activeOffice.name}
                       country={activeOffice.country}

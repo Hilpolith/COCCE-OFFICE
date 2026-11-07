@@ -403,10 +403,12 @@ describe("ManufacturingEvidencePanel", () => {
       target: { value: ids.target },
     });
     await chooseFile();
-    expect(onCommand).toHaveBeenCalledWith(
-      "link_evidence",
-      expect.objectContaining({ target_id: ids.target }),
-      "Evidence linked.",
+    await waitFor(() =>
+      expect(onCommand).toHaveBeenCalledWith(
+        "link_evidence",
+        expect.objectContaining({ target_id: ids.target }),
+        "Evidence linked.",
+      ),
     );
   });
   it("requires reason and stops supersession if actor changes while confirmation is open", async () => {

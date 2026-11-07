@@ -67,17 +67,17 @@ export const industryCatalog: readonly IndustryDefinition[] = [
   },
   {
     id: 'healthcare-admin', label: 'Healthcare administration', shortLabel: 'Health admin',
-    summary: 'Coordinate non-clinical operational requests.', workArea: 'Administrative requests only',
+    summary: 'Use the linked team for hospital operations and protected clinical workflows.', workArea: 'Non-sensitive administrative follow-ups',
     itemLabel: 'Administrative request', referenceLabel: 'Local reference',
     stages: ['Received', 'Assigned', 'In progress', 'Ready for review', 'Closed'],
-    dataNote: 'Administrative only: no patient names, diagnoses, clinical records, or prescriptions.',
+    dataNote: 'Never put patient details in this device-local preview or general tasks. Use the linked clinical workspace only after its private-data storage gate is cleared.',
   },
   {
     id: 'ngo', label: 'NGOs & projects', shortLabel: 'NGO',
-    summary: 'Track grant and field-activity follow-ups at a high level.', workArea: 'Project administration',
+    summary: 'Manage grants, programme delivery, results and accountability in a linked team.', workArea: 'Non-sensitive project follow-ups',
     itemLabel: 'Project work item', referenceLabel: 'Local grant or project reference',
     stages: ['Planned', 'Active', 'Evidence review', 'Ready to report', 'Closed'],
-    dataNote: 'Do not enter beneficiary identities, case records, or restricted grant data.',
+    dataNote: 'Keep beneficiary identities, safeguarding and restricted grants out of this device-local preview and general tasks. Protected records require the linked workspace and its privacy controls.',
   },
   {
     id: 'hospitality', label: 'Hotels & hospitality', shortLabel: 'Hospitality',
