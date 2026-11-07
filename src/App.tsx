@@ -21,6 +21,7 @@ import SlidesWorkspace from './SlidesWorkspace';
 import { slidesCloudFilesEnabled } from './lib/slidesCloudFeature';
 import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './lib/documentEditor';
 import VaultWorkspace from './VaultWorkspace';
+import { FrostedConfirmProvider, useFrostedConfirm } from './FrostedConfirm';
 import OfficeAccountControl from './OfficeAccountControl';
 import OfficeEditorChrome from './OfficeEditorChrome';
 import { readSurfaceStyle, writeSurfaceStyle } from './lib/appearancePreferences';
@@ -55,7 +56,7 @@ type DialogMode = 'workspace' | 'delete' | null;
 
 const themeOptions: { id: ThemeId; name: string; color: string }[] = [
   { id: 'dark', name: 'Dark Liquid Glass', color: '#8d8bff' },
-  { id: 'light', name: 'Light Liquid Glass', color: '#6663df' },
+  { id: 'light', name: 'Pearl Light Glass', color: '#777CC8' },
   { id: 'midnight', name: 'Midnight Glass', color: '#62c4ff' },
   { id: 'amber', name: 'Warm Amber Glass', color: '#ffae66' },
   { id: 'aurora', name: 'Aurora Glass', color: '#54d9b2' },
@@ -360,6 +361,7 @@ function App() {
   };
 
   return (
+    <FrostedConfirmProvider>
     <main className="app-frame">
       <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`} aria-label="Main navigation">
         <div className="brand-lockup">
@@ -447,7 +449,7 @@ function App() {
           {page === 'vault' && <VaultWorkspace />}
           {page === 'industry' && <IndustrySuitesWorkspace key={industryFocus ?? 'all'} preferredIndustryId={industryFocus} onCreateTeam={openIndustryTeam} />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
-          {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
+          {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
         <footer className="app-footer"><span><ShieldCheck size={13} /> Docs/Sheets/Slides offer manual cloud copies only (no auto-sync); Drive/PDF/Vault and Industry previews stay local. Shared Industry tasks require a linked team.</span><span>COCCE OFFICE · INDUSTRY WORKBENCH PREVIEW</span></footer>
@@ -457,6 +459,7 @@ function App() {
       {dialog === 'workspace' && <WorkspaceDialog onClose={() => setDialog(null)} onCreate={createWorkspace} />}
       {dialog === 'delete' && selectedDocument && <DeleteDocumentDialog title={selectedDocument.title} onClose={() => setDialog(null)} onDelete={confirmDeleteDocument} />}
     </main>
+    </FrostedConfirmProvider>
   );
 }
 
@@ -538,10 +541,11 @@ function DocumentRows({ documents, onOpen }: { documents: OfficeDocument[]; onOp
 function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx }: { documents: OfficeDocument[]; query: string; onCreate: () => void; onOpen: (document: OfficeDocument) => void; onImportDocx: (file: File) => Promise<boolean> }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const confirm = useFrostedConfirm();
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
-    if (!file || !window.confirm(DOCX_IMPORT_CONFIRMATION)) return;
+    if (!file || !(await confirm({ title: 'Import a local DOCX?', description: DOCX_IMPORT_CONFIRMATION, confirmLabel: 'Import file', cancelLabel: 'Cancel' }))) return;
     setImporting(true);
     try { await onImportDocx(file); } finally { setImporting(false); }
   };

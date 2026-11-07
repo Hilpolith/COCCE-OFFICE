@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import type { ChangeEvent, FormEvent } from 'react';
 import {
   Archive, ArrowDownToLine, FileLock2, FileText, Folder, FolderPlus,
@@ -45,6 +46,7 @@ function download(name: string, blob: Blob) {
 }
 
 export default function VaultWorkspace({ repository = localVaultRepository }: { repository?: VaultRepository }) {
+  const confirm = useFrostedConfirm();
   const [mode, setMode] = useState<'loading' | 'setup' | 'locked' | 'unlocked'>('loading');
   const [session, setSession] = useState<VaultSession | null>(null);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
@@ -229,7 +231,7 @@ export default function VaultWorkspace({ repository = localVaultRepository }: { 
     const message = entry.kind === 'folder'
       ? `Delete “${entry.name}” and its ${entries.filter((item) => item.kind === 'file' && item.folderId === entry.id).length} files from this local Vault?`
       : `Permanently remove “${entry.name}” from this local Vault?`;
-    if (!window.confirm(`${message} This cannot be undone unless you have an encrypted backup.`)) return;
+    if (!await confirm(`${message} This cannot be undone unless you have an encrypted backup.`)) return;
     const next = entry.kind === 'folder'
       ? entries.filter((item) => item.id !== entry.id && !(item.kind === 'file' && item.folderId === entry.id))
       : entries.filter((item) => item.id !== entry.id);

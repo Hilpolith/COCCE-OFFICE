@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { Extension } from '@tiptap/core';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
@@ -226,6 +227,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   onGoToTeam: () => void;
   onRestoreCloudCopy?: (snapshot: DocsCloudSnapshot) => boolean;
 }) {
+  const confirm = useFrostedConfirm();
   const patchRef = useRef(onPatch);
   const [cloudOpen, setCloudOpen] = useState(false);
   const cloudEnabled = import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true' && Boolean(onRestoreCloudCopy);
@@ -526,8 +528,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     }
   };
 
-  const removeReviewComment = (comment: DocsReviewComment, index: number) => {
-    if (!window.confirm('Delete this review comment from this device? This removes only the local comment.')) return;
+  const removeReviewComment = async (comment: DocsReviewComment, index: number) => {
+    if (!await confirm('Delete this review comment from this device? This removes only the local comment.')) return;
     const scope = reviewCommentScopeRef.current;
     try {
       deleteDocsReviewComment(window.localStorage, scope.workspaceId, scope.documentId, comment.id);
@@ -600,7 +602,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     }
   };
 
-  const replaceAllFindMatches = () => {
+  const replaceAllFindMatches = async () => {
     if (!editor) return;
     const matches = readCurrentFindMatches();
     if (!matches) return;
@@ -612,7 +614,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       setFindNotice({ text: 'The replacement already matches every result; no text was changed.', error: false });
       return;
     }
-    const approved = window.confirm(`Replace all ${matches.length.toLocaleString()} matches in this local document? This is one undoable edit; no document text is sent anywhere.`);
+    const approved = await confirm(`Replace all ${matches.length.toLocaleString()} matches in this local document? This is one undoable edit; no document text is sent anywhere.`);
     if (!approved) {
       setFindNotice({ text: 'Replace all cancelled; no text was changed.', error: false });
       return;
@@ -631,7 +633,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     }
   };
 
-  const exportMarkdown = () => {
+  const exportMarkdown = async () => {
     if (!editor) {
       setTableNotice('The document editor is still loading; nothing was exported.');
       return;
@@ -639,7 +641,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     const headerlessTables = countDocsTablesWithoutHeaderRow(editor.state.doc);
     if (headerlessTables > 0) {
       const tableLabel = headerlessTables === 1 ? 'table has' : 'tables have';
-      const approved = window.confirm(`Markdown table syntax requires a header row. ${headerlessTables} table ${tableLabel} no header row, so export will treat each first row as a header. Continue?`);
+      const approved = await confirm(`Markdown table syntax requires a header row. ${headerlessTables} table ${tableLabel} no header row, so export will treat each first row as a header. Continue?`);
       if (!approved) {
         setTableNotice('Markdown export cancelled; the document was not changed.');
         return;

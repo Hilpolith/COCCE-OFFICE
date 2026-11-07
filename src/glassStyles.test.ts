@@ -25,7 +25,9 @@ const contrast = (foreground: string, background: string) => {
   return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
 };
 const root = style(':root');
+const darkRoot = style(':root:not([data-theme=light])');
 const rootValue = (property: string) => root?.style.getPropertyValue(property).trim();
+const darkRootValue = (property: string) => darkRoot?.style.getPropertyValue(property).trim();
 const media = (condition: string) => allRules.find((rule) => 'conditionText' in rule && (rule as CSSMediaRule).conditionText === condition) as CSSMediaRule | undefined;
 
 const controlledBlurSelectors = rules
@@ -48,7 +50,8 @@ describe('glass design rendering boundaries', () => {
     expect(sheet.cssRules.length).toBe(1);
     expect(screen.conditionText).toBe('screen');
     expect(source).not.toContain('@import');
-    expect(source).not.toMatch(/url\s*\(/i);
+    expect(source).toContain("url('/brand/cocce-light-frosted-ambient.webp')");
+    expect(source).not.toMatch(/url\s*\(['"]?https?:/i);
     expect(source).not.toContain('.pdf-text-layer');
     expect(source).not.toContain('.slides-print');
     expect(source).not.toContain('.slide-canvas');
@@ -61,11 +64,11 @@ describe('glass design rendering boundaries', () => {
   });
 
   it('defines literal opaque fallback values before color-mix enhancement', () => {
-    expect(rootValue('--glass-solid')).toBe('#2f3935');
-    expect(rootValue('--glass-reading')).toBe('#19211d');
-    expect(rootValue('--glass-surface')).toBe('rgba(47, 57, 53, .88)');
-    expect(rootValue('--glass-nav')).toBe('rgba(32, 42, 38, .88)');
-    expect(rootValue('--glass-veil')).toBe('rgba(4, 10, 7, .68)');
+    expect(rootValue('--glass-solid')).toBe('#FCFDFE');
+    expect(rootValue('--glass-reading')).toBe('#FFFFFF');
+    expect(rootValue('--glass-surface')).toBe('rgba(255, 255, 255, .68)');
+    expect(rootValue('--glass-nav')).toBe('rgba(251, 252, 253, .82)');
+    expect(rootValue('--glass-veil')).toBe('rgba(224, 231, 235, .66)');
     expect(source).toContain('--glass-surface: color-mix(in srgb, var(--glass-solid) 78%, transparent)');
     expect(source).toContain('--glass-nav: color-mix(in srgb, var(--bg-top) 82%, transparent)');
   });
@@ -86,6 +89,7 @@ describe('glass design rendering boundaries', () => {
     expect(controlledBlurSelectors).toContain('.docs-format-toolbar');
     expect(controlledBlurSelectors).toContain('.team-panel');
     expect(controlledBlurSelectors).toContain('.office-collab-panel');
+    expect(controlledBlurSelectors).toContain('.frosted-confirm-backdrop');
   });
 
   it('provides solid manual, browser-support and system-accessibility fallbacks', () => {
@@ -113,14 +117,14 @@ describe('glass design rendering boundaries', () => {
     expect(themes).toHaveLength(6);
     const actionText = rootValue('--glass-action-text');
     const actionEndpoints = [rootValue('--glass-action-start'), rootValue('--glass-action-end')];
-    expect(actionText).toBe('#1c2b22');
-    expect(actionEndpoints).toEqual(['#f4f7dd', '#cfdcba']);
+    expect(actionText).toBe('#25343D');
+    expect(actionEndpoints).toEqual(['#F2F6F4', '#D7E7E4']);
     for (const endpoint of actionEndpoints) expect(contrast(actionText!, endpoint!)).toBeGreaterThanOrEqual(4.5);
   });
 
   it('keeps representative dark and light text roles legible on opaque surfaces', () => {
-    const darkBackground = rootValue('--glass-reading')!;
-    const lightBackground = '#f9fbf6';
+    const darkBackground = darkRootValue('--glass-reading')!;
+    const lightBackground = rootValue('--glass-reading')!;
     const darkRoles = { text: '#f2f5f0', muted: '#bbc5bd', faint: '#a0afa5', focus: '#8d8bff', error: '#ff8d91' };
     const lightRoles = { text: '#243329', muted: '#4c6052', faint: '#526859', error: '#a42c45' };
     for (const [role, color] of Object.entries(darkRoles)) {

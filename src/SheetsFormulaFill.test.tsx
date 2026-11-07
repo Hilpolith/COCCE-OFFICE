@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SheetsWorkspace from './SheetsWorkspace';
 import { readPreviewState, writePreviewState } from './lib/localStore';
 import type { PreviewState } from './lib/localStore';
@@ -108,7 +108,7 @@ describe('Sheets formula fill UI', () => {
     expect(screen.getByRole('status').textContent).toContain('Filled 1 formula right');
   });
 
-  it('asks once before overwriting populated target cells and honors cancellation', () => {
+  it('asks once before overwriting populated target cells and honors cancellation', async () => {
     const onState = vi.fn((_next: PreviewState) => true);
     openGrid(onState, stateWithCells({ B1: '=A1+1', B2: 'keep this' }));
     const confirm = setConfirm(false);
@@ -121,10 +121,10 @@ describe('Sheets formula fill UI', () => {
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('translating relative A1 references'));
     expect(onState).not.toHaveBeenCalled();
     expect(cell('B2').getAttribute('aria-label')).toContain('keep this');
-    expect(screen.getByRole('status').textContent).toContain('Formula fill cancelled');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Formula fill cancelled'));
   });
 
-  it('saves once after overwrite approval and does not ask when every target is blank', () => {
+  it('saves once after overwrite approval and does not ask when every target is blank', async () => {
     const onState = vi.fn((_next: PreviewState) => true);
     openGrid(onState, stateWithCells({ A1: '4', A2: '5', B1: '=A1*2', B2: 'old' }));
     const confirm = setConfirm(true);
@@ -133,7 +133,7 @@ describe('Sheets formula fill UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fill formula' }));
 
     expect(confirm).toHaveBeenCalledTimes(1);
-    expect(onState).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onState).toHaveBeenCalledTimes(1));
     expect(onState.mock.calls[0][0].workbooks[0].worksheets[0].cells).toMatchObject({ B2: '=A2*2', B3: '=A3*2' });
 
     cleanup();

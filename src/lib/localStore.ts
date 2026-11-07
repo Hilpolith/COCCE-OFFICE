@@ -41,6 +41,7 @@ export interface OfficeWorkbook {
 export interface PreviewState {
   version: 1;
   theme: ThemeId;
+  themeExplicitlySelected?: boolean;
   accent: string;
   activeWorkspaceId: string | null;
   workspaces: OfficeWorkspace[];
@@ -53,8 +54,9 @@ export type StorageWriter = Pick<Storage, 'setItem'>;
 
 export const DEFAULT_STATE: PreviewState = {
   version: 1,
-  theme: 'dark',
-  accent: '#8d8bff',
+  theme: 'light',
+  themeExplicitlySelected: false,
+  accent: '#777CC8',
   activeWorkspaceId: null,
   workspaces: [],
   documents: [],
@@ -146,9 +148,13 @@ export function readPreviewState(storage: StorageReader): PreviewState {
   const accent = typeof value.accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.accent)
     ? value.accent
     : DEFAULT_STATE.accent;
+  const storedTheme = isTheme(value.theme) ? value.theme : DEFAULT_STATE.theme;
+  const themeExplicitlySelected = value.themeExplicitlySelected === true;
+  const theme = !themeExplicitlySelected && storedTheme === 'dark' ? 'light' : storedTheme;
   return {
     version: 1,
-    theme: isTheme(value.theme) ? value.theme : DEFAULT_STATE.theme,
+    theme,
+    themeExplicitlySelected,
     accent,
     activeWorkspaceId,
     workspaces,

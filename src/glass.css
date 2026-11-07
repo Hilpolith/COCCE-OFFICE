@@ -1,68 +1,113 @@
 /* Application chrome only. Editor geometry, file formats and print rules stay
-   in their owning workspaces. No external imagery or runtime asset requests. */
+   in their owning workspaces. The single background image is bundled locally. */
 @media screen {
   :root {
+    color-scheme: light;
+    --bg: #F0F3F5;
+    --bg-top: #FBFCFD;
+    --text: #25313A;
+    --muted: #52616C;
+    --faint: #64727C;
+    --accent: #777CC8;
+    --surface: rgba(255, 255, 255, .66);
+    --surface-strong: rgba(255, 255, 255, .91);
+    --surface-soft: rgba(255, 255, 255, .48);
+    --surface-hover: rgba(255, 255, 255, .76);
+    --border: rgba(70, 86, 98, .15);
+    --border-strong: rgba(70, 86, 98, .25);
+    --shadow: 0 24px 58px rgba(38, 55, 67, .10);
+    --nav: rgba(251, 252, 253, .80);
+    --input: rgba(255, 255, 255, .78);
+    --success: #26765E;
+    --danger: #A43C4B;
+    --glass-solid: #FCFDFE;
+    --glass-reading: #FFFFFF;
+    --glass-surface: rgba(255, 255, 255, .68);
+    --glass-nav: rgba(251, 252, 253, .82);
+    --glass-shell: rgba(240, 243, 245, .42);
+    --glass-veil: rgba(224, 231, 235, .66);
+    --glass-mini-filter: blur(5px);
+    --glass-action-text: #25343D;
+    --glass-action-start: #F2F6F4;
+    --glass-action-end: #D7E7E4;
+    --glass-edge: rgba(70, 86, 98, .17);
+    --glass-reflection: rgba(255, 255, 255, .88);
+    --glass-sheen: linear-gradient(135deg, rgba(255, 255, 255, .82), rgba(255, 255, 255, .28) 48%, rgba(255, 255, 255, .46));
+    --glass-filter: blur(24px) saturate(145%);
+    --glass-shadow: 0 18px 48px rgba(38, 55, 67, .10), inset 0 1px 0 var(--glass-reflection);
+    --radius: 25px;
+  }
+  :root:not([data-theme=light]) {
+    color-scheme: dark;
     --bg: #111817;
-    --bg-top: #202a26;
-    --glass-solid: #2f3935;
-    --glass-reading: #19211d;
+    --bg-top: #202A26;
+    --text: #F2F5F0;
+    --muted: #BBC5BD;
+    --faint: #A0AFA5;
+    --surface: var(--glass-surface);
+    --surface-strong: var(--glass-solid);
+    --border: var(--glass-edge);
+    --border-strong: rgba(240, 250, 238, .30);
+    --input: rgba(9, 18, 14, .36);
+    --success: #60D7B1;
+    --danger: #FF8D91;
+    --glass-solid: #2F3935;
+    --glass-reading: #19211D;
     --glass-surface: rgba(47, 57, 53, .88);
     --glass-nav: rgba(32, 42, 38, .88);
     --glass-shell: rgba(12, 18, 15, .18);
     --glass-veil: rgba(4, 10, 7, .68);
-    --glass-mini-filter: blur(4px);
-    --glass-action-text: #1c2b22;
-    --glass-action-start: #f4f7dd;
-    --glass-action-end: #cfdcba;
+    --glass-action-text: #1C2B22;
+    --glass-action-start: #F4F7DD;
+    --glass-action-end: #CFDCBA;
     --glass-edge: rgba(240, 250, 238, .19);
     --glass-reflection: rgba(255, 255, 245, .18);
     --glass-sheen: linear-gradient(135deg, rgba(255, 255, 242, .095), rgba(255, 255, 255, .015) 48%, rgba(255, 255, 255, .035));
     --glass-filter: blur(24px) saturate(130%);
     --glass-shadow: 0 18px 48px rgba(0, 8, 5, .24), inset 0 1px 0 var(--glass-reflection);
-    --radius: 25px;
   }
-  :root, :root[data-theme] {
-    --text: #f2f5f0;
-    --muted: #bbc5bd;
-    --faint: #a0afa5;
-    --surface: var(--glass-surface);
-    --surface-strong: var(--glass-solid);
-    --border: var(--glass-edge);
-    --border-strong: rgba(240, 250, 238, .3);
-    --input: rgba(9, 18, 14, .36);
-  }
-  :root[data-theme=midnight] { --glass-solid: #1d2c3d; --glass-reading: #0e1723; }
-  :root[data-theme=amber] { --glass-solid: #352b23; --glass-reading: #211a17; }
-  :root[data-theme=aurora] { --glass-solid: #243a30; --glass-reading: #12231b; }
-  :root[data-theme=lavender] { --glass-solid: #302e3d; --glass-reading: #1c1a25; }
+  :root[data-theme=midnight] { --bg: #070D1B; --bg-top: #0A1930; --glass-solid: #1D2C3D; --glass-reading: #0E1723; --glass-surface: rgba(14, 27, 48, .86); --glass-nav: rgba(8, 16, 31, .88); }
+  :root[data-theme=amber] { --bg: #151016; --bg-top: #211610; --glass-solid: #352B23; --glass-reading: #211A17; --glass-surface: rgba(39, 29, 28, .86); --glass-nav: rgba(23, 18, 21, .88); }
+  :root[data-theme=aurora] { --bg: #091410; --bg-top: #10231F; --glass-solid: #243A30; --glass-reading: #12231B; --glass-surface: rgba(23, 39, 37, .86); --glass-nav: rgba(12, 24, 23, .88); }
+  :root[data-theme=lavender] { --bg: #11101A; --bg-top: #1D1929; --glass-solid: #302E3D; --glass-reading: #1C1A25; --glass-surface: rgba(37, 32, 52, .86); --glass-nav: rgba(22, 19, 33, .88); }
   @supports (color: color-mix(in srgb, black, white)) {
     :root:not([data-theme=light]) {
       --glass-solid: color-mix(in srgb, var(--bg-top) 82%, #718078);
       --glass-reading: color-mix(in srgb, var(--bg) 92%, #718078);
-    }
-    :root {
       --glass-surface: color-mix(in srgb, var(--glass-solid) 78%, transparent);
       --glass-nav: color-mix(in srgb, var(--bg-top) 82%, transparent);
     }
   }
   :root[data-theme=light] {
-    --bg: #d9e2d8;
-    --bg-top: #edf1e7;
-    --text: #243329;
-    --muted: #4c6052;
-    --faint: #526859;
-    --glass-solid: #edf2e9;
-    --glass-reading: #f9fbf6;
-    --glass-surface: rgba(237, 242, 233, .88);
-    --glass-nav: rgba(237, 241, 231, .88);
-    --glass-shell: rgba(245, 250, 239, .18);
-    --glass-edge: rgba(41, 69, 47, .2);
-    --glass-reflection: rgba(255, 255, 255, .8);
-    --danger: #a42c45;
-    --success: #246c53;
-    --border-strong: rgba(41, 69, 47, .36);
-    --input: rgba(255, 255, 255, .6);
-    --glass-shadow: 0 18px 48px rgba(41, 69, 47, .11), inset 0 1px 0 var(--glass-reflection);
+    color-scheme: light;
+    --bg: #F0F3F5;
+    --bg-top: #FBFCFD;
+    --text: #25313A;
+    --muted: #52616C;
+    --faint: #64727C;
+    --surface: rgba(255, 255, 255, .66);
+    --surface-strong: rgba(255, 255, 255, .91);
+    --surface-soft: rgba(255, 255, 255, .48);
+    --surface-hover: rgba(255, 255, 255, .76);
+    --border: rgba(70, 86, 98, .15);
+    --border-strong: rgba(70, 86, 98, .25);
+    --shadow: 0 24px 58px rgba(38, 55, 67, .10);
+    --nav: rgba(251, 252, 253, .80);
+    --input: rgba(255, 255, 255, .78);
+    --glass-solid: #FCFDFE;
+    --glass-reading: #FFFFFF;
+    --glass-surface: rgba(255, 255, 255, .68);
+    --glass-nav: rgba(251, 252, 253, .82);
+    --glass-shell: rgba(240, 243, 245, .42);
+    --glass-veil: rgba(224, 231, 235, .66);
+    --glass-edge: rgba(70, 86, 98, .17);
+    --glass-reflection: rgba(255, 255, 255, .88);
+    --glass-action-text: #25343D;
+    --glass-action-start: #F2F6F4;
+    --glass-action-end: #D7E7E4;
+    --danger: #A43C4B;
+    --success: #26765E;
+    --glass-shadow: 0 18px 48px rgba(38, 55, 67, .10), inset 0 1px 0 var(--glass-reflection);
   }
 
   html, body, #root { min-width: 0; }
@@ -76,12 +121,18 @@
       radial-gradient(ellipse 45% 36% at 64% 3%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 80%),
       linear-gradient(135deg, var(--bg-top), var(--bg) 65%);
   }
-  .app-frame::before { opacity: .07; background-size: 4px 4px; }
+  .app-frame::before { opacity: .035; background-image: radial-gradient(rgba(57, 76, 88, .12) .65px, transparent .65px); background-size: 4px 4px; }
+  :root[data-theme=light] .app-frame {
+    background:
+      radial-gradient(ellipse 48% 42% at 8% 8%, rgba(180, 216, 204, .20), transparent 72%),
+      linear-gradient(135deg, rgba(248, 250, 251, .48), rgba(240, 243, 245, .62)),
+      url('/brand/cocce-light-frosted-ambient.webp') center / cover no-repeat fixed;
+  }
   .sidebar, .topbar, .glass-card, .glass-popover, .toast, .module-card {
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
-  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .mobile-scrim, .slides-present-overlay, .docs-format-toolbar, .team-panel, .office-collab-panel) {
+  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .mobile-scrim, .slides-present-overlay, .docs-format-toolbar, .team-panel, .office-collab-panel, .frosted-confirm-backdrop) {
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
@@ -96,7 +147,7 @@
   :root :is(.team-panel, .office-collab-panel, .docs-format-toolbar) {
     background: var(--glass-sheen), var(--glass-surface);
   }
-  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .mobile-scrim) { background: var(--glass-veil); }
+  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .mobile-scrim, .frosted-confirm-backdrop) { background: var(--glass-veil); }
   :root .theme-swatch::before { -webkit-backdrop-filter: var(--glass-mini-filter); backdrop-filter: var(--glass-mini-filter); }
   .sidebar, .topbar {
     background: var(--glass-sheen), var(--glass-nav);

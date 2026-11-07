@@ -31,7 +31,7 @@ afterEach(() => {
 
 describe('Docs local DOCX import UI', () => {
   it('confirms the supported subset, creates a new local draft, preserves the existing draft, and sends no network request', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const nativeConfirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const network = vi.spyOn(globalThis, 'fetch');
     const blob = await createDocxBlob({
       title: 'Synthetic fixture', content: '',
@@ -46,8 +46,11 @@ describe('Docs local DOCX import UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
 
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog.textContent).toContain(DOCX_IMPORT_CONFIRMATION);
+    fireEvent.click(screen.getByRole('button', { name: 'Import file' }));
     await waitFor(() => expect((screen.getByRole('textbox', { name: 'Document title' }) as HTMLInputElement).value).toBe('Synthetic import'));
-    expect(confirm).toHaveBeenCalledWith(DOCX_IMPORT_CONFIRMATION);
+    expect(nativeConfirm).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox', { name: 'Document content' }).textContent).toContain('Local import');
     expect(screen.getByRole('textbox', { name: 'Document content' }).textContent).toContain('Synthetic only');
     const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).documents as typeof existing[];
@@ -109,7 +112,6 @@ describe('Docs local DOCX import UI', () => {
   });
 
   it('keeps an imported draft in this tab when local storage is full and offers recovery controls', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
     vi.spyOn(window.localStorage, 'setItem').mockImplementation((key, value) => {
       if (key === STORAGE_KEY && JSON.parse(value).documents.length > 1) {
@@ -126,6 +128,7 @@ describe('Docs local DOCX import UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Import file' }));
     expect(await screen.findByText('Unsaved · kept in this tab')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Retry save' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Export \.docx/ })).toBeTruthy();
@@ -134,7 +137,7 @@ describe('Docs local DOCX import UI', () => {
   });
 
   it('does not import or change documents when the user cancels the local format warning', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const nativeConfirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const blob = await createDocxBlob({ title: 'Do not import', content: '', richText: '<p>synthetic text</p>' });
     const file = new File([await blob.arrayBuffer()], 'Cancelled.docx', { type: DOCX_MIME });
 
@@ -144,7 +147,10 @@ describe('Docs local DOCX import UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
 
-    expect(screen.queryByRole('textbox', { name: 'Document title' })).toBeNull();
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Document title' })).toBeNull());
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).documents).toHaveLength(1);
   });
 });

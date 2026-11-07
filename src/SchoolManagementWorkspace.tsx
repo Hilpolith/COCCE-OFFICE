@@ -165,6 +165,43 @@ export default function SchoolManagementWorkspace({
     return false;
   }), [canBursar, canRegistrar, canTeacher, isAdmin]);
   const selectedTab: TabId = visibleTabs.some((item) => item.id === activeTab) ? activeTab : 'overview';
+  const loadedCounts = useMemo(() => [
+    { id: 'terms', label: 'Academic terms', value: terms.length, detail: 'Loaded records', icon: CalendarDays, tone: 'cyan' },
+    { id: 'classes', label: 'Classes & streams', value: classes.length, detail: 'Loaded records', icon: Users, tone: 'teal' },
+    ...(canRegistrar || canTeacher || canBursar ? [{ id: 'students', label: 'Learner records', value: students.length, detail: 'Loaded · max 200', icon: GraduationCap, tone: 'blue' }] : []),
+    ...(canRegistrar ? [{ id: 'admissions', label: 'Applications', value: applications.length, detail: 'Loaded · max 200', icon: ClipboardCheck, tone: 'orange' }] : []),
+    ...(canTeacher ? [{ id: 'attendance', label: 'Attendance sessions', value: attendance.length, detail: 'Loaded · max 100', icon: Check, tone: 'teal' }, { id: 'grades', label: 'Assessments', value: assessments.length, detail: 'Loaded · max 100', icon: BookOpenCheck, tone: 'violet' }] : []),
+    ...(canBursar ? [{ id: 'fees', label: 'Fee charges', value: fees.length, detail: 'Loaded · max 200', icon: WalletCards, tone: 'orange' }] : []),
+  ], [applications.length, assessments.length, attendance.length, canBursar, canRegistrar, canTeacher, classes.length, fees.length, students.length, terms.length]);
+  const attendanceActivity = useMemo(() => {
+    const totals = attendance.reduce((acc, session) => {
+      session.marks.forEach((mark) => { acc[mark.attendance_status] = (acc[mark.attendance_status] ?? 0) + 1; });
+      return acc;
+    }, {} as Record<string, number>);
+    const total = Object.values(totals).reduce((sum, value) => sum + value, 0);
+    return ['present', 'late', 'absent', 'excused'].map((label) => ({ label, value: totals[label] ?? 0, width: total ? Math.round(((totals[label] ?? 0) / total) * 100) : 0 }));
+  }, [attendance]);
+  const nextActions = useMemo(() => {
+    const actions: { label: string; detail: string; tab: TabId }[] = [];
+    const pendingAdmissions = applications.filter((item) => ['submitted', 'reviewing', 'offered', 'waitlisted'].includes(item.status)).length;
+    const openAttendance = attendance.filter((item) => item.status === 'open').length;
+    const draftAssessments = assessments.filter((item) => item.status === 'draft').length;
+    const unpaidCharges = fees.filter((item) => Number(item.amount_tzs) > Number(item.paid_tzs)).length;
+    if (pendingAdmissions) actions.push({ label: 'Review admissions queue', detail: `${pendingAdmissions} active application${pendingAdmissions === 1 ? '' : 's'} loaded`, tab: 'admissions' });
+    if (openAttendance) actions.push({ label: 'Lock open attendance', detail: `${openAttendance} session${openAttendance === 1 ? '' : 's'} awaiting review`, tab: 'attendance' });
+    if (draftAssessments) actions.push({ label: 'Complete grade entry', detail: `${draftAssessments} draft assessment${draftAssessments === 1 ? '' : 's'} loaded`, tab: 'grades' });
+    if (unpaidCharges) actions.push({ label: 'Review fee balances', detail: `${unpaidCharges} charge${unpaidCharges === 1 ? '' : 's'} with a balance`, tab: 'fees' });
+    return actions.slice(0, 4);
+  }, [applications, assessments, attendance, fees]);
+  const selectTab = (tab: TabId) => setActiveTab(visibleTabs.some((item) => item.id === tab) ? tab : 'overview');
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? visibleTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + visibleTabs.length) % visibleTabs.length;
+    const next = visibleTabs[nextIndex];
+    selectTab(next.id);
+    window.setTimeout(() => document.getElementById(`school-tab-${next.id}`)?.focus(), 0);
+  };
 
   const refresh = useCallback(async () => {
     const generation = ++generationRef.current;
@@ -440,14 +477,15 @@ export default function SchoolManagementWorkspace({
     {status === 'error' && <div className="industry-shared-state is-alert" role="alert"><CircleAlert size={16} /><div><strong>School workspace unavailable</strong><span>{feedback || 'Check the Office Team connection and try again.'}</span></div></div>}
     {status === 'setup-required' && <section className="industry-shared-setup glass-card"><span className="industry-shared-setup-icon"><GraduationCap size={18} /></span><div><h2>Connect this team to Schools</h2><p>This creates an empty School profile only. It does not import device-local entries or school data.</p></div>{workspace && ['owner','admin'].includes(workspace.role) ? <button className="button-primary" type="button" disabled={profileBusy} onClick={() => void createProfile()}><Plus size={14} />Create empty School profile</button> : <p>Ask an Office Team owner/admin to create the School profile.</p>}</section>}
     {status === 'ready' && <>
-      <div className="school-sms-module-tabs" role="tablist" aria-label="School Management modules">{visibleTabs.map(({ id, label, icon: Icon }) => <button type="button" role="tab" aria-selected={selectedTab === id} className={activeTab === id ? 'is-active' : ''} key={id} onClick={() => setActiveTab(id)}><Icon size={14} />{label}</button>)}</div>
+      <div className="school-sms-module-tabs" role="tablist" aria-label="School Management modules">{visibleTabs.map(({ id, label, icon: Icon }, index) => <button type="button" role="tab" id={`school-tab-${id}`} aria-controls={`school-panel-${id}`} tabIndex={selectedTab === id ? 0 : -1} aria-selected={selectedTab === id} className={activeTab === id ? 'is-active' : ''} key={id} onClick={() => selectTab(id)} onKeyDown={(event) => handleTabKeyDown(event, index)}><Icon size={14} />{label}</button>)}</div>
       {role === 'unassigned' && <div className="school-sms-unassigned" role="note"><ShieldAlert size={15} />This account is an active Office Team member, but has no School role yet. Ask the Office Team owner/admin to assign Registrar, Teacher, Bursar or Viewer access.</div>}
-      {selectedTab === 'overview' && <section className="school-sms-overview-grid">
-        <article className="school-sms-stat glass-card"><span className="school-sms-icon is-cyan"><CalendarDays size={17} /></span><span>Academic terms</span><strong>{terms.length}</strong><small>Loaded, up to 200 records</small></article>
-        <article className="school-sms-stat glass-card"><span className="school-sms-icon is-teal"><Users size={17} /></span><span>Managed classes</span><strong>{classes.length}</strong><small>Role-filtered list</small></article>
-        <article className="school-sms-stat glass-card"><span className="school-sms-icon is-blue"><ShieldCheck size={17} /></span><span>Your School role</span><strong>{role.replace('_',' ')}</strong><small>{workspace?.role === 'owner' || workspace?.role === 'admin' ? 'Office Team administrator' : 'Assigned by School admin'}</small></article>
-        <section className="school-sms-overview-note glass-card"><div className="school-sms-panel-heading"><span className="school-sms-icon is-orange"><Activity size={17} /></span><div><span className="eyebrow">CLOUD OPERATIONS</span><h3>What is and isn’t connected</h3></div></div><p>School records use authenticated Office Team RPCs. Student/guardian identity and notice text are client-encrypted. No school attachments are uploaded, no external messages are sent, and this system does not connect to NECTA/MoEST or process payments.</p><p>Docs/Sheets/Slides file auto-sync is a separate feature. It does not move browser-local School data or School records.</p></section>
-        <section className="school-sms-overview-note glass-card"><div className="school-sms-panel-heading"><span className="school-sms-icon is-violet"><LockKeyhole size={17} /></span><div><span className="eyebrow">NO SILENT IMPORT</span><h3>Start with an empty shared School</h3></div></div><p>Your device-local industry preview remains separate. The shared School workspace starts empty and does not copy, upload or merge local records automatically.</p></section>
+      {selectedTab === 'overview' && <section id="school-panel-overview" role="tabpanel" className="school-sms-overview-grid">
+        <div className="school-sms-overview-intro"><div><span className="eyebrow">SCHOOL OPERATIONS</span><h1>{workspace?.name || officeName}</h1><p>Role-filtered workspace for the records currently loaded from Office Team.</p></div><span className="school-sms-role-badge"><ShieldCheck size={14} />{role.replace('_', ' ')}</span></div>
+        <div className="school-sms-stat-grid">{loadedCounts.map(({ id, label, value, detail, icon: Icon, tone }) => <article className="school-sms-stat glass-card" key={id}><span className={`school-sms-icon is-${tone}`}><Icon size={17} /></span><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>)}</div>
+        {canTeacher && <section className="school-sms-panel glass-card school-sms-activity"><div className="school-sms-panel-heading"><span className="school-sms-icon is-teal"><Activity size={17} /></span><div><span className="eyebrow">LOADED ATTENDANCE ACTIVITY</span><h3>Marks by status</h3></div><span className="school-sms-badge">{attendance.length} sessions · max 100</span></div>{attendance.length === 0 ? <p className="school-sms-empty">No attendance sessions are loaded yet.</p> : <div className="school-sms-bars">{attendanceActivity.map((item) => <div className="school-sms-bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${item.width}%` }} /></div><strong>{item.value}</strong></div>)}</div>}<p className="school-sms-help">Counts are derived from attendance marks currently loaded for your role; they are not school-wide rates.</p></section>}
+        <section className="school-sms-panel glass-card school-sms-next"><div className="school-sms-panel-heading"><span className="school-sms-icon is-orange"><ClipboardCheck size={17} /></span><div><span className="eyebrow">NEXT ACTIONS</span><h3>Keep work moving</h3></div></div>{nextActions.length ? <div className="school-sms-action-queue">{nextActions.map((item) => <button type="button" className="school-sms-queue-item" key={item.label} onClick={() => selectTab(item.tab)}><span><strong>{item.label}</strong><small>{item.detail}</small></span><span aria-hidden="true">→</span></button>)}</div> : <p className="school-sms-empty">No follow-up items from the records currently loaded.</p>}</section>
+        <section className="school-sms-panel glass-card school-sms-services"><div className="school-sms-panel-heading"><span className="school-sms-icon is-blue"><FileText size={17} /></span><div><span className="eyebrow">OFFICIAL MANUAL SERVICES</span><h3>Open government portals</h3></div></div><p className="school-sms-help">These links open official services for manual use. COCCE has no data synchronization or verified API connection to them.</p><div className="school-sms-service-links"><a href="https://esmis.moe.go.tz/" target="_blank" rel="noreferrer">ESMIS <small>Manual link · unconnected</small></a><a href="https://sqas.moe.go.tz/" target="_blank" rel="noreferrer">SQAS <small>Manual link · unconnected</small></a><a href="https://www.necta.go.tz/" target="_blank" rel="noreferrer">NECTA <small>Manual link · unconnected</small></a></div></section>
+        <section className="school-sms-overview-note glass-card"><div className="school-sms-panel-heading"><span className="school-sms-icon is-violet"><LockKeyhole size={17} /></span><div><span className="eyebrow">PRIVACY BY DEFAULT</span><h3>Operational view only</h3></div></div><p>The overview shows aggregates and internal codes only. Student or guardian names, dates of birth, contact details and decrypted notice text stay out of this dashboard.</p><p>Your shared School workspace starts empty and does not import device-local records automatically.</p></section>
       </section>}
 
       {selectedTab === 'classes' && <section className="school-sms-panels-grid">

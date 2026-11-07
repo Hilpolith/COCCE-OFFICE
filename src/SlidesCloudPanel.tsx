@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import {
   getOfficeTeamClient,
   resolveOfficeTeamConfig,
@@ -62,6 +63,7 @@ export default function SlidesCloudPanel({
   onRestore: (snapshot: SlidesCloudSnapshot) => Promise<void>;
   onGoToTeam: () => void;
 }) {
+  const confirm = useFrostedConfirm();
   const config = resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment);
   const client = getOfficeTeamClient(config);
   const configured = config.status === 'ready' && config.schemaReady;
@@ -282,7 +284,7 @@ export default function SlidesCloudPanel({
       const retainedBytes = prepared.images.reduce((sum, image) => sum + image.metadata.size, 0);
       const slideCount = source.slides.length;
       const prompt = `Save a new cloud copy of “${source.title || 'Untitled presentation'}” in Office workspace “${selectedWorkspace?.name}”?\n\nThis sends a complete, versioned snapshot of the presentation’s current title, theme, all ${slideCount} slide${slideCount === 1 ? '' : 's'} (text, layouts, speaker notes, descriptions), and all ${prepared.images.length} retained local image file${prepared.images.length === 1 ? '' : 's'} (${bytesLabel(retainedBytes)} of image bytes; ${bytesLabel(prepared.bytes.byteLength)} total) to private Bunny storage in Frankfurt. All active members of this Office workspace can access the copy.\n\nEvery supported Slides field and each retained IndexedDB image is included; unsupported, missing, over-limit, or changed media is refused before upload. Your local presentation and image files are not changed. This is a separate manual copy only—there is no background sync or automatic overwrite. Continue?`;
-      if (!window.confirm(prompt)) {
+      if (!await confirm(prompt)) {
         if (current()) setNotice('Cloud copy cancelled. No presentation bytes were sent and no upload reservation was created.');
         return;
       }
@@ -396,7 +398,7 @@ export default function SlidesCloudPanel({
   }
   async function restoreCopy(file: CloudFile) {
     if (unsaved.current) return;
-    if (!window.confirm(
+    if (!await confirm(
       `Download “${file.displayName}” and restore it as a NEW local presentation?\n\nThe validated package includes every supported deck field and every retained local image file. Slides and image IDs will be fresh. The new presentation will be saved in this browser’s current Slides workspace; existing local presentations and the cloud copy will not be overwritten. This does not turn on sync or collaboration. Continue?`,
     )) {
       setNotice('Restore cancelled. No cloud download was started and local presentations are unchanged.');
@@ -425,7 +427,7 @@ export default function SlidesCloudPanel({
     });
   }
   async function changeTrash(file: CloudFile) {
-    if (!window.confirm(trash
+    if (!await confirm(trash
       ? `Restore the Slides cloud copy “${file.displayName}” from cloud trash? Local presentations are unchanged.`
       : `Move the Slides cloud copy “${file.displayName}” to recoverable cloud trash? It remains recoverable and counts toward quota. Local presentations are unchanged.`)) return;
     await run(async (api, current) => {

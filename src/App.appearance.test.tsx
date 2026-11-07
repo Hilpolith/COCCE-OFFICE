@@ -84,7 +84,7 @@ describe('working appearance preferences', () => {
     appearance.writeSurfaceStyle(window.localStorage, 'solid');
     render(<App />);
     openPreferences();
-    fireEvent.click(screen.getByRole('button', { name: /Light Liquid Glass/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Pearl Light Glass/ }));
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(document.documentElement.dataset.surface).toBe('solid');
     fireEvent.change(screen.getByLabelText('Custom accent color'), { target: { value: '#308050' } });

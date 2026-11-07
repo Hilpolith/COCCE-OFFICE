@@ -171,4 +171,15 @@ describe('Government correspondence workspace', () => {
     expect(await screen.findByText(/Routed to Operations/)).toBeTruthy();
     expect(mocks.listEvents).toHaveBeenCalledWith(expect.anything(), workspaceId, incomingRecord.correspondence_id, { limit: 50, before: null });
   });
+
+  it('moves focus and selection together through the role-visible module dock', async () => {
+    renderGovernment();
+    const register = await screen.findByRole('tab', { name: 'Register' });
+    register.focus();
+    fireEvent.keyDown(register, { key: 'ArrowRight' });
+    const records = screen.getByRole('tab', { name: 'Records Management' });
+    expect(document.activeElement).toBe(records);
+    expect(records.getAttribute('aria-selected')).toBe('true');
+    expect(register.getAttribute('tabindex')).toBe('-1');
+  });
 });

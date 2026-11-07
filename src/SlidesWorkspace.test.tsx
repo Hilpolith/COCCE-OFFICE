@@ -385,7 +385,7 @@ describe('Slides workspace', () => {
     expect(click).not.toHaveBeenCalled();
     confirmation.mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'Download presentation JSON' }));
-    expect(click).toHaveBeenCalledOnce();
+    await waitFor(() => expect(click).toHaveBeenCalledOnce());
   });
 
   it('imports image-free JSON v2 with an honest omitted-image warning and keeps only the description', async () => {

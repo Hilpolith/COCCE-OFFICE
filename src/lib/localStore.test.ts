@@ -20,6 +20,7 @@ describe('local preview storage', () => {
   it('starts empty when there is no saved state', () => {
     const { storage } = memoryStorage();
     expect(readPreviewState(storage)).toEqual(DEFAULT_STATE);
+    expect(DEFAULT_STATE.theme).toBe('light');
   });
 
   it('recovers safely from malformed browser data', () => {
@@ -29,7 +30,7 @@ describe('local preview storage', () => {
 
   it('round-trips state through the specified browser storage key', () => {
     const { storage, read } = memoryStorage();
-    const changed = { ...DEFAULT_STATE, theme: 'amber' as const, accent: '#AABBCC' };
+    const changed = { ...DEFAULT_STATE, theme: 'amber' as const, themeExplicitlySelected: true, accent: '#AABBCC' };
     writePreviewState(storage, changed);
     expect(read()).not.toBeNull();
     expect(readPreviewState(storage)).toEqual(changed);
@@ -39,6 +40,23 @@ describe('local preview storage', () => {
   it('migrates earlier local v1 data by adding an empty workbook collection', () => {
     const oldState = JSON.stringify({ ...DEFAULT_STATE, workbooks: undefined });
     expect(readPreviewState(memoryStorage(oldState).storage).workbooks).toEqual([]);
+  });
+
+  it('changes only the legacy implicit dark default to light and preserves saved office data', () => {
+    const original = {
+      ...DEFAULT_STATE,
+      theme: 'dark' as const,
+      themeExplicitlySelected: undefined,
+      documents: [{ id: 'existing', workspaceId: null, title: 'Existing file', content: 'Keep me', createdAt: '2026-11-01T10:00:00.000Z', updatedAt: '2026-11-01T10:00:00.000Z' }],
+    };
+    const { storage, read } = memoryStorage(JSON.stringify(original));
+    expect(readPreviewState(storage)).toMatchObject({ theme: 'light', themeExplicitlySelected: false, documents: original.documents });
+    expect(read()).toBe(JSON.stringify(original));
+  });
+
+  it('respects an explicitly selected dark theme', () => {
+    const state = { ...DEFAULT_STATE, theme: 'dark' as const, themeExplicitlySelected: true };
+    expect(readPreviewState(memoryStorage(JSON.stringify(state)).storage)).toMatchObject({ theme: 'dark', themeExplicitlySelected: true });
   });
 
   it('preserves unsupported future-version data and refuses to overwrite it', () => {

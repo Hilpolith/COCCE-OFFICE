@@ -41,6 +41,15 @@ afterEach(() => {
 });
 
 describe('local Docs recovery integration', () => {
+  it('opens with the pearl-light theme while preserving legacy local document bytes', () => {
+    const legacy = { ...DEFAULT_STATE, theme: 'dark' as const, themeExplicitlySelected: undefined, documents: [draft] };
+    const raw = JSON.stringify(legacy);
+    window.localStorage.setItem(STORAGE_KEY, raw);
+    render(<App />);
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(raw);
+  });
+
   it('searches visible rich-text content even when the older plain-text copy is empty', () => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULT_STATE, documents: [{ ...draft, content: '', richText: '<p>Find the needleword here</p>' }] }));
     render(<App />);

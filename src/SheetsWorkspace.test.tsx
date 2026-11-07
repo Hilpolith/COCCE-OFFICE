@@ -266,7 +266,7 @@ describe('Sheets workspace keyboard navigation', () => {
     expect(screen.getByRole('status').textContent).toContain('rectangular range');
   });
 
-  it('confirms overwrites, honors cancellation, and keeps the saved copy on persistence failure', () => {
+  it('confirms overwrites, honors cancellation, and keeps the saved copy on persistence failure', async () => {
     const onState = vi.fn((_next: PreviewState) => true);
     openGrid(onState);
     originalConfirm = window.confirm;
@@ -278,11 +278,11 @@ describe('Sheets workspace keyboard navigation', () => {
     dispatchClipboard(cell('A1'), 'paste', makeClipboard('replacement'));
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('replace 1 existing cell'));
     expect(onState).not.toHaveBeenCalled();
-    expect(screen.getByRole('status').textContent).toContain('Paste cancelled; no cells were changed.');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Paste cancelled; no cells were changed.'));
 
     confirm.mockReturnValueOnce(true);
     dispatchClipboard(cell('A1'), 'paste', makeClipboard('replacement'));
-    expect(onState).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onState).toHaveBeenCalledTimes(1));
     expect(onState.mock.calls[0][0].workbooks[0].worksheets[0].cells.A1).toBe('replacement');
 
     cleanup();
@@ -369,7 +369,7 @@ describe('Sheets local numeric series fill', () => {
     expect(screen.getByRole('status').textContent).toContain('formulas, text, dates, and booleans are not supported');
   });
 
-  it('asks before replacing populated targets, cancels safely, and applies only after approval', () => {
+  it('asks before replacing populated targets, cancels safely, and applies only after approval', async () => {
     const onState = vi.fn((_next: PreviewState) => true);
     openGrid(onState, stateWithCells({ A1: '1', A2: '2', A3: 'old', A4: '4' }));
     originalConfirm = window.confirm;
@@ -382,16 +382,16 @@ describe('Sheets local numeric series fill', () => {
     fireEvent.click(fillButton());
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('replace 1 existing cell'));
     expect(onState).not.toHaveBeenCalled();
-    expect(screen.getByRole('status').textContent).toContain('Fill cancelled; no cells were changed.');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Fill cancelled; no cells were changed.'));
     expect(cell('A3').getAttribute('aria-label')).toContain('old');
 
     confirm.mockReturnValueOnce(true);
     fireEvent.click(fillButton());
-    expect(onState).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onState).toHaveBeenCalledTimes(1));
     expect(onState.mock.calls[0][0].workbooks[0].worksheets[0].cells).toMatchObject({ A3: '3', A4: '4' });
   });
 
-  it('avoids a save when values already match and preserves the displayed copy on save failure', () => {
+  it('avoids a save when values already match and preserves the displayed copy on save failure', async () => {
     const noOpSave = vi.fn((_next: PreviewState) => true);
     openGrid(noOpSave, stateWithCells({ A1: '1', A2: '2', A3: '3' }));
     fireEvent.click(cell('A1'));
@@ -411,7 +411,7 @@ describe('Sheets local numeric series fill', () => {
     fireEvent.keyDown(cell('A1'), { key: 'ArrowDown', shiftKey: true });
     fireEvent.keyDown(cell('A2'), { key: 'ArrowDown', shiftKey: true });
     fireEvent.click(fillButton());
-    expect(failedSave).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(failedSave).toHaveBeenCalledTimes(1));
     expect(screen.getAllByRole('alert').some((element) => element.textContent?.includes('Changes were not saved'))).toBe(true);
     expect(cell('A3').getAttribute('aria-label')).toContain('old');
     expect(screen.getByRole('status').textContent).not.toContain('Filled 1 cell down');
@@ -503,12 +503,12 @@ describe('Sheets bounded XLSX import and export', () => {
     expect(screen.queryByRole('tab', { name: 'Imported data' })).toBeNull();
   });
 
-  it('cancels XLSX export before creating a download or changing the workbook', () => {
+  it('cancels XLSX export before creating a download or changing the workbook', async () => {
     const onState = vi.fn((_next: PreviewState) => true);
     openGrid(onState);
     setConfirm(false);
     fireEvent.click(screen.getByRole('button', { name: 'Export XLSX' }));
-    expect(screen.getByRole('status').textContent).toContain('XLSX export cancelled');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('XLSX export cancelled'));
     expect(onState).not.toHaveBeenCalled();
   });
 });

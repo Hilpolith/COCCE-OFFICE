@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Copy,
@@ -60,6 +61,7 @@ function clearTabRecovery() {
 }
 
 export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefined }: Props) {
+  const confirm = useFrostedConfirm();
   const [loadResult, setLoadResult] = useState<LoadedSlides>(readSlidesForTab);
   const state = loadResult.state;
   const [activeDeckId, setActiveDeckId] = useState<string | null>(null);
@@ -372,9 +374,9 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
     }
   };
 
-  const downloadJson = (deck: PresentationDeck) => {
+  const downloadJson = async (deck: PresentationDeck) => {
     const imageCount = deck.slides.filter((slide) => Boolean(slide.imageAssetId)).length;
-    if (imageCount > 0 && !window.confirm(`This JSON transfer will omit ${imageCount} local image${imageCount === 1 ? '' : 's'}; it includes slide text, layouts, notes, and image descriptions only. Image files remain in this browser. Continue?`)) return;
+    if (imageCount > 0 && !await confirm(`This JSON transfer will omit ${imageCount} local image${imageCount === 1 ? '' : 's'}; it includes slide text, layouts, notes, and image descriptions only. Image files remain in this browser. Continue?`)) return;
     const blob = new Blob([serializeDeck(deck)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -495,9 +497,9 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
     }
   };
 
-  const deletePresentation = () => {
+  const deletePresentation = async () => {
     if (!state || !activeDeck) return;
-    if (!window.confirm(`Delete “${activeDeck.title || 'Untitled presentation'}” and permanently remove its local image files from this browser?`)) return;
+    if (!await confirm(`Delete “${activeDeck.title || 'Untitled presentation'}” and permanently remove its local image files from this browser?`)) return;
     const deletedDeckId = activeDeck.id;
     const saved = persist(removeDeck(state, deletedDeckId));
     if (saved) {

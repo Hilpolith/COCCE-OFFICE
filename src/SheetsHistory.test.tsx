@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import SheetsWorkspace from './SheetsWorkspace';
 import type { PreviewState, StorageReader, StorageWriter } from './lib/localStore';
@@ -171,7 +171,7 @@ describe('Sheets session-only worksheet undo and redo', () => {
     expect(screen.getByRole('button', { name: 'Undo spreadsheet cell edit' }).hasAttribute('disabled')).toBe(true);
   });
 
-  it('undoes and redoes a rectangular TSV paste with formulas and explicit blank cells as one step', () => {
+  it('undoes and redoes a rectangular TSV paste with formulas and explicit blank cells as one step', async () => {
     const storage = memoryStorage();
     const original = { A1: 'old', B1: 'keep' };
     writePreviewState(storage, stateWithCells(original));
@@ -182,12 +182,12 @@ describe('Sheets session-only worksheet undo and redo', () => {
     cell('A1').focus();
     const paste = dispatchPaste(cell('A1'), '=SUM(1,2)\t\r\npasted\t');
     expect(paste.defaultPrevented).toBe(true);
-    expect(savedCells(storage)).toEqual({ A1: '=SUM(1,2)', A2: 'pasted' });
+    await waitFor(() => expect(savedCells(storage)).toEqual({ A1: '=SUM(1,2)', A2: 'pasted' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo spreadsheet cell edit' }));
-    expect(savedCells(storage)).toEqual(original);
+    await waitFor(() => expect(savedCells(storage)).toEqual(original));
     fireEvent.click(screen.getByRole('button', { name: 'Redo spreadsheet cell edit' }));
-    expect(savedCells(storage)).toEqual({ A1: '=SUM(1,2)', A2: 'pasted' });
+    await waitFor(() => expect(savedCells(storage)).toEqual({ A1: '=SUM(1,2)', A2: 'pasted' }));
   });
 
   it('undoes and redoes numeric series fill as one range action', () => {

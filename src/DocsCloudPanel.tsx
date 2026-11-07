@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import type { OfficeDocument } from './lib/localStore';
 import {
   getOfficeTeamClient,
@@ -56,6 +57,7 @@ export default function DocsCloudPanel({
   onRestore: (snapshot: DocsCloudSnapshot) => boolean;
   onGoToTeam: () => void;
 }) {
+  const confirm = useFrostedConfirm();
   const config = resolveOfficeTeamConfig(
     import.meta.env as unknown as OfficeTeamEnvironment,
   );
@@ -281,7 +283,7 @@ export default function DocsCloudPanel({
           'The document changed during preparation. Try creating the cloud copy again.',
         );
       if (
-        !window.confirm(
+        !await confirm(
           `Save a new cloud copy of “${source.title}” in Office workspace “${selectedWorkspace?.name}”?\n\nThis sends the title, full document text and supported formatting to private Bunny storage in Frankfurt. All active members of this Office workspace can access it. This is not AI processing.\n\nReview comments are not supported by this first copy format; documents with comments are refused. Each save creates another file, even if the name already exists. No local original is overwritten or deleted; no background sync is enabled.`,
         )
       )
@@ -461,7 +463,7 @@ export default function DocsCloudPanel({
   async function restoreCopy(file: CloudFile) {
     if (
       hasUnsavedChanges ||
-      !window.confirm(
+      !await confirm(
         `Download “${file.displayName}” and restore it as a NEW local document in this browser?\n\nExisting local drafts and cloud copies will not be overwritten. The downloaded title, text and formatting will be verified and validated before one local save. This is not live sync or collaboration.`,
       )
     )
@@ -482,7 +484,7 @@ export default function DocsCloudPanel({
   }
   async function changeTrash(file: CloudFile) {
     if (
-      !window.confirm(
+      !await confirm(
         trash
           ? `Restore the cloud file “${file.displayName}” from cloud trash? Local drafts are unchanged.`
           : `Move “${file.displayName}” to cloud trash? It remains recoverable and counts toward quota. Local drafts are unchanged.`,

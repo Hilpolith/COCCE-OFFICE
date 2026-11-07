@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SchoolManagementWorkspace from './SchoolManagementWorkspace';
 
 const mocks = vi.hoisted(() => ({
@@ -44,6 +44,46 @@ function renderSchool() {
 }
 
 describe('School Management workspace', () => {
+  it('builds the overview from loaded operational state without exposing PII', async () => {
+    mocks.read.mockImplementation(async (_client, _workspaceId, resource) => {
+      if (resource === 'bootstrap') return {
+        role: 'school_admin',
+        terms: [{ term_id: 'term-1', academic_year: '2026/27', term_label: 'Term 1', start_date: '', end_date: '', status: 'open' }],
+        classes: [{ class_id: 'class-1', class_label: 'Form 1 A', level_label: 'Form 1', stream_label: 'A', capacity: 40, status: 'active' }],
+        subjects: [],
+      };
+      if (resource === 'admissions') return [{ application_id: 'app-1', person_id: 'person-1', application_code: 'APP-001', term_id: 'term-1', academic_year: '2026/27', term_label: 'Term 1', requested_class_id: 'class-1', class_label: 'Form 1 A', status: 'submitted', version: 1, created_at: '' }];
+      if (resource === 'attendance') return [{ session_id: 'session-1', class_id: 'class-1', class_label: 'Form 1 A', term_id: 'term-1', session_date: '2026-11-07', slot_label: 'Daily', status: 'open', marks: [{ student_id: 'student-1', student_code: 'ST-001', attendance_status: 'present' }] }];
+      if (resource === 'key_config') return { configured: false };
+      return [];
+    });
+    renderSchool();
+
+    expect(await screen.findByText('Learner records')).toBeTruthy();
+    expect(screen.getByText('Applications')).toBeTruthy();
+    expect(screen.getByText('Marks by status')).toBeTruthy();
+    expect(screen.getByText('Review admissions queue')).toBeTruthy();
+    expect(screen.queryByText('Amina Guardian Secret')).toBeNull();
+    expect(screen.queryByText('2020-01-01')).toBeNull();
+  });
+
+  it('labels official services as manual and unconnected, and quick actions use real tabs', async () => {
+    mocks.read.mockImplementation(async (_client, _workspaceId, resource) => {
+      if (resource === 'bootstrap') return { role: 'school_admin', terms: [], classes: [], subjects: [] };
+      if (resource === 'admissions') return [{ application_id: 'app-1', person_id: 'person-1', application_code: 'APP-001', term_id: 'term-1', academic_year: '2026/27', term_label: 'Term 1', requested_class_id: 'class-1', class_label: 'Form 1 A', status: 'submitted', version: 1, created_at: '' }];
+      if (resource === 'key_config') return { configured: false };
+      return [];
+    });
+    renderSchool();
+
+    expect(await screen.findByText(/official manual services/i)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /ESMIS.*Manual link.*unconnected/i }).getAttribute('href')).toBe('https://esmis.moe.go.tz/');
+    expect(screen.getByRole('link', { name: /SQAS.*Manual link.*unconnected/i }).getAttribute('href')).toBe('https://sqas.moe.go.tz/');
+    expect(screen.getByRole('link', { name: /NECTA.*Manual link.*unconnected/i }).getAttribute('href')).toBe('https://www.necta.go.tz/');
+    fireEvent.click(screen.getByRole('button', { name: /Review admissions queue/ }));
+    expect(screen.getByRole('tab', { name: 'Admissions' }).getAttribute('aria-selected')).toBe('true');
+  });
+
   it('loads owner modules and permitted datasets without reading browser-local records', async () => {
     window.localStorage.setItem('school-local-sentinel', 'leave-me-here');
     const getItem = vi.spyOn(Storage.prototype, 'getItem');

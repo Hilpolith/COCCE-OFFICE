@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import {
   getOfficeTeamClient,
   resolveOfficeTeamConfig,
@@ -55,6 +56,7 @@ export default function SheetsCloudPanel({
   onRestore: (snapshot: SheetsCloudSnapshot) => boolean;
   onGoToTeam: () => void;
 }) {
+  const confirm = useFrostedConfirm();
   const config = resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment);
   const client = getOfficeTeamClient(config);
   const configured = config.status === 'ready' && config.schemaReady;
@@ -244,7 +246,7 @@ export default function SheetsCloudPanel({
       const worksheetCount = source.worksheets.length;
       const populatedCells = source.worksheets.reduce((sum, sheet) => sum + Object.keys(sheet.cells).length, 0);
       const prompt = `Save a new cloud copy of “${source.title || 'Untitled spreadsheet'}” in Office workspace “${selectedWorkspace?.name}”?\n\nThis sends the workbook title, ${worksheetCount} worksheet${worksheetCount === 1 ? '' : 's'}, ${populatedCells} populated cell${populatedCells === 1 ? '' : 's'}, values and formula text (up to ${bytesLabel(SHEETS_CLOUD_MAX_BYTES)}) to private Bunny storage in Frankfurt. All active members of this Office workspace can access it.\n\nThis format preserves the current local Sheets model: worksheet names, cell values and raw formula text. The model does not include cell formatting, charts, drawings, images, macros, comments or external workbook links. No local original is overwritten or deleted. This makes a separate copy only; there is no background sync or automatic overwrite.`;
-      if (!window.confirm(prompt)) {
+      if (!await confirm(prompt)) {
         if (current()) setNotice('Cloud copy cancelled. No spreadsheet bytes were sent and no upload reservation was created.');
         return;
       }
@@ -354,7 +356,7 @@ export default function SheetsCloudPanel({
     });
   }
   async function restoreCopy(file: CloudFile) {
-    if (hasUnsavedChanges || !window.confirm(
+    if (hasUnsavedChanges || !await confirm(
       `Download “${file.displayName}” and restore it as a NEW local spreadsheet in this browser?\n\nThe downloaded workbook, worksheet names, cell values and raw formulas will be bounded and validated before one local save. Existing local workbooks and cloud copies will not be overwritten. Formatting, charts and external assets are not part of this Sheets model. This is not live sync or collaboration.`,
     )) return;
     await run(async (api, current) => {
@@ -368,7 +370,7 @@ export default function SheetsCloudPanel({
     });
   }
   async function changeTrash(file: CloudFile) {
-    if (!window.confirm(trash
+    if (!await confirm(trash
       ? `Restore the cloud file “${file.displayName}” from cloud trash? Local workbooks are unchanged.`
       : `Move “${file.displayName}” to cloud trash? It remains recoverable and counts toward quota. Local workbooks are unchanged.`)) return;
     await run(async (api, current) => {

@@ -172,6 +172,13 @@ export default function GovernmentCorrespondenceWorkspace({
     ...(canAdminister ? ['settings' as const] : []),
   ];
   const activeTab = allowedTabs.includes(moduleTab) ? moduleTab : 'register';
+  const moveModuleTab = (direction: 1 | -1) => {
+    const currentIndex = allowedTabs.indexOf(activeTab);
+    const nextIndex = (currentIndex + direction + allowedTabs.length) % allowedTabs.length;
+    const tablist = document.activeElement?.closest('[role="tablist"]');
+    setModuleTab(allowedTabs[nextIndex]);
+    tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex]?.focus();
+  };
   const activeMembers = useMemo(() => members.filter((member) => member.status === 'active'), [members]);
   const memberById = useMemo(() => new Map(activeMembers.map((member) => [member.user_id, member])), [activeMembers]);
 
@@ -573,11 +580,11 @@ export default function GovernmentCorrespondenceWorkspace({
 
     {status === 'ready' && <>
       <nav className="government-module-tabs government-workspace-tabs" role="tablist" aria-label="Government workspace modules">
-        <button type="button" role="tab" aria-selected={activeTab === 'register'} className={activeTab === 'register' ? 'is-active' : ''} onClick={() => setModuleTab('register')}><FileText size={14} /> Register</button>
-        {(canManageRecords || canAudit) && <button type="button" role="tab" aria-selected={activeTab === 'records'} className={activeTab === 'records' ? 'is-active' : ''} onClick={() => setModuleTab('records')}><Archive size={14} /> Records Management</button>}
-        {canUseOutbound && <button type="button" role="tab" aria-selected={activeTab === 'outbound'} className={activeTab === 'outbound' ? 'is-active' : ''} onClick={() => setModuleTab('outbound')}><Mail size={14} /> Outbound</button>}
-        {(canManageRecords || canAudit) && <button type="button" role="tab" aria-selected={activeTab === 'archives'} className={activeTab === 'archives' ? 'is-active' : ''} onClick={() => setModuleTab('archives')}><History size={14} /> Archives</button>}
-        {canAdminister && <button type="button" role="tab" aria-selected={activeTab === 'settings'} className={activeTab === 'settings' ? 'is-active' : ''} onClick={() => setModuleTab('settings')}><Settings2 size={14} /> Settings</button>}
+        <button type="button" role="tab" tabIndex={activeTab === 'register' ? 0 : -1} aria-selected={activeTab === 'register'} className={activeTab === 'register' ? 'is-active' : ''} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveModuleTab(1); } if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveModuleTab(-1); } }} onClick={() => setModuleTab('register')}><FileText size={14} /> Register</button>
+        {(canManageRecords || canAudit) && <button type="button" role="tab" tabIndex={activeTab === 'records' ? 0 : -1} aria-selected={activeTab === 'records'} className={activeTab === 'records' ? 'is-active' : ''} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveModuleTab(1); } if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveModuleTab(-1); } }} onClick={() => setModuleTab('records')}><Archive size={14} /> Records Management</button>}
+        {canUseOutbound && <button type="button" role="tab" tabIndex={activeTab === 'outbound' ? 0 : -1} aria-selected={activeTab === 'outbound'} className={activeTab === 'outbound' ? 'is-active' : ''} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveModuleTab(1); } if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveModuleTab(-1); } }} onClick={() => setModuleTab('outbound')}><Mail size={14} /> Outbound</button>}
+        {(canManageRecords || canAudit) && <button type="button" role="tab" tabIndex={activeTab === 'archives' ? 0 : -1} aria-selected={activeTab === 'archives'} className={activeTab === 'archives' ? 'is-active' : ''} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveModuleTab(1); } if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveModuleTab(-1); } }} onClick={() => setModuleTab('archives')}><History size={14} /> Archives</button>}
+        {canAdminister && <button type="button" role="tab" tabIndex={activeTab === 'settings' ? 0 : -1} aria-selected={activeTab === 'settings'} className={activeTab === 'settings' ? 'is-active' : ''} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveModuleTab(1); } if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveModuleTab(-1); } }} onClick={() => setModuleTab('settings')}><Settings2 size={14} /> Settings</button>}
       </nav>
 
       {activeTab !== 'register' && client && currentUserId && accessProfile && <GovernmentWorkspacePanels

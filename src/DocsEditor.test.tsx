@@ -168,7 +168,7 @@ describe('Docs local table authoring', () => {
     stubWindowConfirm(approveMarkdownExport);
     fireEvent.click(screen.getByRole('button', { name: 'Export .md' }));
     expect(approveMarkdownExport).toHaveBeenCalledTimes(1);
-    expect(onExport).toHaveBeenCalledWith(expect.stringContaining('<td><p>Header A</p></td>'));
+    await waitFor(() => expect(onExport).toHaveBeenCalledWith(expect.stringContaining('<td><p>Header A</p></td>')));
   });
 
   it('selects rows, columns and the whole table for inline formatting, undo/redo and keeps local comments unchanged', async () => {
@@ -421,7 +421,7 @@ describe('Docs local Find & Replace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Replace all' }));
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Replace all 2 matches'));
     expect(screen.getByRole('textbox', { name: 'Document content' }).textContent).toBe('Before Before');
-    expect(findPanelStatus(panel)).toContain('cancelled');
+    await waitFor(() => expect(findPanelStatus(panel)).toContain('cancelled'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace all' }));
     const content = screen.getByRole('textbox', { name: 'Document content' });

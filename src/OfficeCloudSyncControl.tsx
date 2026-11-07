@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import {
   createOfficeCloudSyncLink,
   getOfficeCloudSyncLink,
@@ -44,6 +45,7 @@ export default function OfficeCloudSyncControl({
   snapshot: () => Uint8Array | Promise<Uint8Array>;
   onPendingUpdate?: (records: PendingCloudCopy[]) => void;
 }) {
+  const confirm = useFrostedConfirm();
   const [link, setLink] = useState<OfficeCloudSyncLink | null>(null);
   const [message, setMessage] = useState('');
   const [registryError, setRegistryError] = useState(false);
@@ -109,7 +111,7 @@ export default function OfficeCloudSyncControl({
 
   async function enable() {
     if (!actorId || !workspaceId || !localRecordId || busy || busyRef.current || hasUnsavedChanges || registryError) return;
-    if (!window.confirm(
+    if (!await confirm(
       `Enable automatic cloud sync for “${displayName}” in this Office workspace?\n\nThis will send this one local item to private Bunny storage in Frankfurt now, then upload saved changes for this item automatically. All active members of the workspace can access its cloud versions. The local original remains in place. No other device-local records will be copied.\n\nThis record may contain sensitive content; only continue if your workspace is authorized to store and share it. Continue?`,
     )) return;
     busyRef.current = true;
@@ -222,13 +224,13 @@ export default function OfficeCloudSyncControl({
     return () => window.clearTimeout(timer);
   }, [link, actorId, workspaceId, sourceKey, hasUnsavedChanges, busy, syncing, registryError]);
 
-  function turnOff() {
+  async function turnOff() {
     if (!link || busy || syncing) return;
     if (pendingForItem()) {
       setMessage('Resolve this item’s pending upload before removing its sync link.');
       return;
     }
-    if (!window.confirm(
+    if (!await confirm(
       'Turn off auto-sync for this local item? Existing cloud versions will remain available in the Office workspace; this only removes this device’s link. The local item will not be deleted.',
     )) return;
     removeOfficeCloudSyncLink(window.localStorage, actorId, workspaceId, module, localRecordId);

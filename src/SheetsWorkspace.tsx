@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent } from 'react';
 import {
   ArrowLeft, ArrowUpRight, Check, Download, FileSpreadsheet, FunctionSquare,
@@ -107,6 +108,7 @@ function nextCellAddress(address: string, direction: CellDirection | 'next' | 'p
 }
 
 export default function SheetsWorkspace({ state, onState, onGoToTeam }: { state: PreviewState; onState: (next: PreviewState) => boolean; onGoToTeam?: () => void }) {
+  const confirm = useFrostedConfirm();
   const [selectedWorkbookId, setSelectedWorkbookId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const importInput = useRef<HTMLInputElement>(null);
@@ -167,7 +169,7 @@ export default function SheetsWorkspace({ state, onState, onGoToTeam }: { state:
       setNotice(`XLSX import is limited to ${Math.floor(MAX_XLSX_FILE_BYTES / 1024 / 1024)} MB per file in this browser.`);
       return;
     }
-    if (!window.confirm(XLSX_IMPORT_WARNING)) { setNotice('XLSX import cancelled; no workbook was changed.'); return; }
+    if (!await confirm(XLSX_IMPORT_WARNING)) { setNotice('XLSX import cancelled; no workbook was changed.'); return; }
     try {
       const imported = await importXlsxFile(file);
       const created = addWorkbook(state, imported.title);
@@ -248,6 +250,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
   onGoToTeam: () => void;
   notice: string;
 }) {
+  const confirm = useFrostedConfirm();
   const worksheet = workbook.worksheets.find((item) => item.id === workbook.activeWorksheetId) ?? workbook.worksheets[0];
   const [selectedAddress, setSelectedAddress] = useState('A1');
   const [rangeAnchor, setRangeAnchor] = useState('A1');
@@ -351,7 +354,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
       setMessage('XLSX export requires exactly one worksheet. Export this active sheet as CSV, or use a single-sheet workbook.');
       return;
     }
-    if (!window.confirm(`Export “${workbook.title || 'Untitled spreadsheet'}” as XLSX?\n\n${XLSX_EXPORT_WARNING}`)) {
+    if (!await confirm(`Export “${workbook.title || 'Untitled spreadsheet'}” as XLSX?\n\n${XLSX_EXPORT_WARNING}`)) {
       setMessage('XLSX export cancelled; no file was created.');
       return;
     }
@@ -380,7 +383,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
       setMessage(text ? `Copied ${height} × ${width} cell range as plain text; formulas are preserved.` : 'Copied a blank cell; pasting an empty clipboard is a no-op in this preview.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'The selected range could not be copied.'); }
   };
-  const pasteRange = (event: ReactClipboardEvent<HTMLDivElement>) => {
+  const pasteRange = async (event: ReactClipboardEvent<HTMLDivElement>) => {
     const active = document.activeElement;
     if (!(active instanceof HTMLButtonElement) || !active.classList.contains('cell-display')) return;
     const clipboard = event.clipboardData;
@@ -411,7 +414,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         else nextCells[address] = value;
       }));
       if (!changed) { setMessage('Paste matches the current cells; no changes were made.'); return; }
-      if (overwritten && !window.confirm(`Paste ${height} × ${width} cells at ${selectedAddress} and replace ${overwritten} existing cell${overwritten === 1 ? '' : 's'}?`)) {
+      if (overwritten && !await confirm(`Paste ${height} × ${width} cells at ${selectedAddress} and replace ${overwritten} existing cell${overwritten === 1 ? '' : 's'}?`)) {
         setMessage('Paste cancelled; no cells were changed.');
         return;
       }
@@ -423,7 +426,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
       setMessage(`Pasted ${height} × ${width} cells at ${firstAddress}; formulas remain local.`);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Clipboard data could not be pasted.'); }
   };
-  const applyNumericSeries = () => {
+  const applyNumericSeries = async () => {
     try {
       const result = fillNumericSeries(worksheet.cells, selectedRange, GRID_ROWS, GRID_COLUMNS);
       if (result.changedCount === 0) {
@@ -435,7 +438,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         const last = cellAddress(selectedRange.endRow, selectedRange.endColumn);
         const rangeLabel = first === last ? first : `${first}:${last}`;
         const populated = result.overwrittenCount;
-        if (!window.confirm(`Fill ${rangeLabel} using its first two numeric cells and replace ${populated} existing cell${populated === 1 ? '' : 's'}? This operation stays on this device.`)) {
+        if (!await confirm(`Fill ${rangeLabel} using its first two numeric cells and replace ${populated} existing cell${populated === 1 ? '' : 's'}? This operation stays on this device.`)) {
           setMessage('Fill cancelled; no cells were changed.');
           return;
         }
@@ -447,7 +450,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
       setMessage(error instanceof Error ? error.message : 'Numeric series fill failed.');
     }
   };
-  const applyFormulaFill = () => {
+  const applyFormulaFill = async () => {
     try {
       const result = fillFormula(worksheet.cells, selectedRange, GRID_ROWS, GRID_COLUMNS);
       if (result.changedCount === 0) {
@@ -458,7 +461,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         const first = cellAddress(selectedRange.startRow, selectedRange.startColumn);
         const last = cellAddress(selectedRange.endRow, selectedRange.endColumn);
         const rangeLabel = first === last ? first : `${first}:${last}`;
-        if (!window.confirm(`Fill the formula from ${first} through ${last} in ${rangeLabel}, translating relative A1 references and preserving $ anchors? This will replace ${result.overwrittenCount} populated target cell${result.overwrittenCount === 1 ? '' : 's'}. The operation stays on this device.`)) {
+        if (!await confirm(`Fill the formula from ${first} through ${last} in ${rangeLabel}, translating relative A1 references and preserving $ anchors? This will replace ${result.overwrittenCount} populated target cell${result.overwrittenCount === 1 ? '' : 's'}. The operation stays on this device.`)) {
           setMessage('Formula fill cancelled; no cells were changed.');
           return;
         }

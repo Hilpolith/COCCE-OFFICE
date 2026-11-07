@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFrostedConfirm } from './FrostedConfirm';
 import type { ChangeEvent, FormEvent } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.min.mjs';
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
@@ -72,6 +73,7 @@ function downloadLocalBlob(blob: Blob, filename: string) {
 }
 
 export default function PdfWorkspace({ workspaceId, repository = localDriveRepository }: Props) {
+  const confirm = useFrostedConfirm();
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
@@ -412,7 +414,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
       json = serializePdfAnnotationBundle(scope, verifiedFingerprint, scopedAnnotations, exportedAt);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not prepare a local annotation backup.'); return; }
 
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `Download a browser-local JSON backup for “${file.name}” with ${scopedAnnotations.length} annotation${scopedAnnotations.length === 1 ? '' : 's'}? It includes selected-text quotes, positions, comments, and note text stored on any annotation (including visual marks), but no PDF bytes. The backup can contain sensitive text. It is not uploaded and can be restored only into a byte-identical PDF. Continue?`,
     );
     if (!confirmed) return;
@@ -446,7 +448,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
         throw new Error(`Annotation backup files must be ${MAX_PDF_ANNOTATION_BUNDLE_BYTES} bytes or smaller.`);
       }
       const bundle = parsePdfAnnotationBundle(await backupFile.text());
-      const confirmed = window.confirm(
+      const confirmed = await confirm(
         `Merge ${bundle.annotations.length} annotation${bundle.annotations.length === 1 ? '' : 's'} from “${backupFile.name}” into the local sidecar for “${file.name}”? The backup can contain sensitive selected-text quotes, comments, and note text on any annotation. It has no PDF bytes and will not be uploaded. This browser will recheck the PDF’s SHA-256; a different PDF is refused, and conflicting IDs within this PDF’s local sidecar abort the entire import. Continue?`,
       );
       if (!confirmed) { setNotice('Annotation backup import canceled; the current sidecar was not changed.'); return; }
@@ -501,7 +503,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     const commentNotice = comments
       ? `${comments} comment${comments === 1 ? '' : 's'} and all quote/note text will be excluded. `
       : 'Comments and note text are not included. ';
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `Create a separate browser-local PDF copy of “${file.name}” with ${copyCount} saved highlight/underline/strike-through annotation${copyCount === 1 ? '' : 's'} flattened into page content? ${commentNotice}These are visual marks, not editable PDF annotation objects. The original file and local sidecar will remain unchanged. Signatures and advanced form behavior may not be preserved in this new copy. Continue?`,
     );
     if (!confirmed) return;
@@ -542,7 +544,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     setNotice(message);
   };
 
-  const confirmLocalPdfPageCopy = (description: string) => window.confirm(
+  const confirmLocalPdfPageCopy = async (description: string) => await confirm(
     `${description}\n\n${PDF_PAGE_COPY_WARNING}\n\nSingle-PDF operations are limited to ${MAX_PDF_PAGE_OPERATION_PAGES} pages and ${formatBytes(MAX_LOCAL_FILE_BYTES)} per input/output. Merges accept ${MAX_PDF_MERGE_INPUTS} PDFs, ${formatBytes(MAX_PDF_MERGE_TOTAL_INPUT_BYTES)} combined source bytes, and ${MAX_PDF_PAGE_OPERATION_PAGES} total pages.`,
   );
 
@@ -558,7 +560,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
       setError('The open PDF could not be verified with a local SHA-256 fingerprint; no page copy was created.');
       return;
     }
-    if (!confirmLocalPdfPageCopy(description)) return;
+    if (!await confirmLocalPdfPageCopy(description)) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const snapshot = await readVerifiedPdfSnapshot(file, expectedFingerprint);
@@ -569,7 +571,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     finally { setBusy(false); }
   };
 
-  const exportRotatedPage = () => {
+  const exportRotatedPage = async () => {
     const file = selectedFile;
     const document = pdfDocument;
     const page = currentPage;
@@ -582,7 +584,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     );
   };
 
-  const exportExtract = () => {
+  const exportExtract = async () => {
     const file = selectedFile;
     const document = pdfDocument;
     const fingerprint = sourceFingerprint;
@@ -628,7 +630,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     try { assertPdfMergeInputLimits(selected.map((file) => file.size)); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'The selected PDFs exceed the local merge limits.'); return; }
     const selectedNames = selected.map((file) => `${file.name} (${formatBytes(file.size)})`).join(' + ');
-    if (!confirmLocalPdfPageCopy(`Merge these selected local PDFs into a new copy: ${selectedNames}?`)) return;
+    if (!await confirmLocalPdfPageCopy(`Merge these selected local PDFs into a new copy: ${selectedNames}?`)) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const snapshots: VerifiedPdfSnapshot[] = [];
@@ -775,10 +777,10 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not remove this local annotation.'); }
   };
 
-  const clearCurrentPageAnnotations = () => {
+  const clearCurrentPageAnnotations = async () => {
     if (!selectedFileId || !currentPageAnnotations.length) return;
     const count = currentPageAnnotations.length;
-    if (!window.confirm(`Remove all ${count} local annotation${count === 1 ? '' : 's'} from page ${currentPage}? The original PDF will not change.`)) return;
+    if (!await confirm(`Remove all ${count} local annotation${count === 1 ? '' : 's'} from page ${currentPage}? The original PDF will not change.`)) return;
     try {
       deletePdfAnnotations(window.localStorage, workspaceId, selectedFileId, currentPageAnnotations.map((annotation) => annotation.id));
       setAnnotations((current) => current.filter((annotation) => annotation.page !== currentPage));
