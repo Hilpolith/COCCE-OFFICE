@@ -1,0 +1,461 @@
+.manufacturing-workspace {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0 32px;
+  color: #253b36;
+  --manufacturing-accent: #69a995;
+  font-size: 14px;
+}
+.manufacturing-hero,
+.manufacturing-card,
+.manufacturing-stat,
+.manufacturing-tabs,
+.manufacturing-summary {
+  border: 1px solid
+    color-mix(in srgb, var(--manufacturing-accent) 28%, var(--border));
+  background: var(
+    --manufacturing-pane,
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.82),
+      rgba(228, 235, 233, 0.72)
+    )
+  );
+  box-shadow: 0 16px 36px rgba(46, 64, 60, 0.08);
+}
+.manufacturing-hero {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px 22px;
+  border-radius: 25px;
+}
+.manufacturing-mark {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  flex: none;
+  border-radius: 17px;
+  background: linear-gradient(145deg, #d9eee6, #dddaf5);
+  color: #3d6655;
+}
+.manufacturing-eyebrow {
+  display: block;
+  color: #4b665d;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.manufacturing-hero h2 {
+  margin: 4px 0;
+  font-size: 23px;
+  color: #253b36;
+}
+.manufacturing-hero p,
+.manufacturing-muted {
+  margin: 0;
+  color: #4f665f;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.manufacturing-role {
+  margin-left: auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #e3e1f4;
+  color: #494977;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.manufacturing-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px;
+  border-radius: 999px;
+  scrollbar-width: thin;
+}
+.manufacturing-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #4f665f;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.manufacturing-tabs button.active {
+  border-color: #a9d2c2;
+  background: #dcefe7;
+  color: #275548;
+}
+.manufacturing-content {
+  display: grid;
+  gap: 14px;
+}
+.manufacturing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.manufacturing-card {
+  padding: 17px;
+  border-radius: 19px;
+  min-width: 0;
+}
+.manufacturing-card-head {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 13px;
+}
+.manufacturing-card-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #263c37;
+}
+.manufacturing-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.manufacturing-stat {
+  display: grid;
+  gap: 7px;
+  padding: 17px;
+  border-radius: 18px;
+}
+.manufacturing-stat span,
+.manufacturing-stat small {
+  color: #4f665f;
+  font-size: 12px;
+}
+.manufacturing-stat strong {
+  font-size: 27px;
+  color: #283f39;
+}
+.manufacturing-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.manufacturing-field {
+  display: grid;
+  gap: 6px;
+  color: #4f665f;
+  font-size: 12px;
+  font-weight: 750;
+  min-width: 0;
+}
+.manufacturing-field input,
+.manufacturing-field select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #cbd8d3;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.6);
+  color: #263c37;
+  font: inherit;
+}
+.manufacturing-form > .manufacturing-button {
+  grid-column: 1/-1;
+}
+.manufacturing-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid #bfd0c9;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: #29443b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.manufacturing-button.primary,
+.manufacturing-button:hover {
+  background: #dcefe7;
+  border-color: #a9d2c2;
+  color: #24584a;
+}
+.manufacturing-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.manufacturing-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid #e2c98c;
+  border-radius: 13px;
+  background: #fff8e8;
+  color: #4d4839;
+  font-size: 13px;
+}
+.manufacturing-alert .manufacturing-button {
+  margin-left: auto;
+}
+.manufacturing-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70px;
+  padding: 18px;
+  border: 1px dashed #c5d2cd;
+  border-radius: 13px;
+  text-align: center;
+  color: #4f665f;
+  font-size: 13px;
+}
+.manufacturing-table-wrap {
+  overflow: auto;
+  border: 1px solid #d8e3df;
+  border-radius: 12px;
+}
+.manufacturing-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+}
+.manufacturing-table th,
+.manufacturing-table td {
+  padding: 10px 12px;
+  border-top: 1px solid #e4ebe8;
+  text-align: left;
+  color: #536762;
+  font-size: 12px;
+  vertical-align: top;
+}
+.manufacturing-table th {
+  border-top: 0;
+  background: #edf3f0;
+  color: #466158;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+.manufacturing-table td {
+  overflow-wrap: anywhere;
+}
+.manufacturing-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  color: #4f665f;
+  font-size: 12px;
+}
+.manufacturing-summary {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 1px;
+  padding: 8px;
+  border-radius: 20px;
+}
+.manufacturing-summary div {
+  display: grid;
+  gap: 5px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.manufacturing-summary span {
+  color: #4f665f;
+  font-size: 10px;
+  text-transform: capitalize;
+}
+.manufacturing-summary strong {
+  color: #2c4940;
+  font-size: 18px;
+}
+.manufacturing-action-panel {
+  padding: 17px;
+  border: 1px solid #cbded5;
+  border-radius: 19px;
+  background: rgba(238, 247, 242, 0.72);
+}
+.manufacturing-action-panel h3 {
+  margin: 0 0 5px;
+  color: #263c37;
+}
+.manufacturing-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.manufacturing-action-grid .manufacturing-card {
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+}
+.manufacturing-action-row,
+.manufacturing-report-toolbar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.manufacturing-report-toolbar {
+  justify-content: space-between;
+}
+.manufacturing-links {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.manufacturing-links a {
+  color: #386b5a;
+  font-weight: 750;
+  text-decoration: none;
+  border-bottom: 1px solid #dce5e1;
+  padding: 9px 0;
+}
+.manufacturing-key-status {
+  margin: 14px 0 0;
+  color: #386b5a;
+  font-weight: 750;
+}
+.manufacturing-workspace :is(input, select, button, a):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--manufacturing-accent) 45%, white);
+  outline-offset: 2px;
+}
+@media (max-width: 1000px) {
+  .manufacturing-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 850px) {
+  .manufacturing-grid,
+  .manufacturing-action-grid {
+    grid-template-columns: 1fr;
+  }
+  .manufacturing-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .manufacturing-hero {
+    align-items: flex-start;
+    padding: 15px;
+  }
+  .manufacturing-role {
+    margin-left: auto;
+  }
+  .manufacturing-form {
+    grid-template-columns: 1fr;
+  }
+  .manufacturing-tabs {
+    position: sticky;
+    bottom: 10px;
+    z-index: 3;
+    border-radius: 17px;
+    background: rgba(240, 243, 245, 0.94);
+  }
+  .manufacturing-tabs button {
+    padding: 0 11px;
+  }
+  .manufacturing-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .manufacturing-pager {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .manufacturing-pager .manufacturing-button {
+    width: 100%;
+  }
+  .manufacturing-report-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .manufacturing-report-toolbar > * {
+    width: 100%;
+  }
+}
+
+/* Keep real operational forms readable on narrow touch screens. */
+.manufacturing-hero > div {
+  min-width: 0;
+}
+.manufacturing-hero h2 {
+  overflow-wrap: anywhere;
+}
+.manufacturing-content .manufacturing-tabs {
+  position: static;
+}
+.manufacturing-workspace section[aria-label="Manufacturing report downloads"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+.manufacturing-workspace
+  section[aria-label="Manufacturing report downloads"]
+  > [role] {
+  flex-basis: 100%;
+}
+.manufacturing-table-wrap {
+  max-height: 470px;
+}
+.manufacturing-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+@media (max-width: 600px) {
+  .manufacturing-hero {
+    flex-wrap: wrap;
+  }
+  .manufacturing-hero > div:not(.manufacturing-mark) {
+    flex: 1;
+    min-width: 160px;
+  }
+  .manufacturing-role {
+    margin-left: 65px;
+  }
+  .manufacturing-tabs button,
+  .manufacturing-button,
+  .manufacturing-field input,
+  .manufacturing-field select {
+    min-height: 44px;
+  }
+  .manufacturing-action-row > input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+:root[data-surface="solid"] .manufacturing-workspace {
+  --manufacturing-pane: #f4f8f6;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .manufacturing-workspace {
+    --manufacturing-pane: #f4f8f6;
+  }
+}
+@media (forced-colors: active) {
+  .manufacturing-workspace {
+    color: CanvasText;
+    --manufacturing-pane: Canvas;
+  }
+  .manufacturing-workspace
+    :is(h2, h3, p, span, small, th, td, label, button, input, select, a) {
+    color: CanvasText;
+  }
+}

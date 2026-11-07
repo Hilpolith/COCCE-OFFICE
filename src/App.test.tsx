@@ -139,7 +139,7 @@ describe('local Docs recovery integration', () => {
     expect(screen.getByRole('button', { name: 'Accounting' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Accounting' }));
     expect(screen.getByRole('heading', { name: 'Create an industry office' })).toBeTruthy();
-    expect(screen.getByText(/not a ledger or tax engine/i)).toBeTruthy();
+    expect(screen.getByText(/Existing local preview items are never copied/i)).toBeTruthy();
   });
 
   it('opens the device-local Vault from application navigation', async () => {

@@ -53,17 +53,17 @@ export const industryCatalog: readonly IndustryDefinition[] = [
   },
   {
     id: 'accounting', label: 'Accounting firms', shortLabel: 'Accounting',
-    summary: 'Organize bookkeeping and review requests without posting entries.', workArea: 'Accounting work queue',
+    summary: 'Review client books, post balanced journals and reconcile statements in a linked team.', workArea: 'Accounting work queue',
     itemLabel: 'Accounting work item', referenceLabel: 'Local file reference',
     stages: ['Requested', 'Preparing', 'Review requested', 'Ready to return', 'Closed'],
-    dataNote: 'This is not a ledger or tax engine; do not enter client financial or identity details.',
+    dataNote: 'The device-local preview is not a ledger. Use the linked team for reviewed journals; keep personal identities out of public labels. No tax filing integration.',
   },
   {
     id: 'manufacturing', label: 'Manufacturing & factories', shortLabel: 'Manufacturing',
-    summary: 'Follow production and quality tasks through a lightweight queue.', workArea: 'Production work queue',
+    summary: 'Manage stock, bills of materials, production batches, quality and equipment in a linked team.', workArea: 'Production work queue',
     itemLabel: 'Production work item', referenceLabel: 'Local work-order reference',
     stages: ['Planned', 'In progress', 'Quality check', 'Ready for dispatch', 'Closed'],
-    dataNote: 'This does not reserve stock or enforce safety, batch, or quality-release rules.',
+    dataNote: 'The device-local preview does not reserve stock. Linked team controls support operations and evidence, not official safety certification or fiscal integration.',
   },
   {
     id: 'healthcare-admin', label: 'Healthcare administration', shortLabel: 'Health admin',
