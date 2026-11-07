@@ -452,7 +452,7 @@ function App() {
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
-        <footer className="app-footer"><span><ShieldCheck size={13} /> Docs/Sheets/Slides offer manual cloud copies only (no auto-sync); Drive/PDF/Vault and Industry previews stay local. Shared Industry tasks require a linked team.</span><span>COCCE OFFICE · INDUSTRY WORKBENCH PREVIEW</span></footer>
+        <footer className="app-footer"><span><ShieldCheck size={13} /> Docs/Sheets/Slides offer manual cloud copies only (no auto-sync); Drive/PDF/Vault stay browser-local. Linked industry suites use role-gated team records. Bunny file transfers are not yet verified.</span><span>COCCE OFFICE · INDUSTRY WORKSPACES</span></footer>
       </section>
 
       {feedback && <div className="toast" role={/could not save|not saved|preserved/i.test(feedback) ? 'alert' : 'status'}><Check size={16} />{feedback}</div>}

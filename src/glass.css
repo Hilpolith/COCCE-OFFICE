@@ -148,6 +148,10 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
+  :root :is(.accounting-hero, .accounting-card, .accounting-stat, .accounting-tabs, .accounting-metric-dock) {
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
   :root .office-editor-page :is(.editor-toolbar, .sheet-editor-topline, .slides-editor-toolbar) {
     -webkit-backdrop-filter: var(--glass-mini-filter);
     backdrop-filter: var(--glass-mini-filter);

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import {
   ArrowLeft, ArrowRight, Building2, CalendarDays, Check,
-  CircleAlert, Clock3, FileText, GraduationCap, LockKeyhole, Plus, ShieldAlert, Sparkles, Users, X,
+  CircleAlert, Clock3, FileText, GraduationCap, LockKeyhole, Plus, Scale, ShieldAlert, Sparkles, Users, X,
 } from 'lucide-react';
 import {
   addIndustryWorkItem, advanceIndustryWorkItem, createIndustryOffice,
@@ -15,6 +15,7 @@ import GovernmentCorrespondenceWorkspace from './GovernmentCorrespondenceWorkspa
 import SchoolManagementWorkspace from './SchoolManagementWorkspace';
 import UniversityManagementWorkspace from './UniversityManagementWorkspace';
 import BusinessManagementWorkspace from './BusinessManagementWorkspace';
+import AccountingManagementWorkspace from './AccountingManagementWorkspace';
 import './industrySuites.css';
 
 const accentByIndustry: Record<IndustryId, string> = {
@@ -66,15 +67,17 @@ export default function IndustrySuitesWorkspace({
   const [schoolPanel, setSchoolPanel] = useState<'management' | 'tasks'>('management');
   const [universityPanel, setUniversityPanel] = useState<'management' | 'tasks'>('management');
   const [businessPanel, setBusinessPanel] = useState<'management' | 'tasks'>('management');
+  const [accountingPanel, setAccountingPanel] = useState<'management' | 'tasks'>('management');
 
   const activeOffice = state.offices.find((office) => office.id === selectedOfficeId) ?? null;
   const definition = activeOffice ? getIndustryDefinition(activeOffice.industryId) : null;
   const accent = activeOffice ? accentByIndustry[activeOffice.industryId] : accentByIndustry[industryId];
   const sharedWorkspaceLabel = definition?.id === 'school' ? 'School Management system'
     : definition?.id === 'government' ? 'Government Correspondence workspace'
-      : definition?.id === 'university' ? 'University Management system'
-        : definition?.id === 'business' ? 'Business Management system'
-      : `${definition?.shortLabel ?? 'industry'} shared work-item workspace`;
+        : definition?.id === 'university' ? 'University Management system'
+          : definition?.id === 'business' ? 'Business Management system'
+            : definition?.id === 'accounting' ? 'Accounting Management system'
+          : `${definition?.shortLabel ?? 'industry'} shared work-item workspace`;
   const visibleItems = useMemo(() => {
     if (!activeOffice) return [];
     const normalized = recordSearch.trim().toLocaleLowerCase();
@@ -289,6 +292,10 @@ export default function IndustrySuitesWorkspace({
         <button type="button" role="tab" aria-selected={businessPanel === 'management'} className={businessPanel === 'management' ? 'is-active' : ''} onClick={() => setBusinessPanel('management')}><Building2 size={14} /> Business Management</button>
         <button type="button" role="tab" aria-selected={businessPanel === 'tasks'} className={businessPanel === 'tasks' ? 'is-active' : ''} onClick={() => setBusinessPanel('tasks')}><Check size={14} /> Shared work items</button>
       </div>}
+      {activeOffice.industryId === 'accounting' && <div className="government-module-tabs accounting-module-tabs" role="tablist" aria-label="Accounting office modules">
+        <button type="button" role="tab" aria-selected={accountingPanel === 'management'} className={accountingPanel === 'management' ? 'is-active' : ''} onClick={() => setAccountingPanel('management')}><Scale size={14} /> Accounting Management</button>
+        <button type="button" role="tab" aria-selected={accountingPanel === 'tasks'} className={accountingPanel === 'tasks' ? 'is-active' : ''} onClick={() => setAccountingPanel('tasks')}><Check size={14} /> Shared work items</button>
+      </div>}
       {activeOffice.industryId === 'government' && governmentPanel === 'correspondence'
         ? <GovernmentCorrespondenceWorkspace
           key={`government-${activeOffice.teamWorkspaceId}`}
@@ -314,7 +321,7 @@ export default function IndustrySuitesWorkspace({
               accent={accent}
             />
             : activeOffice.industryId === 'business' && businessPanel === 'management'
-              ? <BusinessManagementWorkspace
+            ? <BusinessManagementWorkspace
                 key={`business-management-${activeOffice.teamWorkspaceId}`}
                 workspaceId={activeOffice.teamWorkspaceId}
                 officeName={activeOffice.name}
@@ -322,6 +329,15 @@ export default function IndustrySuitesWorkspace({
                 accent={accent}
                 onOpenTeam={openTeam}
               />
+              : activeOffice.industryId === 'accounting' && accountingPanel === 'management'
+                ? <AccountingManagementWorkspace
+                  key={`accounting-management-${activeOffice.teamWorkspaceId}`}
+                  workspaceId={activeOffice.teamWorkspaceId}
+                  officeName={activeOffice.name}
+                  country={activeOffice.country}
+                  accent={accent}
+                  onOpenTeam={openTeam}
+                />
           : <IndustrySharedWorkspace
           key={`industry-${activeOffice.teamWorkspaceId}`}
           workspaceId={activeOffice.teamWorkspaceId}
