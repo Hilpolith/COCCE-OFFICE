@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expectedParent, issueStockPayload, licenceTransitionPayload, money, paymentPayload, quantity, roomChargePayload } from "./HospitalityOperationsPanels";
+import { expectedParent, issueStockPayload, licenceTransitionPayload, money, orderTransitionPayload, paymentPayload, quantity, roomChargePayload, shiftTransitionPayload } from "./HospitalityOperationsPanels";
 
 describe("hospitality operations payloads", () => {
   it("uses the selected reservation version for payment and refund ledger entries", () => {
@@ -19,4 +19,9 @@ describe("hospitality operations payloads", () => {
   it("does not permit a transaction to omit a positive selected version", () => {
     expect(expectedParent({ id: "parent-1", version: 12 })).toEqual({ id: "parent-1", expected_version: 12 });
   });
+});
+
+it("builds strict kitchen and shift transition envelopes with references", () => {
+  expect(orderTransitionPayload({ id: "order-1", version: 3 }, "preparing")).toEqual({ resource: "restaurant_orders", row: { id: "order-1", version: 3 }, to_state: "preparing", data: { reference: "kitchen_preparing" } });
+  expect(shiftTransitionPayload({ id: "shift-1", version: 2 }, "cancelled")).toEqual({ resource: "shifts", row: { id: "shift-1", version: 2 }, to_state: "cancelled", data: { reference: "shift_cancelled" } });
 });

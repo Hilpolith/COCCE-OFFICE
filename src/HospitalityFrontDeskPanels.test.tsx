@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import HospitalityFrontDeskPanels from "./HospitalityFrontDeskPanels";
+import HospitalityFrontDeskPanels, { maintenanceTransitionPayload } from "./HospitalityFrontDeskPanels";
 import type { HospitalityWorkspaceContext } from "./hospitalityWorkspaceTypes";
 
 const property = { id: "prop-1", property_id: "prop-1", code: "DAR", name: "Dar House", status: "active" };
@@ -88,4 +88,9 @@ describe("HospitalityFrontDeskPanels", () => {
     const eventPayload = (context.save as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === "events")?.[1];
     expect(eventPayload).not.toHaveProperty("idempotency_key");
   });
+});
+
+
+it("builds maintenance lifecycle transitions with a nonempty reference", () => {
+  expect(maintenanceTransitionPayload({ id: "maint-1", version: 4 }, "verified", "maintenance-verification")).toEqual({ resource: "maintenance", row: { id: "maint-1", version: 4 }, to_state: "verified", data: { reference: "maintenance-verification" } });
 });

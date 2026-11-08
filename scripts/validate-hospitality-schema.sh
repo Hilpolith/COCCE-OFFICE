@@ -10,6 +10,9 @@ MIGRATIONS=(
   "$MIGRATION_DIR/20261108010130_office_hospitality_operations.sql"
   "$MIGRATION_DIR/20261108010140_office_hospitality_dispatch.sql"
   "$MIGRATION_DIR/20261108010150_office_hospitality_guardrails.sql"
+  "$MIGRATION_DIR/20261108020000_office_hospitality_workflow_repair.sql"
+  "$MIGRATION_DIR/20261108020100_office_hospitality_finance_repair.sql"
+  "$MIGRATION_DIR/20261108020200_office_hospitality_report_repair.sql"
 )
 PG_BINDIR=${PG_BINDIR:-/usr/lib/postgresql/16/bin}
 for bin in initdb pg_ctl createdb psql; do command -v "$PG_BINDIR/$bin" >/dev/null || { echo "missing PostgreSQL binary: $PG_BINDIR/$bin" >&2; exit 1; }; done
@@ -39,4 +42,6 @@ node --test "$ROOT/scripts/office-hospitality-read-check.mjs" \
   "$ROOT/scripts/office-hospitality-finance-check.mjs" \
   "$ROOT/scripts/office-hospitality-food-stock-check.mjs" \
   "$ROOT/scripts/office-hospitality-operations-check.mjs"
+node "$ROOT/scripts/office-hospitality-finance-repair-check.mjs"
+node --test "$ROOT/scripts/office-hospitality-report-repair-check.mjs"
 echo "Hospitality schema validation passed."
