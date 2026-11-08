@@ -1,0 +1,10 @@
+BEGIN;
+DO $$ DECLARE t text; BEGIN FOREACH t IN ARRAY ARRAY['office_institutions_settings','office_institutions_roles','office_institutions_keys','office_institutions_records','office_institutions_idempotency','office_institutions_audit','office_institutions_ledger','office_institutions_reports'] LOOP EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('DROP POLICY IF EXISTS deny_direct_%I ON public.%I',t,t); EXECUTE format('CREATE POLICY deny_direct_%I ON public.%I FOR ALL USING (false) WITH CHECK (false)',t,t); END LOOP; END $$;
+CREATE OR REPLACE FUNCTION office_private.deny_institutions_audit_mutation() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN RAISE EXCEPTION 'Institutions audit is immutable' USING ERRCODE='42501'; END $$;
+DROP TRIGGER IF EXISTS office_institutions_audit_immutable ON public.office_institutions_audit;
+CREATE TRIGGER office_institutions_audit_immutable BEFORE UPDATE OR DELETE ON public.office_institutions_audit FOR EACH ROW EXECUTE FUNCTION office_private.deny_institutions_audit_mutation();
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT SELECT,INSERT,UPDATE ON public.office_institutions_settings,public.office_institutions_roles,public.office_institutions_keys,public.office_institutions_records,public.office_institutions_idempotency,public.office_institutions_ledger,public.office_institutions_reports TO service_role;
+GRANT SELECT,INSERT ON public.office_institutions_audit TO service_role;
+REVOKE ALL ON FUNCTION office_private.deny_institutions_audit_mutation() FROM PUBLIC,anon,authenticated;
+COMMIT;

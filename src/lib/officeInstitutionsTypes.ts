@@ -1,0 +1,21 @@
+import type { OfficeRecordsKeyConfig } from './officePrivateRecordsCrypto';
+
+export const INSTITUTIONS_ROLES = ['institution_admin','registrar','governance_secretary','treasurer','approver','facility_manager','programme_coordinator','hr_officer','safeguarding_officer','privacy_officer','institution_viewer'] as const;
+export type InstitutionsRole = typeof INSTITUTIONS_ROLES[number];
+export const INSTITUTIONS_CAPABILITIES = ['manage','people','governance','finance','approve','facilities','programmes','staff','safeguarding','privacy','reports','audit'] as const;
+export type InstitutionsCapability = typeof INSTITUTIONS_CAPABILITIES[number];
+export const INSTITUTIONS_SAVE_RESOURCES = ['organizations','branches','bodies','people','appointments','meetings','resolutions','funds','budgets','contributions','payment_requests','bank_lines','reconciliations','facilities','assets','asset_moves','programmes','events','attendance','staff_assignments','credentials','filings','evidence','safeguarding','privacy_requests'] as const;
+export type InstitutionsSaveResource = typeof INSTITUTIONS_SAVE_RESOURCES[number];
+export const INSTITUTIONS_RESOURCES = ['bootstrap','private_keys',...INSTITUTIONS_SAVE_RESOURCES,'people_index','attendance_index','safeguarding_index','reports','ledger','audit','team_members','roles'] as const;
+export type InstitutionsResource = typeof INSTITUTIONS_RESOURCES[number];
+export type InstitutionsDataResource = Exclude<InstitutionsResource,'bootstrap'|'private_keys'>;
+export const INSTITUTIONS_ACTIONS = ['initialize','configure_settings','assign_role','configure_private_key','record_storage_review','review_storage','set_private_gate','save_record','save_private','transition_record','post_contribution','void_contribution','approve_payment','post_payment','close_reconciliation','post_asset_move','create_report','export_report'] as const;
+export type InstitutionsAction = typeof INSTITUTIONS_ACTIONS[number];
+export type InstitutionsPrivateKind = 'people'|'safeguarding';
+export type InstitutionsRow = Record<string,unknown>;
+export type InstitutionsFilter = { id?:string; q?:string; status?:string; branch_id?:string; fund_id?:string; event_id?:string; purpose?:'administration'|'direct_service'|'record_correction'|'safeguarding_response'|'compliance_review' };
+export type InstitutionsPage = { rows:InstitutionsRow[];total_count:number;limit:number;offset:number;has_more:boolean };
+export type InstitutionsSettings = { initialized:boolean;version:number;base_currency:string;private_data_enabled:boolean;storage_review_state:'unverified'|'pending'|'approved'|'rejected';storage_review_reference:string|null;storage_review_recorded_by?:string|null;storage_reviewed_by?:string|null };
+export type InstitutionsBootstrap = { workspace_id:string;role:InstitutionsRole|null;capabilities:Record<InstitutionsCapability,boolean>;settings:InstitutionsSettings;summary:Record<string,number>;scope_branch_id?:string|null };
+export type InstitutionsKeyConfigs = Record<InstitutionsPrivateKind,OfficeRecordsKeyConfig & { accessible?: boolean }>;
+export type InstitutionsMutationResult = { id?:string;version?:number;status?:string;row?:InstitutionsRow;[key:string]:unknown };

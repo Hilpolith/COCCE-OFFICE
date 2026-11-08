@@ -140,6 +140,10 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
+  :root :is(.institutions-hero, .institutions-card, .institutions-loading) {
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
   :root :is(.university-hero, .university-panel, .university-metric, .university-key-panel, .university-tabs) {
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);

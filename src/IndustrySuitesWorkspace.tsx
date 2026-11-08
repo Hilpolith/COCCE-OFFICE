@@ -20,6 +20,7 @@ import ManufacturingManagementWorkspace from './ManufacturingManagementWorkspace
 import HealthAdminManagementWorkspace from './HealthAdminManagementWorkspace';
 import NgoManagementWorkspace from './NgoManagementWorkspace';
 import HospitalityManagementWorkspace from './HospitalityManagementWorkspace';
+import InstitutionsManagementWorkspace from './InstitutionsManagementWorkspace';
 import './industrySuites.css';
 
 const accentByIndustry: Record<IndustryId, string> = {
@@ -321,6 +322,10 @@ export default function IndustrySuitesWorkspace({
         <button type="button" role="tab" aria-selected={hospitalityPanel === 'management'} className={hospitalityPanel === 'management' ? 'is-active' : ''} onClick={() => setHospitalityPanel('management')}><Building2 size={14} /> Hospitality Management</button>
         <button type="button" role="tab" aria-selected={hospitalityPanel === 'tasks'} className={hospitalityPanel === 'tasks' ? 'is-active' : ''} onClick={() => setHospitalityPanel('tasks')}><Check size={14} /> Shared work items</button>
       </div>}
+      {activeOffice.industryId === 'church' && <div className="government-module-tabs institutions-module-tabs" role="tablist" aria-label="Institutions modules">
+        <span className="industry-team-status is-linked">Institutions management</span>
+        <button type="button" className="button-secondary" onClick={openTeam}><Users size={14} /> Open team</button>
+      </div>}
       {activeOffice.industryId === 'government' && governmentPanel === 'correspondence'
         ? <GovernmentCorrespondenceWorkspace
           key={`government-${activeOffice.teamWorkspaceId}`}
@@ -388,6 +393,12 @@ export default function IndustrySuitesWorkspace({
                       officeName={activeOffice.name}
                       country={activeOffice.country}
                       accent={accent}
+                      onOpenTeam={openTeam}
+                    />
+                  : activeOffice.industryId === 'church'
+                    ? <InstitutionsManagementWorkspace
+                      key={`institutions-management-${activeOffice.teamWorkspaceId}`}
+                      workspaceId={activeOffice.teamWorkspaceId}
                       onOpenTeam={openTeam}
                     />
                   : activeOffice.industryId === 'ngo'

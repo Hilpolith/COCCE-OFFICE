@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "vitest run --maxWorkers=4 --testTimeout=15000 && node --test scripts/office-profile-privacy-check.mjs scripts/office-ai-api-check.mjs scripts/office-cloud-boundaries.mjs scripts/office-cloud-postgres-check.mjs scripts/office-school-sms-postgres-check.mjs scripts/office-accounting-management-postgres-check.mjs scripts/office-manufacturing-management-postgres-check.mjs scripts/office-health-admin-postgres-check.mjs scripts/office-health-residency-approval-check.mjs scripts/office-ngo-postgres-check.mjs",
+    "test": "vitest run --maxWorkers=4 --testTimeout=15000 && node --test scripts/office-profile-privacy-check.mjs scripts/office-ai-api-check.mjs scripts/office-cloud-boundaries.mjs scripts/office-cloud-postgres-check.mjs scripts/office-school-sms-postgres-check.mjs scripts/office-accounting-management-postgres-check.mjs scripts/office-manufacturing-management-postgres-check.mjs scripts/office-health-admin-postgres-check.mjs scripts/office-health-residency-approval-check.mjs scripts/office-ngo-postgres-check.mjs && npm run test:office-hospitality && npm run test:office-institutions",
     "preview": "vite preview",
     "test:office-schema": "node --test scripts/office-profile-privacy-check.mjs",
     "test:office-ai-api": "node --test scripts/office-ai-api-check.mjs",
@@ -17,7 +17,10 @@
     "test:office-manufacturing": "node --test scripts/office-manufacturing-management-postgres-check.mjs",
     "test:office-health-admin": "node --test scripts/office-health-admin-postgres-check.mjs",
     "test:office-health-residency": "node --test scripts/office-health-residency-approval-check.mjs",
-    "test:office-ngo": "node --test scripts/office-ngo-postgres-check.mjs"
+    "test:office-ngo": "node --test scripts/office-ngo-postgres-check.mjs",
+    "test:office-hospitality": "node --test --test-concurrency=2 scripts/office-hospitality-*-check.mjs",
+    "test:office-institutions": "node --test --test-concurrency=2 scripts/office-institutions-*-check.mjs",
+    "test:office-institutions-schema": "bash scripts/validate-institutions-schema.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
