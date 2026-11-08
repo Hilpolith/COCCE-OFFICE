@@ -81,17 +81,17 @@ export const industryCatalog: readonly IndustryDefinition[] = [
   },
   {
     id: 'hospitality', label: 'Hotels & hospitality', shortLabel: 'Hospitality',
-    summary: 'Coordinate housekeeping and service operations without guest records.', workArea: 'Hotel operations',
+    summary: 'Manage stays, rooms, folios and food service in a linked team, with protected guest records gated.', workArea: 'Hotel operations',
     itemLabel: 'Operations task', referenceLabel: 'Local reference',
     stages: ['Requested', 'Assigned', 'In progress', 'Ready', 'Closed'],
-    dataNote: 'Do not enter guest identities, payment data, or live reservation details.',
+    dataNote: 'Never put guest identities, payment data or live reservation details in this device-local preview or general tasks. Protected guest records require the linked team, recorded storage review and unlocked key.',
   },
   {
     id: 'church', label: 'Churches & institutions', shortLabel: 'Institutions',
-    summary: 'Coordinate events, departments, and institution operations.', workArea: 'Institution administration',
+    summary: 'Manage governance, funds, facilities, programmes and protected people records in a linked team.', workArea: 'Institution administration',
     itemLabel: 'Institution work item', referenceLabel: 'Local reference',
     stages: ['Planned', 'Assigned', 'In progress', 'Review requested', 'Closed'],
-    dataNote: 'Do not enter private member, donor, pastoral, or safeguarding details.',
+    dataNote: 'Keep private member, donor, pastoral and safeguarding details out of this device-local preview and general tasks. Protected records require the linked team and its reviewed privacy controls.',
   },
 ] as const;
 
