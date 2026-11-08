@@ -19,6 +19,7 @@ import AccountingManagementWorkspace from './AccountingManagementWorkspace';
 import ManufacturingManagementWorkspace from './ManufacturingManagementWorkspace';
 import HealthAdminManagementWorkspace from './HealthAdminManagementWorkspace';
 import NgoManagementWorkspace from './NgoManagementWorkspace';
+import HospitalityManagementWorkspace from './HospitalityManagementWorkspace';
 import './industrySuites.css';
 
 const accentByIndustry: Record<IndustryId, string> = {
@@ -73,6 +74,7 @@ export default function IndustrySuitesWorkspace({
   const [accountingPanel, setAccountingPanel] = useState<'management' | 'tasks'>('management');
   const [manufacturingPanel, setManufacturingPanel] = useState<'management' | 'tasks'>('management');
   const [healthAdminPanel, setHealthAdminPanel] = useState<'management' | 'tasks'>('management');
+  const [hospitalityPanel, setHospitalityPanel] = useState<'management' | 'tasks'>('management');
 
   const activeOffice = state.offices.find((office) => office.id === selectedOfficeId) ?? null;
   const definition = activeOffice ? getIndustryDefinition(activeOffice.industryId) : null;
@@ -315,6 +317,10 @@ export default function IndustrySuitesWorkspace({
         <button type="button" role="tab" aria-selected={healthAdminPanel === 'management'} className={healthAdminPanel === 'management' ? 'is-active' : ''} onClick={() => setHealthAdminPanel('management')}><HeartPulse size={14} /> Health Administration</button>
         <button type="button" role="tab" aria-selected={healthAdminPanel === 'tasks'} className={healthAdminPanel === 'tasks' ? 'is-active' : ''} onClick={() => setHealthAdminPanel('tasks')}><Check size={14} /> Shared work items</button>
       </div>}
+      {activeOffice.industryId === 'hospitality' && <div className="government-module-tabs hospitality-module-tabs" role="tablist" aria-label="Hospitality modules">
+        <button type="button" role="tab" aria-selected={hospitalityPanel === 'management'} className={hospitalityPanel === 'management' ? 'is-active' : ''} onClick={() => setHospitalityPanel('management')}><Building2 size={14} /> Hospitality Management</button>
+        <button type="button" role="tab" aria-selected={hospitalityPanel === 'tasks'} className={hospitalityPanel === 'tasks' ? 'is-active' : ''} onClick={() => setHospitalityPanel('tasks')}><Check size={14} /> Shared work items</button>
+      </div>}
       {activeOffice.industryId === 'government' && governmentPanel === 'correspondence'
         ? <GovernmentCorrespondenceWorkspace
           key={`government-${activeOffice.teamWorkspaceId}`}
@@ -369,6 +375,15 @@ export default function IndustrySuitesWorkspace({
                   : activeOffice.industryId === 'healthcare-admin' && healthAdminPanel === 'management'
                     ? <HealthAdminManagementWorkspace
                       key={`health-admin-management-${activeOffice.teamWorkspaceId}`}
+                      workspaceId={activeOffice.teamWorkspaceId}
+                      officeName={activeOffice.name}
+                      country={activeOffice.country}
+                      accent={accent}
+                      onOpenTeam={openTeam}
+                    />
+                  : activeOffice.industryId === 'hospitality' && hospitalityPanel === 'management'
+                    ? <HospitalityManagementWorkspace
+                      key={`hospitality-management-${activeOffice.teamWorkspaceId}`}
                       workspaceId={activeOffice.teamWorkspaceId}
                       officeName={activeOffice.name}
                       country={activeOffice.country}

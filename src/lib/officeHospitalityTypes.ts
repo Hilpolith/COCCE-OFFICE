@@ -1,0 +1,22 @@
+import type { OfficeRecordsKeyConfig } from './officePrivateRecordsCrypto';
+
+export const HOSPITALITY_CAPABILITIES = ['manage','reservations','guest_private','rooms','maintenance','finance','stock','food','staff','compliance','incidents','reports','audit'] as const;
+export type HospitalityCapabilities = Record<typeof HOSPITALITY_CAPABILITIES[number], boolean>;
+export const HOSPITALITY_ROLES = ['hotel_admin','front_desk','cashier','housekeeper','maintenance_engineer','fnb_manager','hr_officer','compliance_officer','hotel_viewer'] as const;
+export type HospitalityRole = typeof HOSPITALITY_ROLES[number];
+export const HOSPITALITY_SAVE_RESOURCES = ['properties','rooms','reservations','housekeeping','maintenance','menu_items','restaurant_orders','inventory_items','food_safety','shifts','staff_credentials','licences','incidents','event_spaces','events','evidence'] as const;
+export type HospitalitySaveResource = typeof HOSPITALITY_SAVE_RESOURCES[number];
+export const HOSPITALITY_DATA_RESOURCES = [...HOSPITALITY_SAVE_RESOURCES,'guest_index','guests','incident_index','folio_lines','payments','order_lines','stock_lots','stock_moves','daily_closes','reports','roles','audit','members'] as const;
+export type HospitalityDataResource = typeof HOSPITALITY_DATA_RESOURCES[number];
+export const HOSPITALITY_RESOURCES = ['bootstrap','private_keys',...HOSPITALITY_DATA_RESOURCES] as const;
+export type HospitalityResource = typeof HOSPITALITY_RESOURCES[number];
+export const HOSPITALITY_ACTIONS = ['initialize','configure_settings','assign_role','configure_private_key','set_private_gate','save_record','transition_record','save_guest','post_charge','void_charge','record_payment','refund_payment','check_in','check_out','move_room','receive_stock','issue_stock','add_order_line','settle_order','close_day','create_report','export_report'] as const;
+export type HospitalityAction = typeof HOSPITALITY_ACTIONS[number];
+export type HospitalityPrivateKind = 'guest' | 'incident';
+export type HospitalityRow = Record<string, unknown>;
+export type HospitalityFilter = { id?: string; property_id?: string; reservation_id?: string; status?: string; purpose?: 'check_in'|'guest_service'|'privacy_review'|'incident_response'; start_on?: string; end_on?: string };
+export type HospitalityPage = { rows: HospitalityRow[]; total_count: number; limit: number; offset: number; has_more: boolean };
+export type HospitalitySettings = { initialized: boolean; base_currency: string; jurisdiction: 'mainland'|'zanzibar'; private_data_enabled: boolean; storage_review_state: 'unverified'|'pending'|'approved'|'rejected'; storage_review_reference?: string | null; version: number };
+export type HospitalityBootstrap = { workspace_id: string; actor_id: string; role: HospitalityRole | 'unassigned'; capabilities: HospitalityCapabilities; settings: HospitalitySettings; summary: Record<string, number> };
+export type HospitalityKeyConfigs = Record<HospitalityPrivateKind, OfficeRecordsKeyConfig>;
+export type HospitalityMutationResult = { id: string; version: number; status?: string; row?: HospitalityRow };
