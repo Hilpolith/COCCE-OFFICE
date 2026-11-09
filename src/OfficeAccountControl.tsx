@@ -251,6 +251,10 @@ export default function OfficeAccountControl() {
           {!client ? <div className="office-auth-config-error"><LockKeyhole size={18}/><p>COCCE Auth is not configured in this deployment. Check the public COCCE Supabase URL and key; no other project will be used.</p></div>
             : !authReady ? <p className="office-account-copy"><LoaderCircle className="office-account-spinner" size={16}/> Checking your secure session…</p>
             : user && needsWorkspace ? <form className="office-auth-form" onSubmit={createFirstWorkspace}>
+                <div className="office-auth-account">
+                  <span className="office-auth-user-icon"><UserRound size={21}/></span><div><strong>{user.user_metadata?.display_name || user.email || 'COCCE account'}</strong><small>{user.email}</small></div>
+                  <button className="office-auth-submit" type="button" disabled={busy} onClick={()=>void signOut()}><LogOut size={15}/>{busy?'Signing out…':'Sign out'}</button>
+                </div>
                 <label>Organisation or workspace name<input value={workspaceName} onChange={e=>setWorkspaceName(e.target.value)} placeholder="e.g. Acme Tanzania" minLength={2} maxLength={80} required disabled={busy}/></label>
                 <label>Choose your Office suite<select value={workspaceSuiteId} onChange={e=>setWorkspaceSuiteId(e.target.value as OfficeSuiteId)} required disabled={busy}>{industryCatalog.map(industry=><option key={industry.id} value={industry.id}>{industry.label}</option>)}</select><small className="office-auth-field-hint">This chooses the specialist dashboard and tools for this workspace. You can create other workspaces for different organisations or industries.</small></label>
                 <label>What does your team do? <span className="office-auth-optional">Optional</span><textarea value={workspaceDescription} onChange={e=>setWorkspaceDescription(e.target.value)} placeholder="A short description of your organisation" maxLength={240} disabled={busy}/></label>
