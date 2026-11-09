@@ -269,7 +269,6 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const editor = useEditor({
     extensions: [StarterKit.configure({
       heading: { levels: [1, 2, 3] }, link: false, underline: false,
-      code: true, codeBlock: true, horizontalRule: true,
     }), Underline, TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } }), reviewCommentExtension, tableGuard],
     content: initialHtml,
     editorProps: {
