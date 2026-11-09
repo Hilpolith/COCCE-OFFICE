@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { Bell, Check, CircleAlert, LogIn, LogOut, MessageCircle, Plus, RefreshCw, Send, Shield, Users, X } from 'lucide-react';
+import { Bell, Check, CircleAlert, LogIn, LogOut, MessageCircle, Plus, RefreshCw, Shield, Users, X } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
 import OfficePersonIdentity from './OfficePersonIdentity';
-import type { OfficeConversation, OfficeInvitation, OfficeMember, OfficeMessage, OfficeNotification, OfficePresence, OfficeSearchResult, OfficeWorkspace, OfficeWorkspaceInvitation } from './lib/officeTeamApi';
+import OfficeChatPanel from './OfficeChatPanel';
+import type { OfficeConversation, OfficeInvitation, OfficeMember, OfficeNotification, OfficePresence, OfficeSearchResult, OfficeWorkspace, OfficeWorkspaceInvitation } from './lib/officeTeamApi';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeTeamConfigState, OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 
@@ -97,18 +98,14 @@ export default function OfficeTeamCollaboration({
     }
     setConversationId(nextId);
   }, []);
-  const [messages, setMessages] = useState<OfficeMessage[]>([]);
-  const [loadedMessagesConversationId, setLoadedMessagesConversationId] = useState('');
-  const [messageBody, setMessageBody] = useState('');
   const [groupTitle, setGroupTitle] = useState('');
   const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
 
   const resetAccountScopedState = useCallback(() => {
     setWorkspaces([]); setWorkspaceScope(''); setInvitations([]); setNotifications([]);
     setMembers([]); setLoadedWorkspaceId(''); setWorkspaceInvitations([]); setPresence([]);
-    setSearchResults([]); setConversations([]); setConversationScope(''); setMessages([]); setLoadedMessagesConversationId('');
-    setWorkspaceName(''); setSearch(''); setInviteRole('member'); setInviteJobTitle('');
-    setMessageBody(''); setGroupTitle(''); setGroupMemberIds([]);
+    setSearchResults([]); setConversations([]); setConversationScope(''); setWorkspaceName(''); setSearch(''); setInviteRole('member'); setInviteJobTitle('');
+    setGroupTitle(''); setGroupMemberIds([]);
     setBusy(false);
   }, [setConversationScope, setWorkspaceScope]);
   const adoptUser = useCallback((nextUser: User | null) => {
@@ -132,7 +129,6 @@ export default function OfficeTeamCollaboration({
   const visiblePresence = workspaceDataReady ? presence : [];
   const visibleConversations = workspaceDataReady ? conversations : [];
   const visibleWorkspaceInvitations = workspaceDataReady ? workspaceInvitations : [];
-  const visibleMessages = conversationId === loadedMessagesConversationId ? messages : [];
   const activeMembers = visibleMembers.filter((member) => member.status === 'active' && member.user_id !== user?.id);
 
   useEffect(() => {
@@ -284,30 +280,6 @@ export default function OfficeTeamCollaboration({
     };
   }, [client, schemaReady, user, workspaceIdsKey]);
 
-  useEffect(() => {
-    if (!schemaReady || !client || !user || !conversationId) return undefined;
-    let alive = true;
-    let loading = false;
-    const generation = accountGenerationRef.current;
-    const scopedUserId = user.id;
-    const targetConversationId = conversationId;
-    const conversationGeneration = conversationGenerationRef.current;
-    const targetWorkspaceId = workspaceIdRef.current;
-    const workspaceGeneration = workspaceGenerationRef.current;
-    const isCurrent = () => alive && generation === accountGenerationRef.current && scopedUserId === userIdRef.current
-      && targetConversationId === conversationIdRef.current && conversationGeneration === conversationGenerationRef.current
-      && targetWorkspaceId === workspaceIdRef.current && workspaceGeneration === workspaceGenerationRef.current;
-    const load = async () => {
-      if (loading || !isCurrent()) return;
-      loading = true;
-      try { const next = await officeTeamApi.listMessages(client, targetConversationId); if (isCurrent()) { setMessages(next); setLoadedMessagesConversationId(targetConversationId); } }
-      catch (cause) { if (isCurrent()) setError(friendlyError(cause)); }
-      finally { loading = false; }
-    };
-    void load();
-    const timer = window.setInterval(() => { void load(); }, 5_000);
-    return () => { alive = false; window.clearInterval(timer); };
-  }, [client, schemaReady, user, conversationId, workspaceId]);
 
   const signInWithExistingAccount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -541,30 +513,6 @@ export default function OfficeTeamCollaboration({
       && targetConversationId === conversationIdRef.current && conversationGeneration === conversationGenerationRef.current);
   };
 
-  const sendMessage = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const body = messageBody.trim();
-    const targetConversationId = conversationIdRef.current;
-    const targetWorkspaceId = workspaceIdRef.current;
-    const conversationGeneration = conversationGenerationRef.current;
-    const workspaceGeneration = workspaceGenerationRef.current;
-    if (!targetConversationId || !body) return;
-    void run(async (isCurrent) => {
-      const isScopeCurrent = () => isCurrent() && targetConversationId === conversationIdRef.current
-        && conversationGeneration === conversationGenerationRef.current && targetWorkspaceId === workspaceIdRef.current
-        && workspaceGeneration === workspaceGenerationRef.current;
-      await officeTeamApi.sendMessage(client, targetConversationId, body);
-      if (!isScopeCurrent()) return;
-      setMessageBody('');
-      const nextMessages = await officeTeamApi.listMessages(client, targetConversationId);
-      if (!isScopeCurrent()) return;
-      setMessages(nextMessages);
-      const nextConversations = await officeTeamApi.listConversations(client, targetWorkspaceId);
-      if (isScopeCurrent()) setConversations(nextConversations);
-    }, undefined, () => targetConversationId === conversationIdRef.current && conversationGeneration === conversationGenerationRef.current
-      && targetWorkspaceId === workspaceIdRef.current && workspaceGeneration === workspaceGenerationRef.current);
-  };
-
   const startDirect = (member: OfficeMember) => {
     const targetWorkspaceId = workspaceIdRef.current;
     const workspaceGeneration = workspaceGenerationRef.current;
@@ -576,7 +524,7 @@ export default function OfficeTeamCollaboration({
       const next = await officeTeamApi.listConversations(client, targetWorkspaceId);
       if (!isWorkspaceCurrent() || conversationGeneration !== conversationGenerationRef.current) return false;
       setConversations(next);
-      setMessages([]); setLoadedMessagesConversationId(''); setConversationScope(id);
+      setConversationScope(id);
       return true;
     }, `Direct conversation opened with ${displayName(member)}.`, () => targetWorkspaceId === workspaceIdRef.current && workspaceGeneration === workspaceGenerationRef.current);
   };
@@ -594,7 +542,7 @@ export default function OfficeTeamCollaboration({
       const next = await officeTeamApi.listConversations(client, targetWorkspaceId);
       if (!isWorkspaceCurrent() || conversationGeneration !== conversationGenerationRef.current) return false;
       setConversations(next);
-      setMessages([]); setLoadedMessagesConversationId(''); setConversationScope(id); setGroupTitle(''); setGroupMemberIds([]);
+      setConversationScope(id); setGroupTitle(''); setGroupMemberIds([]);
       return true;
     }, 'Group conversation created.', () => targetWorkspaceId === workspaceIdRef.current && workspaceGeneration === workspaceGenerationRef.current);
   };
@@ -608,7 +556,7 @@ export default function OfficeTeamCollaboration({
       {invitations.length > 0 && <div className="office-inbox"><h3><Bell size={15} /> Invitations for you</h3>{invitations.map((invitation) => { const inviterPresence = invitation.workspace_id === workspaceId ? visiblePresence.find((person) => person.user_id === invitation.inviter_id) : undefined; return <article className="office-invite-row" key={invitation.invitation_id}><div><strong>{invitation.workspace_name}</strong><OfficePersonIdentity name={invitation.inviter_name} avatarUrl={invitation.inviter_avatar_url} isVip={invitation.inviter_is_vip} vipExpiresAt={invitation.inviter_vip_expires_at} presenceStatus={inviterPresence?.status ?? invitation.inviter_presence_status} lastSeenAt={inviterPresence?.last_seen_at ?? invitation.inviter_last_seen_at} now={presenceNow} compact /><small>{invitation.role}</small></div><button className="button-primary" disabled={busy} onClick={() => respond(invitation, true)}>Accept</button><button className="button-secondary" disabled={busy} onClick={() => respond(invitation, false)}>Decline</button></article>; })}</div>}
       {!initialWorkspaceId && <div className="office-create-space"><h3>{initialWorkspaceName ? 'Create an Office team for this industry office' : workspaces.length ? 'Create another Office space' : 'Create an Office space'}</h3><p>{initialWorkspaceName ? `This creates a server-backed team named for ${initialWorkspaceName}. Industry register items remain local and are not uploaded.` : workspaces.length ? 'Create a separate organisation or team workspace. You can switch between every workspace you own or have joined.' : 'This creates your first server-backed Office workspace in the selected COCCE project. It does not convert or upload the local planner above.'}</p><form onSubmit={createWorkspace}><input aria-label="Office space name" value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={80} placeholder="Office space name" required /><button className="button-primary" disabled={busy}><Plus size={15} /> {initialWorkspaceName ? 'Create team' : 'Create Office'}</button></form></div>}
       {workspaces.length === 0 ? null : <>
-        <label className="office-workspace-select">Office space<select aria-label="Office space" value={workspaceId} onChange={(event) => { setWorkspaceScope(event.target.value); setConversationScope(''); setNotice(''); setMembers([]); setLoadedWorkspaceId(''); setWorkspaceInvitations([]); setPresence([]); setSearch(''); setSearchResults([]); setConversations([]); setMessages([]); setLoadedMessagesConversationId(''); setMessageBody(''); setGroupTitle(''); setGroupMemberIds([]); }}>{!workspaceId && <option value="" disabled>Select an available team</option>}{workspaces.map((item) => <option key={item.workspace_id} value={item.workspace_id}>{item.name} · {item.role}</option>)}</select></label>
+        <label className="office-workspace-select">Office space<select aria-label="Office space" value={workspaceId} onChange={(event) => { setWorkspaceScope(event.target.value); setConversationScope(''); setNotice(''); setMembers([]); setLoadedWorkspaceId(''); setWorkspaceInvitations([]); setPresence([]); setSearch(''); setSearchResults([]); setConversations([]); setGroupTitle(''); setGroupMemberIds([]); }}>{!workspaceId && <option value="" disabled>Select an available team</option>}{workspaces.map((item) => <option key={item.workspace_id} value={item.workspace_id}>{item.name} · {item.role}</option>)}</select></label>
         {activeWorkspace && <div className="office-collab-grid">
           <div className="office-collab-column">
             <section className="office-subpanel"><div className="office-subpanel-title"><h3><Users size={15} /> Members</h3><span>{visibleMembers.filter((member) => member.status === 'active').length}</span></div>
@@ -618,12 +566,12 @@ export default function OfficeTeamCollaboration({
             <section className="office-subpanel"><div className="office-subpanel-title"><h3><Bell size={15} /> Notifications</h3><span>{notifications.filter((item) => !item.read_at).length} unread</span></div>{notifications.filter((item) => item.workspace_id === workspaceId).slice(0, 5).map((item) => { const actorPresence = item.actor_id ? visiblePresence.find((person) => person.user_id === item.actor_id) : undefined; return <article className={`office-notification-row ${item.read_at ? '' : 'is-unread'}`} key={item.notification_id}>{item.actor_id && <OfficePersonIdentity name={item.actor_name ?? `COCCE member ${item.actor_id.slice(0, 8)}`} avatarUrl={item.actor_avatar_url} isVip={item.actor_is_vip} vipExpiresAt={item.actor_vip_expires_at} presenceStatus={actorPresence?.status ?? item.actor_presence_status} lastSeenAt={actorPresence?.last_seen_at ?? item.actor_last_seen_at} now={presenceNow} compact />}<span>{item.kind.replaceAll('_', ' ')}</span><small>{new Date(item.created_at).toLocaleString()}</small>{!item.read_at && <button className="button-tertiary" disabled={busy} onClick={() => markNotificationRead(item)}>Mark read</button>}</article>; })}{notifications.filter((item) => item.workspace_id === workspaceId).length === 0 && <p className="office-muted">No Office notifications yet.</p>}</section>
           </div>
           <div className="office-collab-column">
-            <section className="office-subpanel"><div className="office-subpanel-title"><h3><MessageCircle size={15} /> Text chat</h3><span>server-backed</span></div><div className="office-conversation-list">{visibleConversations.map((conversation) => { const directPresence = conversation.direct_user_id ? visiblePresence.find((person) => person.user_id === conversation.direct_user_id) : undefined; return <button className={`office-conversation-button ${conversation.conversation_id === conversationId ? 'is-active' : ''}`} key={conversation.conversation_id} onClick={() => { setMessages([]); setLoadedMessagesConversationId(''); setConversationScope(conversation.conversation_id); }}>{conversation.kind === 'direct' && conversation.direct_user_id ? <OfficePersonIdentity name={displayName({ display_name: conversation.direct_user_display_name, username: conversation.direct_user_username, user_id: conversation.direct_user_id })} avatarUrl={conversation.direct_user_avatar_url} isVip={conversation.direct_user_is_vip} vipExpiresAt={conversation.direct_user_vip_expires_at} presenceStatus={directPresence?.status ?? conversation.direct_user_presence_status} lastSeenAt={directPresence?.last_seen_at ?? conversation.direct_user_last_seen_at} now={presenceNow} compact /> : <span>{conversation.title || conversation.kind}</span>}<small>{conversation.kind}</small></button>; })}</div><form className="office-group-form" onSubmit={startGroup}><label>New group name<input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} maxLength={80} placeholder="Project group" /></label><div className="office-group-members">{activeMembers.map((member) => { const memberPresence = visiblePresence.find((person) => person.user_id === member.user_id); return <label key={member.user_id}><input type="checkbox" checked={groupMemberIds.includes(member.user_id)} onChange={(event) => setGroupMemberIds((ids) => event.target.checked ? [...ids, member.user_id] : ids.filter((id) => id !== member.user_id))} /><OfficePersonIdentity name={displayName(member)} avatarUrl={member.avatar_url} isVip={member.is_vip} vipExpiresAt={member.vip_expires_at} presenceStatus={memberPresence ? memberPresence.status : 'offline'} lastSeenAt={memberPresence?.last_seen_at} now={presenceNow} compact /></label>; })}</div><button className="button-secondary" disabled={busy || !groupTitle.trim() || groupMemberIds.length === 0}><Plus size={14} /> Create group</button></form>
-              <div className="office-message-list" aria-live="polite">{visibleMessages.length === 0 ? <p className="office-muted">Select a conversation or message a member. Only authorized participants can read these text messages.</p> : visibleMessages.slice().reverse().map((message) => <article className={`office-message ${message.author_id === user.id ? 'is-own' : ''}`} key={message.message_id}><div className="office-message-meta"><OfficePersonIdentity name={message.author_id === user.id ? 'You' : message.author_name} avatarUrl={message.author_avatar_url} isVip={message.author_is_vip} vipExpiresAt={message.author_vip_expires_at} presenceStatus={visiblePresence.find((person) => person.user_id === message.author_id)?.status ?? message.author_presence_status} lastSeenAt={visiblePresence.find((person) => person.user_id === message.author_id)?.last_seen_at ?? message.author_last_seen_at} now={presenceNow} compact /><time>{new Date(message.created_at).toLocaleString()}</time></div><p>{message.body}</p></article>)}</div><form className="office-send-form" onSubmit={sendMessage}><label className="sr-only" htmlFor="office-message-text">Message</label><textarea id="office-message-text" value={messageBody} onChange={(event) => setMessageBody(event.target.value)} maxLength={4000} placeholder="Write a text message…" disabled={!conversationId || busy} /><button className="button-primary" disabled={!conversationId || !messageBody.trim() || busy}><Send size={15} /> Send</button></form><p className="office-muted office-chat-limit">Text messages only in this staged slice. Attachments, audio/video, reactions, edit/delete, read receipts, and push notifications are not implemented.</p></section>
+            <section className="office-subpanel"><div className="office-subpanel-title"><h3><MessageCircle size={15} /> Text chat</h3><span>server-backed</span></div><div className="office-conversation-list">{visibleConversations.map((conversation) => { const directPresence = conversation.direct_user_id ? visiblePresence.find((person) => person.user_id === conversation.direct_user_id) : undefined; return <button className={`office-conversation-button ${conversation.conversation_id === conversationId ? 'is-active' : ''}`} key={conversation.conversation_id} onClick={() => { setConversationScope(conversation.conversation_id); }}>{conversation.kind === 'direct' && conversation.direct_user_id ? <OfficePersonIdentity name={displayName({ display_name: conversation.direct_user_display_name, username: conversation.direct_user_username, user_id: conversation.direct_user_id })} avatarUrl={conversation.direct_user_avatar_url} isVip={conversation.direct_user_is_vip} vipExpiresAt={conversation.direct_user_vip_expires_at} presenceStatus={directPresence?.status ?? conversation.direct_user_presence_status} lastSeenAt={directPresence?.last_seen_at ?? conversation.direct_user_last_seen_at} now={presenceNow} compact /> : <span>{conversation.title || conversation.kind}</span>}<small>{conversation.kind}</small></button>; })}</div><form className="office-group-form" onSubmit={startGroup}><label>New group name<input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} maxLength={80} placeholder="Project group" /></label><div className="office-group-members">{activeMembers.map((member) => { const memberPresence = visiblePresence.find((person) => person.user_id === member.user_id); return <label key={member.user_id}><input type="checkbox" checked={groupMemberIds.includes(member.user_id)} onChange={(event) => setGroupMemberIds((ids) => event.target.checked ? [...ids, member.user_id] : ids.filter((id) => id !== member.user_id))} /><OfficePersonIdentity name={displayName(member)} avatarUrl={member.avatar_url} isVip={member.is_vip} vipExpiresAt={member.vip_expires_at} presenceStatus={memberPresence ? memberPresence.status : 'offline'} lastSeenAt={memberPresence?.last_seen_at} now={presenceNow} compact /></label>; })}</div><button className="button-secondary" disabled={busy || !groupTitle.trim() || groupMemberIds.length === 0}><Plus size={14} /> Create group</button></form>
+              <OfficeChatPanel client={client} user={user} publicKey={config.anonKey} workspaceId={workspaceId} conversationId={conversationId} disabled={busy} /></section>
           </div>
         </div>}
       </>}
-      <div className="office-collab-footer"><span>Polling only: chat messages every 5 seconds; workspace members, conversations, and presence every 15 seconds; workspaces, invitations, and notifications every 30 seconds. Presence heartbeats run every 25 seconds; stale sessions show offline after 90 seconds and hidden tabs show away. This is not Realtime.</span><button className="button-tertiary" disabled={busy} onClick={refreshOfficeData}><RefreshCw size={13} /> Refresh</button></div>
+      <div className="office-collab-footer"><span>Chats use Supabase Realtime with a 15-second polling fallback; workspace members, conversations, and presence refresh every 15 seconds; workspaces, invitations, and notifications refresh every 30 seconds. Presence heartbeats run every 25 seconds.</span><button className="button-tertiary" disabled={busy} onClick={refreshOfficeData}><RefreshCw size={13} /> Refresh</button></div>
     </>}
   </section>;
 }
