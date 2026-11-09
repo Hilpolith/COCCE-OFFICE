@@ -78,7 +78,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
     const rows = await officeTeamApi.listWorkspaces(client);
     setWorkspaces(rows);
     setWorkspaceId((current) => initialWorkspaceId && rows.some((row) => row.workspace_id === initialWorkspaceId) ? initialWorkspaceId : rows.some((row) => row.workspace_id === current) ? current : rows[0]?.workspace_id ?? '');
-  }, [client]);
+  }, [client, initialWorkspaceId]);
 
   useEffect(() => {
     if (!client || !schemaReady) { setLoading(false); return; }
