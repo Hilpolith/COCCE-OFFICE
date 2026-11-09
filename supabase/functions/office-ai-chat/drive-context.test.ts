@@ -182,7 +182,7 @@ describe('COCCE AI selected Drive context', () => {
     for (const name of ['src/main.ts','components/App.tsx','server/index.js','styles/theme.scss','db/schema.sql','scripts/build.py','README.mdx','config/app.toml']) {
       expect(isSupportedDriveTextFile(name)).toBe(true);
     }
-    for (const name of ['.env','.env.example','secrets.json','credentials.json','service-account.json','private-key.json','notes.txt','movie.mp4','archive.zip']) {
+    for (const name of ['.env','.env.example','secrets.json','credentials.json','service-account.json','private-key.json','token.json','movie.mp4','archive.zip']) {
       expect(isSupportedDriveTextFile(name)).toBe(false);
     }
   });
