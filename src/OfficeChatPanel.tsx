@@ -78,7 +78,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
 
   useEffect(() => {
     let alive = true;
-    let fallback: ReturnType<typeof window.setInterval> | null = null;
+    let fallback: number | null = null;
     const poll = () => {
       if (fallback) return;
       fallback = window.setInterval(() => { void refresh().catch((cause) => { if (alive) setError(cause instanceof Error ? cause.message : 'Could not refresh chat.'); }); }, 15000);
