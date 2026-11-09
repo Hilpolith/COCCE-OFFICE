@@ -111,8 +111,30 @@ describe('linked industry team selection', () => {
     expect(await screen.findByText('Opened the existing team linked to this industry office.')).toBeTruthy();
     expect((screen.getByLabelText('Office space') as HTMLSelectElement).value).toBe('linked-team-id');
     await waitFor(() => expect(mocks.officeApiCall).toHaveBeenCalledWith('listMembers', expect.anything(), 'linked-team-id'));
-    expect(mocks.officeApiCall.mock.calls.some(([method]) => method === 'createWorkspace')).toBe(false);
+    expect(mocks.officeApiCall.mock.calls.some(([method]) => method === 'createWorkspace' || method === 'createWorkspaceWithSuite')).toBe(false);
     expect(onWorkspaceCreated).not.toHaveBeenCalled();
+  });
+
+
+  it('creates a new team with the suite selected for the industry office', async () => {
+    let created = false;
+    mocks.schemaReady = true;
+    mocks.auth.getSession.mockResolvedValue({ data: { session: { user: account } }, error: null });
+    const createdTeam = { workspace_id: 'new-school-team', name: 'Kijiji Academy · Schools', role: 'owner' as const, created_at: '2026-11-09T12:00:00.000Z' };
+    mocks.officeApiCall.mockImplementation((method: string) => {
+      if (method === 'listWorkspaces') return Promise.resolve(created ? [createdTeam] : []);
+      if (method === 'createWorkspaceWithSuite') { created = true; return Promise.resolve(createdTeam.workspace_id); }
+      return Promise.resolve([]);
+    });
+
+    render(<OfficeTeamCollaboration initialWorkspaceName="Kijiji Academy" initialSuiteId="school" />);
+    await screen.findByLabelText('Office space name');
+    expect((screen.getByLabelText('Office suite') as HTMLSelectElement).value).toBe('school');
+    fireEvent.click(screen.getByRole('button', { name: 'Create team' }));
+
+    await waitFor(() => expect(mocks.officeApiCall).toHaveBeenCalledWith(
+      'createWorkspaceWithSuite', expect.anything(), 'Kijiji Academy', '', 'school',
+    ));
   });
 
   it('keeps the selection empty and reports unavailable access without offering to create a replacement', async () => {
