@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
     schemaReady: true,
     listWorkspaces: vi.fn(),
     listWorkspaceSuites: vi.fn(),
+    setWorkspaceSuite: vi.fn(),
   };
 });
 
@@ -32,6 +33,7 @@ vi.mock('./lib/officeTeamApi', () => ({
   officeTeamApi: {
     listWorkspaces: mocks.listWorkspaces,
     listWorkspaceSuites: mocks.listWorkspaceSuites,
+    setWorkspaceSuite: mocks.setWorkspaceSuite,
   },
 }));
 
@@ -60,6 +62,7 @@ beforeEach(() => {
   });
   mocks.listWorkspaces.mockResolvedValue([workspaceA]);
   mocks.listWorkspaceSuites.mockResolvedValue([{ workspace_id: workspaceA.workspace_id, suite_id: 'school', created_at: workspaceA.created_at }]);
+  mocks.setWorkspaceSuite.mockResolvedValue(undefined);
   window.addEventListener('cocce-office:workspace-changed', recordWorkspaceChanged);
   window.addEventListener('cocce-office:workspace-cleared', recordWorkspaceCleared);
 });
@@ -90,6 +93,37 @@ describe('global Office workspace selection', () => {
     await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceB.workspace_id)).toBe(true));
     expect(events.find((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceB.workspace_id)?.detail)
       .toMatchObject({ name: workspaceB.name, suiteId: 'business', role: 'admin' });
+  });
+
+
+  it('selects a newly created workspace instead of retaining the previous selection', async () => {
+    mocks.listWorkspaces.mockResolvedValue([workspaceA]);
+    mocks.listWorkspaceSuites.mockResolvedValue([{ workspace_id: workspaceA.workspace_id, suite_id: 'school', created_at: workspaceA.created_at }]);
+    render(<OfficeWorkspaceSwitcher />);
+    const selector = await screen.findByRole('combobox', { name: 'Active Office workspace' });
+    await waitFor(() => expect((selector as HTMLSelectElement).value).toBe(workspaceA.workspace_id));
+
+    mocks.listWorkspaces.mockResolvedValue([workspaceA, workspaceB]);
+    mocks.listWorkspaceSuites.mockResolvedValue([
+      { workspace_id: workspaceA.workspace_id, suite_id: 'school', created_at: workspaceA.created_at },
+      { workspace_id: workspaceB.workspace_id, suite_id: 'business', created_at: workspaceB.created_at },
+    ]);
+    window.dispatchEvent(new CustomEvent('cocce-office:workspace-created', { detail: { workspaceId: workspaceB.workspace_id } }));
+
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Active Office workspace' }) as HTMLSelectElement).value).toBe(workspaceB.workspace_id));
+    await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceB.workspace_id)).toBe(true));
+  });
+
+  it('lets workspace owners assign a specialist suite to a legacy workspace', async () => {
+    mocks.listWorkspaceSuites.mockResolvedValue([]);
+    render(<OfficeWorkspaceSwitcher />);
+    await screen.findByRole('combobox', { name: 'Active Office workspace' });
+    fireEvent.click(screen.getByRole('button', { name: 'Assign suite' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Assign workspace suite' }), { target: { value: 'government' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save suite/ }));
+
+    await waitFor(() => expect(mocks.setWorkspaceSuite).toHaveBeenCalledWith(mocks.client, workspaceA.workspace_id, 'government'));
+    await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceA.workspace_id && item.detail?.suiteId === 'government')).toBe(true));
   });
 
   it('clears the previous account workspace immediately when the signed-in COCCE user changes', async () => {
