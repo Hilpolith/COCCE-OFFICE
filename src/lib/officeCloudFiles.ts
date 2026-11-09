@@ -52,6 +52,39 @@ export type CloudUsage = {
   usagePercent: number;
   warningAtPercent: 0 | 80 | 90 | 100;
 };
+export type CloudStoragePlan = {
+  planCode: string;
+  displayName: string;
+  quotaBytes: number;
+  monthlyCoins: number;
+  sortOrder: number;
+};
+export type CloudStorageSubscription = {
+  subscriptionId: string;
+  planCode: string;
+  displayName: string;
+  quotaBytes: number;
+  monthlyCoins: number;
+  status: 'active' | 'past_due' | 'expired';
+  autoRenew: boolean;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  nextBillingAt: string | null;
+  graceUntil: string | null;
+  lastBilledAt: string | null;
+  createdAt: string;
+};
+export type CloudStorageHistoryEvent = {
+  eventId: string;
+  subscriptionId: string;
+  eventType: 'purchased' | 'renewed' | 'renewal_failed' | 'auto_renew_enabled' | 'auto_renew_disabled' | 'expired';
+  planCode: string;
+  displayName: string;
+  coins: number;
+  quotaBytes: number;
+  createdAt: string;
+};
 export type CloudSyncState = {
   fileId: string;
   workspaceId: string;
@@ -116,6 +149,8 @@ function stableError(status?: number): OfficeCloudFilesError {
     return new OfficeCloudFilesError('The cloud request was invalid.', status);
   if (status === 401)
     return new OfficeCloudFilesError('Sign in again to continue.', status);
+  if (status === 402)
+    return new OfficeCloudFilesError('Your COCCE Coin balance is too low for this storage plan.', status);
   if (status === 403 || status === 404)
     return new OfficeCloudFilesError(
       'This file or workspace is unavailable to your account.',
@@ -450,6 +485,81 @@ export function createOfficeCloudApi(
         !sha(item.sha256Hex) || !date(item.updatedAt)
       ) throw stableError();
       return { ...item, sha256Hex: item.sha256Hex.toLowerCase() } as CloudSyncState;
+    },
+    async storagePlans(workspaceId: string): Promise<CloudStoragePlan[]> {
+      if (!uuid(workspaceId)) throw stableError(400);
+      const result = await call('storage_plans', { workspaceId });
+      if (!Array.isArray(result.plans)) throw stableError();
+      return result.plans.map((item) => {
+        if (!record(item) || typeof item.planCode !== 'string' || !item.planCode.startsWith('storage_')
+          || typeof item.displayName !== 'string' || !byteCount(item.quotaBytes, false)
+          || !Number.isSafeInteger(item.monthlyCoins) || Number(item.monthlyCoins) < 1
+          || !Number.isSafeInteger(item.sortOrder) || Number(item.sortOrder) < 1) throw stableError();
+        return item as unknown as CloudStoragePlan;
+      });
+    },
+    async storageSubscriptions(workspaceId: string): Promise<CloudStorageSubscription[]> {
+      if (!uuid(workspaceId)) throw stableError(400);
+      const result = await call('storage_subscriptions', { workspaceId });
+      if (!Array.isArray(result.subscriptions)) throw stableError();
+      return result.subscriptions.map((item) => {
+        if (!record(item) || !uuid(item.subscriptionId) || typeof item.planCode !== 'string'
+          || typeof item.displayName !== 'string' || !byteCount(item.quotaBytes, false)
+          || !Number.isSafeInteger(item.monthlyCoins) || Number(item.monthlyCoins) < 1
+          || !['active','past_due','expired'].includes(String(item.status))
+          || typeof item.autoRenew !== 'boolean' || typeof item.cancelAtPeriodEnd !== 'boolean'
+          || !date(item.currentPeriodStart) || !date(item.currentPeriodEnd) || !date(item.createdAt)
+          || (item.nextBillingAt !== null && item.nextBillingAt !== undefined && !date(item.nextBillingAt))
+          || (item.graceUntil !== null && item.graceUntil !== undefined && !date(item.graceUntil))
+          || (item.lastBilledAt !== null && item.lastBilledAt !== undefined && !date(item.lastBilledAt))) throw stableError();
+        return item as unknown as CloudStorageSubscription;
+      });
+    },
+    async storageHistory(workspaceId: string): Promise<CloudStorageHistoryEvent[]> {
+      if (!uuid(workspaceId)) throw stableError(400);
+      const result = await call('storage_history', { workspaceId });
+      if (!Array.isArray(result.events)) throw stableError();
+      return result.events.map((item) => {
+        if (!record(item) || !uuid(item.eventId) || !uuid(item.subscriptionId)
+          || !['purchased','renewed','renewal_failed','auto_renew_enabled','auto_renew_disabled','expired'].includes(String(item.eventType))
+          || typeof item.planCode !== 'string' || typeof item.displayName !== 'string'
+          || !byteCount(item.coins) || !byteCount(item.quotaBytes, false) || !date(item.createdAt)) throw stableError();
+        return item as unknown as CloudStorageHistoryEvent;
+      });
+    },
+    async purchaseStorage(workspaceId: string, planCode: string, idempotencyKey: string, autoRenew = false) {
+      if (!uuid(workspaceId) || !uuid(idempotencyKey) || !/^storage_(5gb|25gb|100gb|250gb|1tb|2tb)_monthly$/.test(planCode)) throw stableError(400);
+      const result = await call('purchase_storage', { workspaceId, planCode, idempotencyKey, autoRenew });
+      const purchase = result.purchase;
+      if (!record(purchase) || !uuid(purchase.subscriptionId) || typeof purchase.planCode !== 'string'
+        || typeof purchase.displayName !== 'string' || !byteCount(purchase.quotaBytes, false)
+        || !Number.isSafeInteger(purchase.monthlyCoins) || Number(purchase.monthlyCoins) < 1
+        || !['active','past_due','expired'].includes(String(purchase.status))
+        || typeof purchase.autoRenew !== 'boolean' || !date(purchase.currentPeriodEnd)
+        || typeof purchase.replayed !== 'boolean') throw stableError();
+      return purchase as {
+        subscriptionId: string; planCode: string; displayName: string; quotaBytes: number;
+        monthlyCoins: number; status: 'active' | 'past_due' | 'expired'; autoRenew: boolean;
+        currentPeriodEnd: string; balance: number | null; replayed: boolean;
+      };
+    },
+    async renewStorage(subscriptionId: string, idempotencyKey: string) {
+      if (!uuid(subscriptionId) || !uuid(idempotencyKey)) throw stableError(400);
+      const result = await call('renew_storage', { subscriptionId, idempotencyKey });
+      const renewal = result.renewal;
+      if (!record(renewal) || !uuid(renewal.subscriptionId)
+        || !['active','past_due','expired'].includes(String(renewal.status))
+        || !date(renewal.currentPeriodEnd) || typeof renewal.replayed !== 'boolean') throw stableError();
+      return renewal as { subscriptionId: string; status: 'active' | 'past_due' | 'expired'; currentPeriodEnd: string; replayed: boolean; balance: number | null };
+    },
+    async setStorageAutoRenew(subscriptionId: string, autoRenew: boolean) {
+      if (!uuid(subscriptionId) || typeof autoRenew !== 'boolean') throw stableError(400);
+      const result = await call('set_storage_auto_renew', { subscriptionId, autoRenew });
+      const subscription = result.subscription;
+      if (!record(subscription) || !uuid(subscription.subscriptionId)
+        || typeof subscription.autoRenew !== 'boolean' || typeof subscription.cancelAtPeriodEnd !== 'boolean'
+        || !date(subscription.currentPeriodEnd)) throw stableError();
+      return subscription as { subscriptionId: string; autoRenew: boolean; cancelAtPeriodEnd: boolean; currentPeriodEnd: string };
     },
     async usage(workspaceId: string): Promise<CloudUsage> {
       if (!uuid(workspaceId)) throw stableError(400);
