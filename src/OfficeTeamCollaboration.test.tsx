@@ -129,7 +129,9 @@ describe('linked industry team selection', () => {
 
     render(<OfficeTeamCollaboration initialWorkspaceName="Kijiji Academy" initialSuiteId="school" />);
     await screen.findByLabelText('Office space name');
+    expect((screen.getByLabelText('Office space name') as HTMLInputElement).value).toBe('Kijiji Academy');
     expect((screen.getByLabelText('Office suite') as HTMLSelectElement).value).toBe('school');
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Create team' }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Create team' }));
 
     await waitFor(() => expect(mocks.officeApiCall).toHaveBeenCalledWith(
