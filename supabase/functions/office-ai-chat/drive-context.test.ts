@@ -11,7 +11,7 @@ const enabled = [{ workspace_id: workspaceId, name: 'Operations' }];
 
 function cloudLink(overrides: Record<string, unknown> = {}) {
   return Response.json({
-    fileId, workspaceId, displayName: 'policy.md', sizeBytes: 7, url: bunnyUrl, ...overrides,
+    fileId, workspaceId, displayName: 'policy.md', sizeBytes: 7, sha256Hex: '6cfab04bd04c3db726cef5cc651b047a9ac8d4bc97ef976a8e44b59ff23e0c92', url: bunnyUrl, ...overrides,
   });
 }
 
@@ -74,13 +74,13 @@ describe('COCCE AI selected Drive context', () => {
       .rejects.toMatchObject({ status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH' });
 
     const invalidUtf8 = vi.fn(async (input: RequestInfo | URL) => String(input).startsWith(supabaseUrl)
-      ? cloudLink({ sizeBytes: 1 })
+      ? cloudLink({ sizeBytes: 1, sha256Hex: 'a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89' })
       : new Response(new Uint8Array([0xff])));
     await expect(loadSelectedDriveFiles([fileId], enabled, supabaseUrl, 'key', 'jwt', invalidUtf8))
       .rejects.toMatchObject({ status: 415, code: 'DRIVE_FILE_NOT_TEXT' });
 
     const binary = vi.fn(async (input: RequestInfo | URL) => String(input).startsWith(supabaseUrl)
-      ? cloudLink({ sizeBytes: 3 })
+      ? cloudLink({ sizeBytes: 3, sha256Hex: '59b271ae1bbcb1d31d41929817f4b16fb439eb4f31520b5ad1d5ce98920a7138' })
       : new Response(new Uint8Array([0x61, 0x00, 0x62])));
     await expect(loadSelectedDriveFiles([fileId], enabled, supabaseUrl, 'key', 'jwt', binary))
       .rejects.toMatchObject({ status: 415, code: 'DRIVE_FILE_NOT_TEXT' });
