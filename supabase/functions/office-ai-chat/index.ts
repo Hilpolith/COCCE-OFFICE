@@ -62,6 +62,7 @@ function rateAllowed(userId: string) {
   return true;
 }
 
+
 type DriveContextError = { status: number; code: string; message: string };
 
 function isUuid(value: unknown): value is string {
@@ -91,14 +92,22 @@ async function readBoundedBytes(response: Response, limit: number): Promise<Uint
       }
       chunks.push(part.value);
     }
-  } finally { reader.releaseLock(); }
+  } finally {
+    reader.releaseLock();
+  }
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   return bytes;
 }
 
-async function loadSelectedDriveFiles(fileIds: string[], enabledWorkspaces: Array<Record<string, unknown>>, supabaseUrl: string, anonKey: string, token: string): Promise<Array<{ workspaceName: string; displayName: string; text: string }>> {
+async function loadSelectedDriveFiles(
+  fileIds: string[],
+  enabledWorkspaces: Array<Record<string, unknown>>,
+  supabaseUrl: string,
+  anonKey: string,
+  token: string,
+): Promise<Array<{ workspaceName: string; displayName: string; text: string }>> {
   if (fileIds.length === 0) return [];
   const enabledById = new Map(enabledWorkspaces.map((workspace) => [String(workspace.workspace_id), String(workspace.name ?? 'Office workspace')]));
   const endpoint = new URL(OFFICE_CLOUD_FUNCTION, supabaseUrl).toString();
@@ -107,7 +116,9 @@ async function loadSelectedDriveFiles(fileIds: string[], enabledWorkspaces: Arra
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, apikey: anonKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'get_link', fileId, purpose: 'preview' }),
-      cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(10_000),
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
     });
     if (!linkResponse.ok) throw { status: linkResponse.status === 403 ? 403 : 404, code: 'DRIVE_FILE_ACCESS_DENIED', message: 'A selected Drive file is unavailable to your account.' } satisfies DriveContextError;
     const link = await linkResponse.json();
@@ -290,7 +301,14 @@ Deno.serve(async (req) => {
     if (signed.origin !== BUNNY_DOWNLOAD_ORIGIN || !expectedPath.test(signed.pathname) || !signed.search) {
       throw { status: 502, code: 'DRIVE_FILE_LINK_INVALID', message: 'A selected Drive file returned an invalid private download link.' } satisfies DriveContextError;
     }
-    const fileResponse = await fetch(signed.toString(), { method: 'GET', cache: 'no-store', redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(10_000) });
+    const fileResponse = await fetch(signed.toString(), {
+      method: 'GET',
+      cache: 'no-store',
+      redirect: 'error',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!fileResponse.ok) throw { status: 502, code: 'DRIVE_FILE_UNAVAILABLE', message: 'A selected Drive file could not be downloaded for this AI request.' } satisfies DriveContextError;
     const bytes = await readBoundedBytes(fileResponse, MAX_DRIVE_FILE_BYTES);
     if (bytes.byteLength !== link.sizeBytes) throw { status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH', message: 'A selected Drive file failed its stored-size check.' } satisfies DriveContextError;
