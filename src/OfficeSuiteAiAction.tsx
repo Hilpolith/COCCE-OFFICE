@@ -15,7 +15,7 @@ export default function OfficeSuiteAiAction({ workspaceId, suiteLabel, tabLabel 
 
   return <button type="button" className="office-suite-ai-action" onClick={openAssistant} aria-label={`Ask COCCE AI about ${suiteLabel}, ${tabLabel}`}>
     <span className="office-suite-ai-action-icon"><Sparkles size={15} /></span>
-    <span className="office-suite-ai-action-copy"><strong>Ask COCCE AI</strong><small>{tabLabel}</small></span>
+    <span className="office-suite-ai-action-copy"><strong>Ask COCCE AI</strong><small>Current tab</small></span>
     <ChevronRight size={15} className="office-suite-ai-action-chevron" />
   </button>;
 }
