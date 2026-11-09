@@ -160,6 +160,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFileHasMore(false);
       setDriveFilesError('');
       setDriveFilesOpen(false);
+      setShowDriveConsent(false);
     };
     const handleWorkspaceChange = (event: Event) => {
       const nextId = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId ?? '';
@@ -202,6 +203,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setDriveFileOffsets({});
     setDriveFileHasMore(false);
     setDriveFilesOpen(false);
+    setAnswer('');
+    setShowDriveConsent(false);
   }, [initialWorkspaceId, workspaces]);
 
   const supportedDriveFile = (file: CloudFile) => file.sizeBytes <= 512 * 1024 && /\.(txt|md|csv|tsv|json|xml|yaml|yml|log)$/i.test(file.displayName);
