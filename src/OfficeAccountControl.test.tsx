@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
   signInWithOAuth: vi.fn(),
   signOut: vi.fn(),
   unsubscribe: vi.fn(),
+  officeApi: { listWorkspaces: vi.fn(), listWorkspaceSuites: vi.fn(), createWorkspaceWithSuite: vi.fn() },
 }));
+
+vi.mock('./lib/officeTeamApi', () => ({ officeTeamApi: mocks.officeApi }));
 
 vi.mock('./lib/officeTeamSupabase', () => ({
   resolveOfficeTeamConfig: () => ({ status: 'ready', url: 'https://nresyncmhdybucenhxbw.supabase.co', projectRef: 'nresyncmhdybucenhxbw', anonKey: 'sb_publishable_test', schemaReady: true }),
@@ -52,6 +55,9 @@ beforeEach(() => {
   mocks.signInWithPassword.mockResolvedValue({ data: { user: existingUser }, error: null });
   mocks.signInWithOAuth.mockResolvedValue({ data: { provider: 'google', url: 'https://accounts.google.com/o/oauth2/v2/auth' }, error: null });
   mocks.signOut.mockResolvedValue({ error: null });
+  mocks.officeApi.listWorkspaces.mockResolvedValue([]);
+  mocks.officeApi.listWorkspaceSuites.mockResolvedValue([]);
+  mocks.officeApi.createWorkspaceWithSuite.mockResolvedValue('new-office-workspace');
 });
 
 afterEach(() => cleanup());
@@ -84,6 +90,31 @@ describe('Office account control', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in to COCCE Office' }));
     const password = await screen.findByPlaceholderText('Enter your password') as HTMLInputElement;
     expect(password.value).toBe('');
+  });
+
+
+  it('creates the first server workspace with its selected industry suite', async () => {
+    let created = false;
+    mocks.getSession.mockResolvedValue({ data: { session: { user: existingUser } }, error: null });
+    mocks.officeApi.listWorkspaces.mockImplementation(async () => created ? [{
+      workspace_id: 'new-office-workspace', name: 'Kijiji Academy', role: 'owner', created_at: '2026-11-09T12:00:00.000Z',
+    }] : []);
+    mocks.officeApi.listWorkspaceSuites.mockImplementation(async () => created ? [{
+      workspace_id: 'new-office-workspace', suite_id: 'school', created_at: '2026-11-09T12:00:00.000Z',
+    }] : []);
+    mocks.officeApi.createWorkspaceWithSuite.mockImplementation(async () => { created = true; return 'new-office-workspace'; });
+
+    render(<OfficeAccountControl />);
+    fireEvent.click(screen.getByRole('button', { name: /Account: synthetic@example.test/ }));
+    await screen.findByLabelText('Organisation or workspace name');
+    fireEvent.change(screen.getByLabelText('Organisation or workspace name'), { target: { value: 'Kijiji Academy' } });
+    fireEvent.change(screen.getByLabelText('Choose your Office suite'), { target: { value: 'school' } });
+    fireEvent.click(screen.getByRole('button', { name: /Create organisation/ }));
+
+    await waitFor(() => expect(mocks.officeApi.createWorkspaceWithSuite).toHaveBeenCalledWith(
+      mocks.client, 'Kijiji Academy', '', 'school',
+    ));
+    expect(await screen.findByText(/owner · Schools/i)).toBeTruthy();
   });
 
   it('starts Google OAuth on the current Office origin using the existing client', async () => {
