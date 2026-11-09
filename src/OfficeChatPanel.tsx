@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { CheckCheck, Download, Mic, Paperclip, Pencil, Radio, Reply, Send, Square, Trash2, X } from 'lucide-react';
 import { createOfficeCloudApi } from './lib/officeCloudFiles';
+import type { CloudFile } from './lib/officeCloudFiles';
 import { officeTeamApi } from './lib/officeTeamApi';
 import type { OfficeChatAttachment, OfficeConversationRead, OfficeRichMessage } from './lib/officeTeamApi';
 import './officeChat.css';
@@ -227,7 +228,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
   const downloadAttachment = async (attachment: OfficeChatAttachment) => {
     try {
       setError('');
-      let file = null;
+      let file: CloudFile | null = null;
       for (let offset = 0; offset <= 10000; offset += 50) {
         const page = await cloud.list(workspaceId, false, offset);
         file = page.find((item) => item.fileId === attachment.fileId) ?? null;
