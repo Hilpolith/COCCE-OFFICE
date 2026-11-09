@@ -557,3 +557,73 @@ describe('non-mutating upload recovery and transfer boundaries', () => {
     )).rejects.toMatchObject({ status: 409 });
   });
 });
+
+
+describe('Office Cloud monthly storage billing client', () => {
+  const subscriptionId = '66666666-6666-4666-8666-666666666666';
+  const plan = { planCode: 'storage_5gb_monthly', displayName: '5 GB', quotaBytes: 5000000000, monthlyCoins: 2000, sortOrder: 1 };
+  const subscription = {
+    subscriptionId, planCode: plan.planCode, displayName: plan.displayName,
+    quotaBytes: plan.quotaBytes, monthlyCoins: plan.monthlyCoins, status: 'active',
+    autoRenew: false, cancelAtPeriodEnd: false,
+    currentPeriodStart: '2026-11-09T00:00:00Z', currentPeriodEnd: '2026-12-09T00:00:00Z',
+    nextBillingAt: null, graceUntil: null, lastBilledAt: '2026-11-09T00:00:00Z',
+    createdAt: '2026-11-09T00:00:00Z',
+  };
+
+  it('loads server-priced monthly plans and validates plan payloads', async () => {
+    const fetcher = vi.fn().mockResolvedValue(json({ plans: [plan] }));
+    await expect(api(fetcher).storagePlans(workspaceId)).resolves.toEqual([plan]);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ action: 'storage_plans', workspaceId });
+    await expect(api(vi.fn().mockResolvedValue(json({ plans: [{ ...plan, monthlyCoins: -1 }] }))).storagePlans(workspaceId)).rejects.toThrow();
+  });
+
+  it('lists workspace subscriptions and billing history with strict validation', async () => {
+    const events = [{
+      eventId: '77777777-7777-4777-8777-777777777777', subscriptionId,
+      eventType: 'purchased', planCode: plan.planCode, displayName: plan.displayName,
+      coins: 2000, quotaBytes: plan.quotaBytes, createdAt: '2026-11-09T00:00:00Z',
+    }];
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(json({ subscriptions: [subscription] }))
+      .mockResolvedValueOnce(json({ events }));
+    await expect(api(fetcher).storageSubscriptions(workspaceId)).resolves.toEqual([subscription]);
+    await expect(api(fetcher).storageHistory(workspaceId)).resolves.toEqual(events);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ action: 'storage_subscriptions', workspaceId });
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ action: 'storage_history', workspaceId });
+  });
+
+  it('purchases with a client idempotency key and explicit auto-renew choice', async () => {
+    const purchase = {
+      subscriptionId, planCode: plan.planCode, displayName: plan.displayName,
+      quotaBytes: plan.quotaBytes, monthlyCoins: plan.monthlyCoins, status: 'active',
+      autoRenew: false, currentPeriodEnd: '2026-12-09T00:00:00Z',
+      balance: 98000, replayed: false,
+    };
+    const fetcher = vi.fn().mockResolvedValue(json({ purchase }));
+    await expect(api(fetcher).purchaseStorage(workspaceId, plan.planCode, sessionId)).resolves.toEqual(purchase);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+      action: 'purchase_storage', workspaceId, planCode: plan.planCode,
+      idempotencyKey: sessionId, autoRenew: false,
+    });
+    await expect(api(vi.fn()).purchaseStorage(workspaceId, 'storage_unknown', sessionId)).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('renews and changes auto-renew only through explicit edge actions', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(json({ renewal: { subscriptionId, status: 'active', currentPeriodEnd: '2027-01-09T00:00:00Z', replayed: false, balance: 96000 } }))
+      .mockResolvedValueOnce(json({ subscription: { subscriptionId, autoRenew: true, cancelAtPeriodEnd: false, currentPeriodEnd: '2027-01-09T00:00:00Z' } }));
+    await expect(api(fetcher).renewStorage(subscriptionId, sessionId)).resolves.toMatchObject({ subscriptionId, status: 'active' });
+    await expect(api(fetcher).setStorageAutoRenew(subscriptionId, true)).resolves.toMatchObject({ subscriptionId, autoRenew: true });
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ action: 'renew_storage', subscriptionId, idempotencyKey: sessionId });
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ action: 'set_storage_auto_renew', subscriptionId, autoRenew: true });
+  });
+
+  it('preserves payment-required status when the server rejects an insufficient Coin balance', async () => {
+    const fetcher = vi.fn().mockResolvedValue(json({ error: 'PAYMENT_REQUIRED' }, 402));
+    await expect(api(fetcher).purchaseStorage(workspaceId, plan.planCode, sessionId)).rejects.toMatchObject({
+      status: 402,
+      message: 'Your COCCE Coin balance is too low for this storage plan.',
+    });
+  });
+});
