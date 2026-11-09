@@ -42,8 +42,11 @@ const workspaceB = { workspace_id: 'workspace-b', name: 'Business B', role: 'adm
 
 let emitAuthState: ((event: string, session: { user: typeof userA } | null) => void) | null = null;
 let events: Array<{ type: string; detail?: Record<string, unknown> }> = [];
-let onWorkspaceChanged: ((event: Event) => void) | null = null;
-let onWorkspaceCleared: (() => void) | null = null;
+const recordWorkspaceChanged = (event: Event) => {
+  const detail = (event as CustomEvent<Record<string, unknown>>).detail;
+  events.push({ type: 'changed', detail });
+};
+const recordWorkspaceCleared = () => { events.push({ type: 'cleared' }); };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -57,19 +60,14 @@ beforeEach(() => {
   });
   mocks.listWorkspaces.mockResolvedValue([workspaceA]);
   mocks.listWorkspaceSuites.mockResolvedValue([{ workspace_id: workspaceA.workspace_id, suite_id: 'school', created_at: workspaceA.created_at }]);
-  onWorkspaceChanged = (event) => {
-    const detail = (event as CustomEvent<Record<string, unknown>>).detail;
-    events.push({ type: 'changed', detail });
-  };
-  onWorkspaceCleared = () => { events.push({ type: 'cleared' }); };
-  window.addEventListener('cocce-office:workspace-changed', onWorkspaceChanged);
-  window.addEventListener('cocce-office:workspace-cleared', onWorkspaceCleared);
+  window.addEventListener('cocce-office:workspace-changed', recordWorkspaceChanged);
+  window.addEventListener('cocce-office:workspace-cleared', recordWorkspaceCleared);
 });
 
 afterEach(() => {
   cleanup();
-  if (onWorkspaceChanged) window.removeEventListener('cocce-office:workspace-changed', onWorkspaceChanged);
-  if (onWorkspaceCleared) window.removeEventListener('cocce-office:workspace-cleared', onWorkspaceCleared);
+  window.removeEventListener('cocce-office:workspace-changed', recordWorkspaceChanged);
+  window.removeEventListener('cocce-office:workspace-cleared', recordWorkspaceCleared);
   vi.restoreAllMocks();
 });
 
@@ -154,7 +152,7 @@ describe('global Office workspace selection', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 20));
 
     expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceA.workspace_id)).toBe(false);
-    expect(events.at(-1)?.detail?.workspaceId).toBe(workspaceB.workspace_id);
+    expect(events[events.length - 1]?.detail?.workspaceId).toBe(workspaceB.workspace_id);
   });
 
 });
