@@ -154,3 +154,14 @@ The latest full local test run could not be repeated after the isolated Vercel s
 The private Cloud Drive link response now includes the stored SHA-256 digest from the verified revision. COCCE AI compares the server-fetched Bunny bytes against that digest before decoding or adding any excerpt to model context. The Cloud Drive Edge Function is ACTIVE at version 8 and COCCE AI is ACTIVE at version 16; both still require JWT verification. The Drive-context test suite now covers the SHA-256 match and mismatch paths.
 
 GitHub Actions run `42607472160` completed successfully for an earlier main revision and executed both the full test command and production build. The latest main commit `f3c29c2d0ef353c980aa75012d686cb101382e60` has its own full validation run queued as `42608122219`; wait for that run to complete before treating the latest SHA as fully verified. Vercel production deployment remains blocked by the team's HTTP 402 `api-deployments-free-per-day` limit.
+
+
+
+### Current release gate (2026-11-09)
+
+- Current main HEAD: `b877c44007217d3fa5a900fa62843f81a8b853a0`.
+- Latest READY Vercel production deployment still points to `5c2e662a3cfcd7a5ebca45b19de4a821ae3a654c`; it is not the current main HEAD. The current production alias has not been verified against the new AI/Drive work.
+- The latest Vercel build error in the deployment history was for an earlier test revision; the subsequent source changes addressed that reported test failure, but no newer production deployment has completed.
+- The main-branch GitHub Actions workflow is present, but no workflow run is visible for the latest commits.
+- Vercel deployment creation returned HTTP 402 for the daily deployment quota. A separate Vercel sandbox attempt returned HTTP 402 because sandbox snapshot storage is at its plan limit until 2026-12-01. No snapshots were deleted and no plan or billing settings were changed.
+- Supabase migrations and the two Edge Functions are deployed independently: `office-ai-chat` version 16 and `office-cloud-files` version 8, both ACTIVE with JWT verification. The latest main-branch frontend/API changes still need a clean full test/build and a READY production deployment.
