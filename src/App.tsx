@@ -120,6 +120,10 @@ function App() {
       if (!detail?.workspaceId || !detail.name) return;
       setServerWorkspace({ workspaceId: detail.workspaceId, name: detail.name, suiteId: detail.suiteId ?? null, role: detail.role });
       setIndustryFocus(detail.suiteId ?? null);
+      setPage('industry');
+      setMobileMenuOpen(false);
+      setSelectedDocumentId(null);
+      setQuery('');
     };
     const workspaceCleared = () => { setServerWorkspace(null); setIndustryFocus(null); };
     const workspaceCreated = (event: Event) => {
