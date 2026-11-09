@@ -329,7 +329,7 @@ async function verifyUser(config: CloudConfig, token: string, fetcher: Fetcher):
 }
 
 async function officeRpc(config: CloudConfig, name: string, payload: Record<string, unknown>, fetcher: Fetcher): Promise<unknown> {
-  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload|list_storage_plans|list_storage_subscriptions|list_storage_history|purchase_storage_subscription|renew_storage_subscription|set_storage_subscription_auto_renew|wallet_pin_guard)$/.test(name)) {
+  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload|list_storage_plans|list_storage_subscriptions|list_storage_history|purchase_storage_subscription|renew_storage_subscription|set_storage_subscription_auto_renew)$/.test(name)) {
     throw new Error('Office RPC not allowed');
   }
   const response = await fetcher(`${config.supabaseUrl}/rest/v1/rpc/${name}`, {
@@ -630,23 +630,11 @@ function errorMessage(status: number): string {
 
 
 type WalletPinFailure = { status: number; error: string; message: string };
-async function verifyOfficeWalletPin(
-  _config: CloudConfig,
-  _actorId: string,
-  pin: string,
-  _fetcher: Fetcher,
-): Promise<WalletPinFailure | null> {
-  // The legacy profiles.wallet_pin_hash field is not a password hash: a
-  // read-only format audit found raw four-digit values for some accounts.
-  // Never compare or expose that field. Storage purchases stay fail-closed
-  // until COCCE Wallet supplies a reviewed, salted server-side verifier.
-  if (!/^\d{4}$/.test(pin)) {
-    return { status: 400, error: 'INVALID_WALLET_PIN_FORMAT', message: 'Enter your four-digit COCCE Wallet PIN.' };
-  }
+function walletPinVerifierUnavailable(): WalletPinFailure {
   return {
     status: 409,
     error: 'WALLET_PIN_VERIFIER_UNAVAILABLE',
-    message: 'Secure server-side COCCE Wallet PIN verification is not ready for storage billing. No payment was taken.',
+    message: 'COCCE Wallet has not yet exposed a reviewed, salted server-side PIN verifier. Monthly storage billing remains disabled.',
   };
 }
 
@@ -970,7 +958,7 @@ export function createOfficeCloudHandler({
           || (body.autoRenew !== undefined && typeof body.autoRenew !== 'boolean')) {
           return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
         }
-        const pinFailure = await verifyOfficeWalletPin(config, actorId, body.walletPin, fetchImpl);
+        const pinFailure = walletPinVerifierUnavailable();
         if (pinFailure) return jsonResponse(origin, pinFailure.status, { error: pinFailure.error, message: pinFailure.message });
         const result = rpcObject(await officeRpc(config, 'office_cloud_purchase_storage_subscription', {
           p_actor_id: actorId, p_workspace_id: body.workspaceId.toLowerCase(),
@@ -1011,7 +999,7 @@ export function createOfficeCloudHandler({
           return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
         }
         if (body.autoRenew) {
-          const pinFailure = await verifyOfficeWalletPin(config, actorId, body.walletPin as string, fetchImpl);
+          const pinFailure = walletPinVerifierUnavailable();
           if (pinFailure) return jsonResponse(origin, pinFailure.status, { error: pinFailure.error, message: pinFailure.message });
         }
         const result = rpcObject(await officeRpc(config, 'office_cloud_set_storage_subscription_auto_renew', {
