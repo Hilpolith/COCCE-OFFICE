@@ -25,6 +25,7 @@ import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './l
 import VaultWorkspace from './VaultWorkspace';
 import { FrostedConfirmProvider, useFrostedConfirm } from './FrostedConfirm';
 import OfficeAccountControl from './OfficeAccountControl';
+import OfficeWorkspaceSwitcher from './OfficeWorkspaceSwitcher';
 import OfficeEditorChrome from './OfficeEditorChrome';
 import { readSurfaceStyle, writeSurfaceStyle } from './lib/appearancePreferences';
 import type { SurfaceStyle } from './lib/appearancePreferences';
@@ -89,6 +90,7 @@ function App() {
   const [dialog, setDialog] = useState<DialogMode>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [industryFocus, setIndustryFocus] = useState<IndustryId | null>(null);
+  const [serverWorkspace, setServerWorkspace] = useState<{ workspaceId: string; name: string; suiteId: IndustryId | null; role?: string } | null>(null);
   const [industryTeamSetup, setIndustryTeamSetup] = useState<IndustryTeamSetup | null>(null);
   const [aiContext, setAiContext] = useState<{ workspaceId: string; prompt: string } | null>(null);
   const [query, setQuery] = useState('');
@@ -99,19 +101,41 @@ function App() {
   });
 
   useEffect(() => {
+    type OfficeWorkspaceEvent = { workspaceId?: string; name?: string; suiteId?: IndustryId | null; role?: string };
     const navigateOffice = (event: Event) => {
-      const detail = (event as CustomEvent<{ page?: PageId; workspaceId?: string; prompt?: string }>).detail;
+      const detail = (event as CustomEvent<{ page?: PageId; workspaceId?: string; prompt?: string; name?: string; suiteId?: IndustryId | null }>).detail;
       if (detail?.page === 'team') { setPage('team'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery(''); }
+      if (detail?.page === 'industry') {
+        if (detail.workspaceId && detail.name) setServerWorkspace({ workspaceId: detail.workspaceId, name: detail.name, suiteId: detail.suiteId ?? null });
+        setIndustryFocus(detail.suiteId ?? null);
+        setPage('industry'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery('');
+      }
       if (detail?.page === 'ai') {
         setAiContext(detail.workspaceId ? { workspaceId: detail.workspaceId, prompt: detail.prompt ?? '' } : null);
         setPage('ai'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery('');
       }
     };
-    const workspaceCreated = () => { setPage('team'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery(''); };
+    const workspaceChanged = (event: Event) => {
+      const detail = (event as CustomEvent<OfficeWorkspaceEvent>).detail;
+      if (!detail?.workspaceId || !detail.name) return;
+      setServerWorkspace({ workspaceId: detail.workspaceId, name: detail.name, suiteId: detail.suiteId ?? null, role: detail.role });
+      setIndustryFocus(detail.suiteId ?? null);
+    };
+    const workspaceCreated = (event: Event) => {
+      const detail = (event as CustomEvent<OfficeWorkspaceEvent>).detail;
+      if (detail?.workspaceId && detail.name) {
+        setServerWorkspace({ workspaceId: detail.workspaceId, name: detail.name, suiteId: detail.suiteId ?? null });
+        setIndustryFocus(detail.suiteId ?? null);
+        setPage(detail.suiteId ? 'industry' : 'team');
+      } else setPage('team');
+      setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery('');
+    };
     window.addEventListener('cocce-office:navigate', navigateOffice);
+    window.addEventListener('cocce-office:workspace-changed', workspaceChanged);
     window.addEventListener('cocce-office:workspace-created', workspaceCreated);
     return () => {
       window.removeEventListener('cocce-office:navigate', navigateOffice);
+      window.removeEventListener('cocce-office:workspace-changed', workspaceChanged);
       window.removeEventListener('cocce-office:workspace-created', workspaceCreated);
     };
   }, []);
@@ -390,6 +414,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <label className="search-box"><Search size={16} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-keyshortcuts="Control+k Meta+k" aria-label={page === 'team' ? 'Search local planner items' : page === 'industry' ? 'Search local industry work' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
+            <OfficeWorkspaceSwitcher />
             <span className="local-status"><span className="status-dot" /> Office workspace</span>
             <OfficeAccountControl />
             <button className="icon-button help-button" title="Workspace information" aria-label="Workspace information" onClick={() => goTo('settings')}><CircleHelp size={18} /></button>
@@ -408,7 +433,7 @@ function App() {
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
           {page === 'vault' && <VaultWorkspace />}
-          {page === 'industry' && <IndustrySuitesWorkspace key={industryFocus ?? 'all'} preferredIndustryId={industryFocus} onCreateTeam={openIndustryTeam} />}
+          {page === 'industry' && <IndustrySuitesWorkspace key={`${serverWorkspace?.workspaceId ?? 'local'}-${industryFocus ?? 'all'}`} preferredIndustryId={industryFocus} activeWorkspace={serverWorkspace} onCreateTeam={openIndustryTeam} />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
           {page === 'chats' && <ChatsWorkspace />}
           {page === 'ai' && <OfficeAiWorkspace initialWorkspaceId={aiContext?.workspaceId} initialPrompt={aiContext?.prompt} />}
