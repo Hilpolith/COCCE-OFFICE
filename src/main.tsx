@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import './glass.css'
 import './reimagine.css'
+import './visionOS.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
