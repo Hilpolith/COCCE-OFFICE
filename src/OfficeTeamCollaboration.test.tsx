@@ -127,6 +127,9 @@ describe('linked industry team selection', () => {
       return Promise.resolve([]);
     });
 
+    const createdEvents: CustomEvent[] = [];
+    const onCreated = (event: Event) => createdEvents.push(event as CustomEvent);
+    window.addEventListener('cocce-office:workspace-created', onCreated);
     render(<OfficeTeamCollaboration initialWorkspaceName="Kijiji Academy" initialSuiteId="school" />);
     await screen.findByLabelText('Office space name');
     expect((screen.getByLabelText('Office space name') as HTMLInputElement).value).toBe('Kijiji Academy');
@@ -139,6 +142,8 @@ describe('linked industry team selection', () => {
     await waitFor(() => expect(mocks.officeApiCall).toHaveBeenCalledWith(
       'createWorkspaceWithSuite', expect.anything(), 'Kijiji Academy', '', 'school',
     ));
+    await waitFor(() => expect(createdEvents.some((event) => event.detail?.workspaceId === 'new-school-team' && event.detail?.suiteId === 'school')).toBe(true));
+    window.removeEventListener('cocce-office:workspace-created', onCreated);
   });
 
   it('keeps the selection empty and reports unavailable access without offering to create a replacement', async () => {
