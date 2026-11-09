@@ -171,6 +171,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     if (!files.length) return;
     if (pending.length + files.length > 10) { setError('A message can include up to 10 attachments.'); return; }
     const scope = conversationId;
+    const activeUploadSessions: string[] = [];
     setUploading(true);
     setError('');
     try {
@@ -182,10 +183,12 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
         const reservation = await cloud.reserve(workspaceId, normalizedName, bytes, createChatUploadUuid());
         let fileId: string;
         if (reservation.status === 'upload_pending') {
+          activeUploadSessions.push(reservation.uploadSessionId);
           await cloud.upload(reservation, bytes);
           const result = await cloud.finalize(reservation.uploadSessionId);
           const finalizedFileId = result.fileId;
           if (typeof finalizedFileId !== 'string' || !finalizedFileId) throw new Error('Cloud upload finalized without a file ID.');
+          activeUploadSessions.splice(activeUploadSessions.indexOf(reservation.uploadSessionId), 1);
           fileId = finalizedFileId;
         } else {
           if (typeof reservation.fileId !== 'string' || !reservation.fileId) throw new Error('Cloud upload reservation did not return a file ID.');
@@ -193,14 +196,17 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
         }
         const attachment = { fileId, name: normalizedName, sizeBytes: file.size, mimeType: file.type || 'application/octet-stream' };
         if (scopeRef.current === scope) setPending((current) => [...current, attachment]);
+        else {
+          await cloud.trash(fileId).catch(() => undefined);
+        }
       }
     } catch (cause) {
+      await Promise.all(activeUploadSessions.map((sessionId) => cloud.abandonUpload(sessionId).catch(() => undefined)));
       setError(cause instanceof Error ? cause.message : 'The Bunny upload could not be completed.');
     } finally {
       setUploading(false);
     }
   };
-
   const onFiles = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files ? Array.from(event.target.files) : [];
     event.target.value = '';
