@@ -97,7 +97,7 @@ export function extractOfficeAiDocumentText(doc: {
   return doc.textBetween(0, doc.content.size, '\n');
 }
 
-export function buildOfficeAiDocumentSummaryRequest(documentText: string, workspaceId: string): OfficeAiDocumentSummaryRequest {
+export function buildOfficeAiDocumentSummaryRequest(documentText: string, workspaceId = '*'): OfficeAiDocumentSummaryRequest {
   if (typeof workspaceId !== 'string' || (workspaceId !== '*' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId))) throw new OfficeAiError('WORKSPACE_REQUIRED', 'Choose an Office workspace with COCCE AI enabled.');
   if (!documentText.trim()) throw new OfficeAiError('DOCUMENT_TEXT_REQUIRED', 'This document has no text to summarize.');
   if (documentText.length > OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS) {
@@ -110,7 +110,7 @@ export function buildOfficeAiDocumentSummaryRequest(documentText: string, worksp
   return payload;
 }
 
-export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: string, prompt: string, workspaceId: string): OfficeAiRequest {
+export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: string, prompt: string, workspaceId = '*'): OfficeAiRequest {
   if (typeof workspaceId !== 'string' || (workspaceId !== '*' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId))) throw new OfficeAiError('WORKSPACE_REQUIRED', 'Choose an Office workspace with COCCE AI enabled.');
   const cleanPrompt = prompt.trim();
   if (cleanPrompt.length > OFFICE_AI_MAX_PROMPT_CHARS) {
