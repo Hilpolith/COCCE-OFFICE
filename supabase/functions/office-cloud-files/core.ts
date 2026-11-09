@@ -22,9 +22,11 @@ function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS.has(origin)) return true;
   try {
     const parsed = new URL(origin);
+    const hostname = parsed.hostname.toLowerCase();
     return parsed.protocol === 'https:'
       && parsed.origin === origin
-      && /^cocce-office(?:-[a-z0-9-]+)?-hilpolithrothschild-7822s-projects\.vercel\.app$/i.test(parsed.hostname);
+      && hostname.startsWith('cocce-office-')
+      && hostname.endsWith('-hilpolithrothschild-7822s-projects.vercel.app');
   } catch {
     return false;
   }
