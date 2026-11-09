@@ -67,8 +67,9 @@ export default function OfficeAccountControl() {
   useEffect(() => {
     if (!client) return undefined;
     let alive = true;
-    const { data: subscription } = client.auth.onAuthStateChange((_event, session) => {
+    const { data: subscription } = client.auth.onAuthStateChange((event, session) => {
       eventVersion.current += 1;
+      if (event === 'PASSWORD_RECOVERY') { setMode('recovery'); setOpen(true); setNotice('Choose a new password for your COCCE account.'); }
       const nextUser = session?.user ?? null;
       setUser(nextUser);
       setPassword('');
