@@ -93,7 +93,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     <div className="office-ai-hero">
       <div className="office-ai-orbit office-ai-orbit-one" /><div className="office-ai-orbit office-ai-orbit-two" />
       <div className="office-ai-mark"><Sparkles size={25} /></div>
-      <div><span className="eyebrow">COCCE OFFICE · INTELLIGENCE</span><h1>COCCE AI</h1><p>Ask questions and work through ideas with the context of a conversation you already have permission to access.</p></div>
+      <div><span className="eyebrow">COCCE OFFICE · INTELLIGENCE</span><h1>COCCE AI</h1><p>Ask questions across the workspaces you belong to. Workspace owners can switch AI access off at any time.</p></div>
       <span className="office-ai-free"><span /> FREE MODEL ONLY</span>
     </div>
     <section className="office-ai-shell glass-card">
@@ -105,9 +105,9 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       {status === 'ready' && <>
         <div className="office-ai-context"><label>Workspace<select value={workspaceId} onChange={event => void changeWorkspace(event.target.value)}><option value="*">All authorised workspaces</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label><label className="office-ai-context-toggle"><span>Workspace context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · private prompt only'}</small></span></label></div>
         {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before using workspace-aware AI.</div>}
-        <div className="office-ai-answer" aria-live="polite">{answer ? <><div className="office-ai-answer-label"><Sparkles size={14} /> COCCE AI</div><p>{answer}</p></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose a conversation and ask for a summary, a plan, a draft, or help thinking through the discussion.</span></div>}</div>
+        <div className="office-ai-answer" aria-live="polite">{answer ? <><div className="office-ai-answer-label"><Sparkles size={14} /> COCCE AI</div><p>{answer}</p></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose one workspace or all AI-enabled workspaces. Ask for summaries, plans, drafts, and practical next steps.</span></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder="Ask across your workspace…" disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
-        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI can read up to 20 authorised workspaces, sampling up to 2 conversations and 2 recent messages per conversation through membership-checked RPCs. Drive file contents are not included in this release.' : 'Workspace context is off. Your prompt is sent without team conversation history.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
+        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI can read up to 20 AI-enabled authorised workspaces, sampling up to 2 conversations and 2 recent messages per conversation through membership-checked RPCs. Drive file contents are not included in this release.' : 'Workspace context is off. Your prompt is sent without team conversation history.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
       </>}
       {error && status === 'ready' && <div className="office-ai-error" role="alert"><AlertCircle size={14} /> {error}</div>}
     </section>
