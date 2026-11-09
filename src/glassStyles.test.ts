@@ -89,6 +89,8 @@ describe('glass design rendering boundaries', () => {
     expect(controlledBlurSelectors).toContain('.docs-format-toolbar');
     expect(controlledBlurSelectors).toContain('.team-panel');
     expect(controlledBlurSelectors).toContain('.office-collab-panel');
+    expect(controlledBlurSelectors).toContain('.office-ai-hero');
+    expect(controlledBlurSelectors).toContain('.office-ai-shell');
     expect(controlledBlurSelectors).toContain('.frosted-confirm-backdrop');
   });
 
