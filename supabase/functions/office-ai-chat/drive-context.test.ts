@@ -89,6 +89,13 @@ describe('COCCE AI selected Drive context', () => {
   it('limits selected files and caps the combined context to 20,000 characters', async () => {
     await expect(loadSelectedDriveFiles([fileId, fileId], enabled, supabaseUrl, 'key', 'jwt', vi.fn()))
       .rejects.toMatchObject({ status: 400, code: 'DRIVE_FILE_SELECTION_INVALID' });
+    await expect(loadSelectedDriveFiles([
+      fileId,
+      '55555555-5555-4555-8555-555555555555',
+      '66666666-6666-4666-8666-666666666666',
+      '77777777-7777-4777-8777-777777777777',
+    ], enabled, supabaseUrl, 'key', 'jwt', vi.fn()))
+      .rejects.toMatchObject({ status: 400, code: 'DRIVE_FILE_SELECTION_INVALID' });
     const fileIds = [
       fileId,
       '55555555-5555-4555-8555-555555555555',
