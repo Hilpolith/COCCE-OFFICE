@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import {
   ArrowLeft, ArrowRight, Building2, CalendarDays, Check,
@@ -10,18 +10,19 @@ import {
   returnIndustryWorkItem, writeIndustryState,
 } from './lib/industryWorkspaces';
 import type { IndustryId, IndustryState, IndustryTeamSetup } from './lib/industryWorkspaces';
-import IndustrySharedWorkspace from './IndustrySharedWorkspace';
-import GovernmentCorrespondenceWorkspace from './GovernmentCorrespondenceWorkspace';
-import SchoolManagementWorkspace from './SchoolManagementWorkspace';
-import UniversityManagementWorkspace from './UniversityManagementWorkspace';
-import BusinessManagementWorkspace from './BusinessManagementWorkspace';
-import AccountingManagementWorkspace from './AccountingManagementWorkspace';
-import ManufacturingManagementWorkspace from './ManufacturingManagementWorkspace';
-import HealthAdminManagementWorkspace from './HealthAdminManagementWorkspace';
-import NgoManagementWorkspace from './NgoManagementWorkspace';
-import HospitalityManagementWorkspace from './HospitalityManagementWorkspace';
-import InstitutionsManagementWorkspace from './InstitutionsManagementWorkspace';
 import './industrySuites.css';
+
+const IndustrySharedWorkspace = lazy(() => import('./IndustrySharedWorkspace'));
+const GovernmentCorrespondenceWorkspace = lazy(() => import('./GovernmentCorrespondenceWorkspace'));
+const SchoolManagementWorkspace = lazy(() => import('./SchoolManagementWorkspace'));
+const UniversityManagementWorkspace = lazy(() => import('./UniversityManagementWorkspace'));
+const BusinessManagementWorkspace = lazy(() => import('./BusinessManagementWorkspace'));
+const AccountingManagementWorkspace = lazy(() => import('./AccountingManagementWorkspace'));
+const ManufacturingManagementWorkspace = lazy(() => import('./ManufacturingManagementWorkspace'));
+const HealthAdminManagementWorkspace = lazy(() => import('./HealthAdminManagementWorkspace'));
+const NgoManagementWorkspace = lazy(() => import('./NgoManagementWorkspace'));
+const HospitalityManagementWorkspace = lazy(() => import('./HospitalityManagementWorkspace'));
+const InstitutionsManagementWorkspace = lazy(() => import('./InstitutionsManagementWorkspace'));
 
 const accentByIndustry: Record<IndustryId, string> = {
   government: '#ff9b63', school: '#55d5c3', university: '#77a9ff', business: '#be91ff',
@@ -326,6 +327,7 @@ export default function IndustrySuitesWorkspace({
         <span className="industry-team-status is-linked">Institutions management</span>
         <button type="button" className="button-secondary" onClick={openTeam}><Users size={14} /> Open team</button>
       </div>}
+      <Suspense fallback={<div className="industry-shared-state" role="status">Opening specialist management workspace…</div>}>
       {activeOffice.industryId === 'government' && governmentPanel === 'correspondence'
         ? <GovernmentCorrespondenceWorkspace
           key={`government-${activeOffice.teamWorkspaceId}`}
@@ -419,6 +421,7 @@ export default function IndustrySuitesWorkspace({
           definition={definition}
           accent={accent}
         />}
+      </Suspense>
     </>}
 
     {!activeOffice && !createOpen && <section className="industry-empty-office glass-card"><div className="industry-empty-icon"><Building2 size={21} /></div><h2>Create your first industry office</h2><p>Choose an industry to get its working register and stage flow.</p><button className="button-primary" onClick={() => setCreateOpen(true)}><Plus size={15} /> Choose an industry</button></section>}
