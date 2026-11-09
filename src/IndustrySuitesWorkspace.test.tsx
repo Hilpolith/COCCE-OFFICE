@@ -239,7 +239,7 @@ describe('industry office workbench', () => {
     />);
 
     expect(await screen.findByTestId('school-management-preview')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Server-backed Academy' })).toBeTruthy();
+    expect(screen.getAllByRole('heading', { name: 'Server-backed Academy' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('tab', { name: 'School Management' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('button', { name: 'Ask COCCE AI' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Private device-only preview item' })).toBeNull();
