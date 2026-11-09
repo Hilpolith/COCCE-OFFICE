@@ -51,3 +51,17 @@ The package now includes dedicated PostgreSQL acceptance suites for Government, 
 ## Deployment baseline at audit time
 
 The latest code deployment for `main` is READY and corresponds to commit `dc63aa98bf5f26b78a5d615b90827ae63dcdaebe` (`Code-split all ten sector management workspaces`). The audit-document-only follow-up commit is `aea960365a6a2a41ed8f4d813ad92496efb68279` and does not change application code. All ten specialist sector components are now lazy-loaded. The main application JavaScript chunk fell from approximately 1,711.81 kB (gzip 451.92 kB) to 885.04 kB (gzip 249.73 kB), about a 48% reduction in the main chunk. The build still reports separate large Docs/PDF chunks; this is a performance warning, not a failed build. Production READY confirms deployability, not completion of all ten sector workflows.
+
+
+## Focused Office RPC privilege review — 2026-11-09
+
+A read-only catalogue query over the connected COCCE database found 117 public `office_*` functions. Of these, 105 are `SECURITY DEFINER`; all 105 pin an empty `search_path`. No `office_*` function is executable by `anon`. Seventy-six definer functions are directly executable by `authenticated`; the remainder are not granted to authenticated callers. Twelve functions did not contain a direct `auth.uid()` or membership-table check in their own source, so their private guard helpers were inspected individually:
+
+- Business reads call `office_private.business_require`, which requires a non-null authenticated user, active workspace membership, a Business industry profile, and the caller's assigned business role for protected resources.
+- Government archive, attachment, outbound, and record-control reads call `office_private.government_has_role` or `office_private.government_can_view_record`, which verify active membership and role/record scope.
+- Industry work-item reads and event history call `office_private.is_active_member` and enforce workspace/industry ownership.
+- School timetable reads call `office_private.school_timetable_authorize`, which verifies authentication, active membership, School profile, and owner/admin privileges for writes.
+
+The inspected private helpers also use an empty search path and are not executable by `anon`. The `is_active_member` helper is callable by authenticated users and returns only a membership boolean. This targeted review found no anonymous execution path in the Office RPC namespace. It is not a substitute for full role-by-role mutation and data-disclosure tests, which remain CI acceptance gates.
+
+The Supabase security advisor continues to report two ERROR findings on shared legacy `public.orders` and `public.order_items` tables where policies exist but RLS is disabled. These tables are outside COCCE Office's scope and were not changed. Numerous RLS-enabled/no-policy INFO findings on private Office and shared app tables were also left intact; the intended access path is through reviewed membership/role-gated RPCs, not broad table policies.
