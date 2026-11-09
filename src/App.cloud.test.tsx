@@ -64,7 +64,7 @@ const spreadsheet = {
 async function open() {
   render(<App />);
   fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
   fireEvent.click(
     screen.getByRole('button', { name: /Original local document/ }),
   );
@@ -79,7 +79,7 @@ async function openSheets() {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, workbooks: [spreadsheet] }));
   render(<App />);
   fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Sheets' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Sheets' }));
   fireEvent.click(screen.getByRole('button', { name: /Original local spreadsheet/ }));
   await screen.findByRole('textbox', { name: 'Formula or value for A1' });
 }
