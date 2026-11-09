@@ -1,10 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
 import OfficeSuiteAiAction from './OfficeSuiteAiAction';
-
-afterEach(() => {
-  window.removeEventListener('cocce-office:navigate', vi.fn());
-});
 
 it('opens COCCE AI with the active workspace and current suite tab context', () => {
   const received: CustomEvent[] = [];
