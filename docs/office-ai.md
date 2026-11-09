@@ -55,3 +55,10 @@ The Edge Function is deployed as `office-ai-chat` with JWT verification enabled.
 
 
 Workspace owners and administrators can disable or re-enable COCCE AI per workspace in Team & Collaboration. The setting is stored on the workspace, not in browser state. The AI Edge Function checks it for every workspace in the selected scope; disabled workspaces are excluded, and a request is rejected if no enabled workspace remains. Members can see the setting but cannot change it. Context-off requests still respect the workspace AI setting.
+
+
+## Deployment verification — 2026-11-09
+
+The current workspace-wide Edge Function is ACTIVE as version 7 in the existing COCCE Supabase project, with `verify_jwt=true`. Its deployment was inspected after release and includes the all-authorised-workspaces loop and workspace-level AI gate. The `office_get_workspace_ai_enabled(uuid)` RPC returns a boolean and is executable by authenticated users only; it checks active membership server-side before returning the setting. The workspace/conversation/message RPCs likewise require authenticated execution and membership checks.
+
+The repository's full `pnpm test` suite passed in an isolated sandbox using PostgreSQL 18 for the repository's SQL-backed migration checks. The clean TypeScript/Vite build passed. Production Vercel deployment is currently blocked by the team's HTTP 402 `api-deployments-free-per-day` limit; no production release is claimed for this code until a deployment of the current `main` commit reaches READY.
