@@ -30,6 +30,7 @@ export const officeTeamApi = {
   createWorkspace: (client: RpcClient, name: string, description = '') => rpc<string>(client, 'office_create_workspace', { p_name: name, p_description: description }),
   createWorkspaceWithSuite: (client: RpcClient, name: string, description: string, suiteId: OfficeSuiteId) => rpc<string>(client, 'office_create_workspace_with_suite', { p_name: name, p_description: description, p_suite_id: suiteId }),
   listWorkspaceSuites: (client: RpcClient) => rpc<OfficeWorkspaceSuite[]>(client, 'office_list_workspace_suites'),
+  setWorkspaceSuite: (client: RpcClient, workspaceId: string, suiteId: OfficeSuiteId) => rpc<void>(client, 'office_set_workspace_suite', { p_workspace_id: workspaceId, p_suite_id: suiteId }),
   listMyInvitations: (client: RpcClient) => rpc<OfficeInvitation[]>(client, 'office_list_my_invitations'),
   respondInvitation: (client: RpcClient, invitationId: string, accept: boolean) => rpc<void>(client, 'office_respond_invitation', { p_invitation_id: invitationId, p_accept: accept }),
   listMembers: async (client: RpcClient, workspaceId: string) => {
