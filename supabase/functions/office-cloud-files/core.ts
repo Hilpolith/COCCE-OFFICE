@@ -562,7 +562,8 @@ export function createOfficeCloudHandler({
     const origin = request.headers.get('origin');
     if (origin && !isAllowedOrigin(origin)) return jsonResponse(null, 403, { error: 'ORIGIN_NOT_ALLOWED', message: 'This Office origin is not allowed.' });
     if (request.method === 'OPTIONS') {
-      if (origin && !ALLOWED_ORIGINS.has(origin)) return jsonResponse(null, 403, { error: 'ORIGIN_NOT_ALLOWED', message: 'This Office origin is not allowed.' });
+      // The shared origin validator above also authorises the exact linked Vercel
+      // preview hostname; do not narrow preflight back to the two static origins.
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
     if (request.method !== 'POST') return jsonResponse(origin, 405, { error: 'METHOD_NOT_ALLOWED', message: 'Use POST for Office cloud file operations.' });
