@@ -9,6 +9,7 @@ import type { OfficeDocument } from './lib/localStore';
 import { formatFileSize, localDriveRepository, MAX_LOCAL_FILE_BYTES } from './lib/driveStore';
 import type { DriveFile, DriveRepository } from './lib/driveStore';
 import './drive.css';
+import CloudDriveWorkspace from './CloudDriveWorkspace';
 
 interface Props {
   workspaceId: string | null;
@@ -57,6 +58,7 @@ export default function DriveWorkspace({
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [showTrash, setShowTrash] = useState(false);
   const [fileCategory, setFileCategory] = useState<DriveCategory>('all');
+  const [driveMode, setDriveMode] = useState<'device' | 'cloud'>('device');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -185,6 +187,11 @@ export default function DriveWorkspace({
 
   return (
     <div className="page subpage drive-page">
+      <div className="drive-mode-tabs" role="tablist" aria-label="Drive storage">
+        <button type="button" role="tab" aria-selected={driveMode === 'device'} className={driveMode === 'device' ? 'is-active' : ''} onClick={() => setDriveMode('device')}><HardDrive size={15}/> This device</button>
+        <button type="button" role="tab" aria-selected={driveMode === 'cloud'} className={driveMode === 'cloud' ? 'is-active' : ''} onClick={() => setDriveMode('cloud')}><LockKeyhole size={15}/> Cloud workspaces</button>
+      </div>
+      {driveMode === 'cloud' ? <CloudDriveWorkspace query={query} /> : <>
       <div className="page-title-row drive-title-row">
         <div><span className="eyebrow">COCCE DRIVE · BROWSER-LOCAL MODE</span><h1>{showTrash ? 'Trash' : 'My files'}</h1><p className="page-lede">Add files to this browser, preview and download them, or move them to a restorable local trash. These files are not synced or backed up.</p></div>
         <div className="drive-title-actions">
@@ -228,6 +235,7 @@ export default function DriveWorkspace({
       {renameTarget && <Dialog title="Rename file" onClose={() => setRenameTarget(null)}><label className="drive-dialog-label" htmlFor="drive-rename">File name</label><input id="drive-rename" className="drive-dialog-input" value={renameValue} maxLength={255} autoFocus onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void saveRename(); if (event.key === 'Escape') setRenameTarget(null); }} />{error && <p className="drive-dialog-error" role="alert">{error}</p>}<div className="drive-dialog-actions"><button className="button-secondary" onClick={() => setRenameTarget(null)}>Cancel</button><button className="button-primary" onClick={() => void saveRename()}><Check size={15} /> Save name</button></div></Dialog>}
       {purgeTarget && <Dialog title="Delete this file permanently?" onClose={() => setPurgeTarget(null)}><p className="drive-purge-copy"><strong>{purgeTarget.name}</strong> and its locally stored bytes will be removed from this browser. This cannot be undone.</p><div className="drive-dialog-actions"><button className="button-secondary" onClick={() => setPurgeTarget(null)}>Cancel</button><button className="button-primary drive-purge-confirm" onClick={() => void permanentlyDelete()}><Trash2 size={15} /> Delete permanently</button></div></Dialog>}
       {preview && <PreviewDialog preview={preview} onClose={() => setPreview(null)} onDownload={() => downloadBlob(preview.blob, preview.file.name)} />}
+      </>}
     </div>
   );
 }
