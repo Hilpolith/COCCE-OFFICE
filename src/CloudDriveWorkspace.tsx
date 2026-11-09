@@ -119,6 +119,13 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   }, [client, schemaReady, loadWorkspaces]);
 
   useEffect(() => {
+    setSelectedStoragePlan(null);
+    setStoragePinAction(null);
+    setWalletPin('');
+    setAutoRenewChoice(false);
+  }, [workspaceId]);
+
+  useEffect(() => {
     if (!initialWorkspaceId || !workspaces.some((row) => row.workspace_id === initialWorkspaceId) || workspaceId === initialWorkspaceId) return;
     sequence.current += 1;
     setWorkspaceId(initialWorkspaceId);
@@ -413,8 +420,8 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
           <label className="drive-storage-pin-field"><span>COCCE Wallet PIN</span><input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={walletPin} onChange={(event) => setWalletPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit PIN" aria-label="COCCE Wallet PIN"/></label>
           <p className="drive-storage-dialog-note">After the subscription expires, its add-on quota is removed. Existing files are not deleted; new uploads may pause until usage is below the remaining quota.</p>
           <div className="drive-storage-dialog-actions">
-            <button type="button" className="button-secondary" onClick={() => setSelectedStoragePlan(null)} disabled={storageBusy}>Cancel</button>
-            <button type="button" className="button-primary" onClick={() => void purchaseStorage()} disabled={storageBusy}>{storageBusy ? 'Processing…' : 'Purchase · ' + selectedStoragePlan.monthlyCoins.toLocaleString() + ' Coins'}</button>
+            <button type="button" className="button-secondary" onClick={() => { setSelectedStoragePlan(null); setWalletPin(''); setAutoRenewChoice(false); }} disabled={storageBusy}>Cancel</button>
+            <button type="button" className="button-primary" onClick={() => void purchaseStorage()} disabled={storageBusy || !/^\d{4}$/.test(walletPin)}>{storageBusy ? 'Processing…' : 'Purchase · ' + selectedStoragePlan.monthlyCoins.toLocaleString() + ' Coins'}</button>
           </div>
         </section>
       </div>}
