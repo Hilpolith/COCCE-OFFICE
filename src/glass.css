@@ -132,7 +132,7 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
-  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .mobile-scrim, .slides-present-overlay, .docs-format-toolbar, .team-panel, .office-collab-panel, .frosted-confirm-backdrop) {
+  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .drive-storage-dialog-backdrop, .mobile-scrim, .slides-present-overlay, .docs-format-toolbar, .team-panel, .office-collab-panel, .frosted-confirm-backdrop) {
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
@@ -171,7 +171,7 @@
   :root :is(.team-panel, .office-collab-panel, .docs-format-toolbar) {
     background: var(--glass-sheen), var(--glass-surface);
   }
-  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .mobile-scrim, .frosted-confirm-backdrop) { background: var(--glass-veil); }
+  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .drive-storage-dialog-backdrop, .mobile-scrim, .frosted-confirm-backdrop) { background: var(--glass-veil); }
   :root .theme-swatch::before { -webkit-backdrop-filter: var(--glass-mini-filter); backdrop-filter: var(--glass-mini-filter); }
   .sidebar, .topbar {
     background: var(--glass-sheen), var(--glass-nav);
