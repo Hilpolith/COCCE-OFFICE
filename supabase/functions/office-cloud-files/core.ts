@@ -329,7 +329,7 @@ async function verifyUser(config: CloudConfig, token: string, fetcher: Fetcher):
 }
 
 async function officeRpc(config: CloudConfig, name: string, payload: Record<string, unknown>, fetcher: Fetcher): Promise<unknown> {
-  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload)$/.test(name)) {
+  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload|list_storage_plans|list_storage_subscriptions|list_storage_history|purchase_storage_subscription|renew_storage_subscription|set_storage_subscription_auto_renew)$/.test(name)) {
     throw new Error('Office RPC not allowed');
   }
   const response = await fetcher(`${config.supabaseUrl}/rest/v1/rpc/${name}`, {
@@ -381,6 +381,7 @@ function apiErrorStatus(error: unknown): number {
   const rpcError = error as RpcError | null;
   const status = rpcError?.status;
   if (rpcError?.sqlState === '42501') return 403;
+  if (rpcError?.sqlState === 'P0001') return 402;
   if (rpcError?.sqlState === '55000') return 409;
   if (rpcError?.sqlState === '54000') return 429;
   if (rpcError?.sqlState === '22023') return 400;
@@ -497,6 +498,77 @@ function safeByteCount(value: unknown): number | null {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+const STORAGE_PLAN_CODES = new Set([
+  'storage_5gb_monthly','storage_25gb_monthly','storage_100gb_monthly',
+  'storage_250gb_monthly','storage_1tb_monthly','storage_2tb_monthly',
+]);
+const STORAGE_SUBSCRIPTION_STATUSES = new Set(['active','past_due','expired']);
+const STORAGE_EVENT_TYPES = new Set([
+  'purchased','renewed','renewal_failed','auto_renew_enabled','auto_renew_disabled','expired',
+]);
+function safeStoragePlans(value: unknown): Record<string, unknown>[] {
+  return rpcRows(value).filter((row) => STORAGE_PLAN_CODES.has(String(row.plan_code))
+    && typeof row.display_name === 'string' && row.display_name.length <= 80
+    && safeByteCount(row.quota_bytes) !== null
+    && Number.isSafeInteger(row.monthly_coins) && Number(row.monthly_coins) > 0
+    && Number.isSafeInteger(row.sort_order) && Number(row.sort_order) > 0)
+    .map((row) => ({
+      planCode: row.plan_code, displayName: row.display_name,
+      quotaBytes: safeByteCount(row.quota_bytes), monthlyCoins: row.monthly_coins,
+      sortOrder: row.sort_order,
+    }));
+}
+function safeStorageSubscriptions(value: unknown): Record<string, unknown>[] {
+  return rpcRows(value).filter((row) => uuid(row.subscription_id)
+    && STORAGE_PLAN_CODES.has(String(row.plan_code))
+    && typeof row.display_name === 'string'
+    && safeByteCount(row.quota_bytes) !== null
+    && Number.isSafeInteger(row.monthly_coins) && Number(row.monthly_coins) > 0
+    && STORAGE_SUBSCRIPTION_STATUSES.has(String(row.status))
+    && typeof row.auto_renew === 'boolean' && typeof row.cancel_at_period_end === 'boolean'
+    && typeof row.current_period_start === 'string' && Number.isFinite(Date.parse(row.current_period_start))
+    && typeof row.current_period_end === 'string' && Number.isFinite(Date.parse(row.current_period_end))
+    && typeof row.created_at === 'string' && Number.isFinite(Date.parse(row.created_at)))
+    .map((row) => ({
+      subscriptionId: row.subscription_id, planCode: row.plan_code, displayName: row.display_name,
+      quotaBytes: safeByteCount(row.quota_bytes), monthlyCoins: row.monthly_coins,
+      status: row.status, autoRenew: row.auto_renew, cancelAtPeriodEnd: row.cancel_at_period_end,
+      currentPeriodStart: row.current_period_start, currentPeriodEnd: row.current_period_end,
+      nextBillingAt: row.next_billing_at ?? null, graceUntil: row.grace_until ?? null,
+      lastBilledAt: row.last_billed_at ?? null, createdAt: row.created_at,
+    }));
+}
+function safeStorageHistory(value: unknown): Record<string, unknown>[] {
+  return rpcRows(value).filter((row) => uuid(row.event_id) && uuid(row.subscription_id)
+    && STORAGE_EVENT_TYPES.has(String(row.event_type))
+    && STORAGE_PLAN_CODES.has(String(row.plan_code))
+    && typeof row.display_name === 'string'
+    && Number.isSafeInteger(row.coins) && Number(row.coins) >= 0
+    && safeByteCount(row.quota_bytes) !== null
+    && typeof row.created_at === 'string' && Number.isFinite(Date.parse(row.created_at)))
+    .map((row) => ({
+      eventId: row.event_id, subscriptionId: row.subscription_id,
+      eventType: row.event_type, planCode: row.plan_code, displayName: row.display_name,
+      coins: row.coins, quotaBytes: safeByteCount(row.quota_bytes), createdAt: row.created_at,
+    }));
+}
+function safeStoragePurchase(value: Record<string, unknown>): Record<string, unknown> | null {
+  if (!uuid(value.subscription_id) || !STORAGE_PLAN_CODES.has(String(value.plan_code))
+    || !STORAGE_SUBSCRIPTION_STATUSES.has(String(value.status))
+    || !Number.isSafeInteger(value.monthly_coins) || Number(value.monthly_coins) <= 0
+    || safeByteCount(value.quota_bytes) === null || typeof value.auto_renew !== 'boolean'
+    || typeof value.replayed !== 'boolean'
+    || typeof value.current_period_end !== 'string' || !Number.isFinite(Date.parse(value.current_period_end))) return null;
+  return {
+    subscriptionId: value.subscription_id, planCode: value.plan_code,
+    displayName: typeof value.display_name === 'string' ? value.display_name : '',
+    quotaBytes: safeByteCount(value.quota_bytes), monthlyCoins: value.monthly_coins,
+    status: value.status, autoRenew: value.auto_renew,
+    currentPeriodEnd: value.current_period_end,
+    balance: safeByteCount(value.balance), replayed: value.replayed,
+  };
+}
+
 function safeUsageRecord(value: Record<string, unknown>): Record<string, unknown> | null {
   const workspaceId = value.workspace_id;
   const tierCode = value.tier_code;
@@ -544,6 +616,7 @@ function safeTrashRows(rows: Record<string, unknown>[], expectedWorkspaceId: str
 
 function errorMessage(status: number): string {
   if (status === 400) return 'The storage request is invalid.';
+  if (status === 402) return 'Your COCCE Coin balance is too low for this storage plan.';
   if (status === 401) return 'Sign in again to continue.';
   if (status === 403 || status === 404) return 'This file or workspace is unavailable to your account.';
   if (status === 409) return 'This upload is no longer available. Start a new upload or retry the current session.';
@@ -839,6 +912,86 @@ export function createOfficeCloudHandler({
           throw new Error('Invalid Office sync state response');
         }
         return jsonResponse(origin, 200, { syncState });
+      }
+
+      if (body.action === 'storage_plans') {
+        if (!onlyKeys(body, ['action', 'workspaceId']) || !uuid(body.workspaceId)) return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        const plans = safeStoragePlans(await officeRpc(config, 'office_cloud_list_storage_plans', {
+          p_actor_id: actorId, p_workspace_id: body.workspaceId.toLowerCase(),
+        }, fetchImpl));
+        return jsonResponse(origin, 200, { plans });
+      }
+
+      if (body.action === 'storage_subscriptions') {
+        if (!onlyKeys(body, ['action', 'workspaceId']) || !uuid(body.workspaceId)) return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        const subscriptions = safeStorageSubscriptions(await officeRpc(config, 'office_cloud_list_storage_subscriptions', {
+          p_actor_id: actorId, p_workspace_id: body.workspaceId.toLowerCase(),
+        }, fetchImpl));
+        return jsonResponse(origin, 200, { subscriptions });
+      }
+
+      if (body.action === 'storage_history') {
+        if (!onlyKeys(body, ['action', 'workspaceId']) || !uuid(body.workspaceId)) return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        const events = safeStorageHistory(await officeRpc(config, 'office_cloud_list_storage_history', {
+          p_actor_id: actorId, p_workspace_id: body.workspaceId.toLowerCase(),
+        }, fetchImpl));
+        return jsonResponse(origin, 200, { events });
+      }
+
+      if (body.action === 'purchase_storage') {
+        if (!onlyKeys(body, ['action', 'workspaceId', 'planCode', 'idempotencyKey', 'autoRenew'])
+          || !uuid(body.workspaceId) || !uuid(body.idempotencyKey)
+          || typeof body.planCode !== 'string' || !STORAGE_PLAN_CODES.has(body.planCode)
+          || (body.autoRenew !== undefined && typeof body.autoRenew !== 'boolean')) {
+          return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        }
+        const result = rpcObject(await officeRpc(config, 'office_cloud_purchase_storage_subscription', {
+          p_actor_id: actorId, p_workspace_id: body.workspaceId.toLowerCase(),
+          p_plan_code: body.planCode, p_idempotency_key: body.idempotencyKey,
+          p_auto_renew: body.autoRenew === true,
+        }, fetchImpl));
+        const purchase = result ? safeStoragePurchase(result) : null;
+        if (!purchase) throw new Error('Invalid storage purchase response');
+        return jsonResponse(origin, 200, { purchase });
+      }
+
+      if (body.action === 'renew_storage') {
+        if (!onlyKeys(body, ['action', 'subscriptionId', 'idempotencyKey'])
+          || !uuid(body.subscriptionId) || !uuid(body.idempotencyKey)) {
+          return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        }
+        const result = rpcObject(await officeRpc(config, 'office_cloud_renew_storage_subscription', {
+          p_actor_id: actorId, p_subscription_id: body.subscriptionId.toLowerCase(),
+          p_idempotency_key: body.idempotencyKey,
+        }, fetchImpl));
+        if (!result || !uuid(result.subscription_id) || !STORAGE_SUBSCRIPTION_STATUSES.has(String(result.status))
+          || typeof result.current_period_end !== 'string' || !Number.isFinite(Date.parse(result.current_period_end))
+          || typeof result.replayed !== 'boolean') throw new Error('Invalid storage renewal response');
+        return jsonResponse(origin, 200, { renewal: {
+          subscriptionId: result.subscription_id, status: result.status,
+          currentPeriodEnd: result.current_period_end, replayed: result.replayed,
+          balance: safeByteCount(result.balance),
+        } });
+      }
+
+      if (body.action === 'set_storage_auto_renew') {
+        if (!onlyKeys(body, ['action', 'subscriptionId', 'autoRenew'])
+          || !uuid(body.subscriptionId) || typeof body.autoRenew !== 'boolean') {
+          return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        }
+        const result = rpcObject(await officeRpc(config, 'office_cloud_set_storage_subscription_auto_renew', {
+          p_actor_id: actorId, p_subscription_id: body.subscriptionId.toLowerCase(),
+          p_auto_renew: body.autoRenew,
+        }, fetchImpl));
+        if (!result || !uuid(result.subscription_id) || typeof result.auto_renew !== 'boolean'
+          || typeof result.cancel_at_period_end !== 'boolean'
+          || typeof result.current_period_end !== 'string' || !Number.isFinite(Date.parse(result.current_period_end))) {
+          throw new Error('Invalid storage auto-renew response');
+        }
+        return jsonResponse(origin, 200, { subscription: {
+          subscriptionId: result.subscription_id, autoRenew: result.auto_renew,
+          cancelAtPeriodEnd: result.cancel_at_period_end, currentPeriodEnd: result.current_period_end,
+        } });
       }
 
       if (body.action === 'get_usage') {
