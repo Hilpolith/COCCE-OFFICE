@@ -39,3 +39,6 @@
 
 .drive-cloud-load-more{display:flex;justify-content:center;padding:6px 0 14px}
 .drive-preview-docx{width:100%;min-height:65vh;border:0;border-radius:14px;background:#fff}
+
+
+.drive-cloud-active-workspace{display:flex;align-items:center;gap:10px;min-width:170px;min-height:42px;padding:7px 12px;border:1px solid var(--border);border-radius:13px;background:linear-gradient(135deg,rgba(255,255,255,.085),rgba(255,255,255,.035));color:var(--muted)}.drive-cloud-active-workspace>svg{flex:none;color:var(--accent)}.drive-cloud-active-workspace>span{display:grid;gap:3px;min-width:0}.drive-cloud-active-workspace small{font-size:8px;letter-spacing:.11em;color:var(--faint)}.drive-cloud-active-workspace strong{overflow:hidden;color:var(--text);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
