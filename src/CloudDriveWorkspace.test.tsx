@@ -80,7 +80,7 @@ describe('Cloud Drive workspace', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^DOCX brief\.docx/ }));
     const frame = await screen.findByTitle('brief.docx') as HTMLIFrameElement;
     expect(mocks.importDocxFile).toHaveBeenCalledWith(expect.any(File));
-    expect(frame.getAttribute('sandbox')).toBe('');
+    expect(frame.sandbox.length).toBe(0);
     expect(frame.getAttribute('srcdoc')).toContain('Imported brief');
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(docxFile);
   });
