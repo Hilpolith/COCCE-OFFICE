@@ -1,3 +1,4 @@
+import OfficeSuiteAiAction from './OfficeSuiteAiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -477,6 +478,7 @@ export default function SchoolManagementWorkspace({
     {status === 'error' && <div className="industry-shared-state is-alert" role="alert"><CircleAlert size={16} /><div><strong>School workspace unavailable</strong><span>{feedback || 'Check the Office Team connection and try again.'}</span></div></div>}
     {status === 'setup-required' && <section className="industry-shared-setup glass-card"><span className="industry-shared-setup-icon"><GraduationCap size={18} /></span><div><h2>Connect this team to Schools</h2><p>This creates an empty School profile only. It does not import device-local entries or school data.</p></div>{workspace && ['owner','admin'].includes(workspace.role) ? <button className="button-primary" type="button" disabled={profileBusy} onClick={() => void createProfile()}><Plus size={14} />Create empty School profile</button> : <p>Ask an Office Team owner/admin to create the School profile.</p>}</section>}
     {status === 'ready' && <>
+      <div className="office-suite-ai-toolbar"><OfficeSuiteAiAction workspaceId={workspaceId} suiteLabel="Schools" tabLabel={selectedTab.replaceAll("_", " ")} /></div>
       <div className="school-sms-module-tabs" role="tablist" aria-label="School Management modules">{visibleTabs.map(({ id, label, icon: Icon }, index) => <button type="button" role="tab" id={`school-tab-${id}`} aria-controls={`school-panel-${id}`} tabIndex={selectedTab === id ? 0 : -1} aria-selected={selectedTab === id} className={activeTab === id ? 'is-active' : ''} key={id} onClick={() => selectTab(id)} onKeyDown={(event) => handleTabKeyDown(event, index)}><Icon size={14} />{label}</button>)}</div>
       {role === 'unassigned' && <div className="school-sms-unassigned" role="note"><ShieldAlert size={15} />This account is an active Office Team member, but has no School role yet. Ask the Office Team owner/admin to assign Registrar, Teacher, Bursar or Viewer access.</div>}
       {selectedTab === 'overview' && <section id="school-panel-overview" role="tabpanel" className="school-sms-overview-grid">
