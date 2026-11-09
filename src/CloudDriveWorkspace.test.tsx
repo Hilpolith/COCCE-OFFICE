@@ -53,6 +53,8 @@ const cloudFile = { fileId: 'file-1', workspaceId: 'workspace-1', displayName: '
 const usage = { workspaceId: 'workspace-1', tierCode: 'small_office', baseQuotaBytes: 1000, purchasedQuotaBytes: 0, quotaBytes: 1000, activeStoredBytes: 5, trashBytes: 0, reservedBytes: 0, totalConsumedBytes: 5, availableBytes: 995, usagePercent: 0, warningAtPercent: 0 };
 
 beforeEach(() => {
+  vi.unstubAllEnvs();
+  vi.stubEnv('VITE_OFFICE_CLOUD_STORAGE_SUBSCRIPTIONS_READY', 'true');
   vi.clearAllMocks();
   mocks.confirm.mockResolvedValue(true);
   mocks.auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'member-1' } } }, error: null });
@@ -76,7 +78,7 @@ beforeEach(() => {
   mocks.importDocxFile.mockResolvedValue({ title: 'brief', content: 'Preview body', richText: '<h1>Imported brief</h1><p>Preview body</p>', warnings: [] });
 });
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('Cloud Drive workspace', () => {
   it('lists membership-scoped cloud files and previews downloaded text', async () => {
@@ -139,9 +141,10 @@ describe('Cloud Drive workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose plan' }));
     const autoRenew = screen.getByRole('checkbox', { name: /Automatically renew monthly/ });
     expect(autoRenew.checked).toBe(false);
+    fireEvent.change(screen.getByLabelText('COCCE Wallet PIN'), { target: { value: '2468' } });
     fireEvent.click(screen.getByRole('button', { name: /Purchase · 2,000 Coins/ }));
     await waitFor(() => expect(mocks.cloudApi.purchaseStorage).toHaveBeenCalledWith(
-      'workspace-1', 'storage_5gb_monthly', expect.any(String), false,
+      'workspace-1', 'storage_5gb_monthly', expect.any(String), '2468', false,
     ));
     expect(await screen.findByText(/Added 5 GB to this workspace Drive/)).toBeTruthy();
   });
