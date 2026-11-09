@@ -8,6 +8,12 @@ const mocks = vi.hoisted(() => {
   const cloudApi = {
     list: vi.fn(),
     usage: vi.fn(),
+    setStorageAutoRenew: vi.fn(),
+    renewStorage: vi.fn(),
+    purchaseStorage: vi.fn(),
+    storageHistory: vi.fn(),
+    storageSubscriptions: vi.fn(),
+    storagePlans: vi.fn(),
     download: vi.fn(),
     reserve: vi.fn(),
     upload: vi.fn(),
@@ -22,6 +28,22 @@ const mocks = vi.hoisted(() => {
     onAuthStateChange: vi.fn(),
   };
   return { cloudApi, auth, listWorkspaces: vi.fn(), confirm: vi.fn(), importDocxFile: vi.fn() };
+
+it('shows monthly add-on prices and keeps automatic renewal off until explicitly selected', async () => {
+  render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
+  await screen.findByText('Cloud files');
+  fireEvent.click(screen.getByRole('button', { name: 'View plans' }));
+  expect(await screen.findByText('5 GB additional')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Choose plan' }));
+  const autoRenew = screen.getByRole('checkbox', { name: /Automatically renew monthly/ });
+  expect(autoRenew.checked).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: /Purchase · 2,000 Coins/ }));
+  await waitFor(() => expect(mocks.cloudApi.purchaseStorage).toHaveBeenCalledWith(
+    'workspace-1', 'storage_5gb_monthly', expect.any(String), false,
+  ));
+  expect(await screen.findByText(/Added 5 GB to this workspace Drive/)).toBeTruthy();
+});
+
 });
 
 vi.mock('./FrostedConfirm', () => ({ useFrostedConfirm: () => mocks.confirm }));
@@ -55,6 +77,12 @@ beforeEach(() => {
   mocks.importDocxFile.mockResolvedValue({ richText: '<p>Imported brief</p>', warnings: [] });
   mocks.cloudApi.list.mockResolvedValue([cloudFile]);
   mocks.cloudApi.usage.mockResolvedValue(usage);
+  mocks.cloudApi.storagePlans.mockResolvedValue([{ planCode: 'storage_5gb_monthly', displayName: '5 GB', quotaBytes: 5000000000, monthlyCoins: 2000, sortOrder: 1 }]);
+  mocks.cloudApi.storageSubscriptions.mockResolvedValue([]);
+  mocks.cloudApi.storageHistory.mockResolvedValue([]);
+  mocks.cloudApi.purchaseStorage.mockResolvedValue({ subscriptionId: 'sub-1', planCode: 'storage_5gb_monthly', displayName: '5 GB', quotaBytes: 5000000000, monthlyCoins: 2000, status: 'active', autoRenew: false, currentPeriodEnd: '2026-12-09T00:00:00Z', balance: 98000, replayed: false });
+  mocks.cloudApi.renewStorage.mockResolvedValue({ subscriptionId: 'sub-1', status: 'active', currentPeriodEnd: '2027-01-09T00:00:00Z', replayed: false });
+  mocks.cloudApi.setStorageAutoRenew.mockResolvedValue({ subscriptionId: 'sub-1', autoRenew: true, cancelAtPeriodEnd: false, currentPeriodEnd: '2026-12-09T00:00:00Z' });
   mocks.cloudApi.download.mockResolvedValue(new TextEncoder().encode('hello'));
   mocks.cloudApi.reserve.mockResolvedValue({ status: 'upload_pending', uploadSessionId: 'session-1' });
   mocks.cloudApi.upload.mockResolvedValue(undefined);
