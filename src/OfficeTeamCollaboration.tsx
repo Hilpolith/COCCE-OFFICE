@@ -410,6 +410,7 @@ export default function OfficeTeamCollaboration({
         setConversationScope('');
       }
       onWorkspaceCreated?.(createdWorkspaceId, requestedName);
+      window.dispatchEvent(new CustomEvent('cocce-office:workspace-created', { detail: { workspaceId: createdWorkspaceId, name: requestedName, suiteId: workspaceSuiteId } }));
     }, 'Office space created.', () => startingWorkspaceGeneration === workspaceGenerationRef.current
       && startingConversationGeneration === conversationGenerationRef.current);
   };
