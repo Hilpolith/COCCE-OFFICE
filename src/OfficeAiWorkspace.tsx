@@ -152,10 +152,10 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset: 0, hasMore: false }; }
       }));
       if (generation !== driveLoadGeneration.current) return;
-      const files = results.flatMap((result) => result.files).filter(supportedDriveFile).slice(0, 80);
+      const files = results.flatMap((result) => result.files).filter(supportedDriveFile).slice(0, 100);
       setDriveFiles(files);
       setDriveFileOffsets(Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])));
-      setDriveFileHasMore(results.some((result) => result.hasMore) && files.length < 80);
+      setDriveFileHasMore(results.some((result) => result.hasMore) && files.length < 100);
       if (!files.length) setDriveFilesError('No supported text files were found in this workspace scope. Only .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files up to 512 KiB can be attached.');
     } catch (reason) {
       if (generation === driveLoadGeneration.current) setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
@@ -190,10 +190,10 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       if (generation !== driveLoadGeneration.current) return;
       const more = results.flatMap((result) => result.files).filter(supportedDriveFile);
       const seen = new Set(driveFiles.map((file) => file.fileId));
-      const nextFiles = [...driveFiles, ...more.filter((file) => !seen.has(file.fileId))].slice(0, 80);
+      const nextFiles = [...driveFiles, ...more.filter((file) => !seen.has(file.fileId))].slice(0, 100);
       setDriveFiles(nextFiles);
       setDriveFileOffsets((current) => ({ ...current, ...Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])) }));
-      setDriveFileHasMore(results.some((result) => result.hasMore) && nextFiles.length < 80);
+      setDriveFileHasMore(results.some((result) => result.hasMore) && nextFiles.length < 100);
     } catch (reason) {
       if (generation === driveLoadGeneration.current) setDriveFilesError(reason instanceof Error ? reason.message : 'More private Drive files could not be loaded.');
     } finally { if (generation === driveLoadGeneration.current) setDriveFilesLoading(false); }
