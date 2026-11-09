@@ -1,3 +1,4 @@
+import OfficeSuiteAiAction from './OfficeSuiteAiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -56,7 +57,8 @@ export default function NgoManagementWorkspace({ workspaceId, officeName, countr
   return <div className="ngo-workspace" style={{ '--ngo-accent': accent ?? '#87d986' } as CSSProperties}>
     <header className="ngo-hero glass-card"><div><span className="eyebrow"><ShieldCheck size={13} /> NGO MANAGEMENT · {country}</span><h1>{officeName}</h1><p>Shared operational workspace with server-enforced roles, approvals, evidence and audit trails.</p></div><div className="ngo-hero-actions"><span className="ngo-role"><Users size={14} /> {bootstrap.role}</span>{onOpenTeam && <button className="button-secondary" type="button" onClick={onOpenTeam}>Open team</button>}</div></header>
     {error && <div className="ngo-alert" role="alert">{error}</div>}{feedback && <div className="ngo-feedback" role="status">{feedback}</div>}
-    <nav className="ngo-tabs" role="tablist" aria-label="NGO modules">{tabs.filter(allowed).map(item => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? 'is-active' : ''} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
+    <div className="office-suite-ai-toolbar"><OfficeSuiteAiAction workspaceId={workspaceId} suiteLabel="NGO" tabLabel={tab.replaceAll("-", " ")} /></div>
+      <nav className="ngo-tabs" role="tablist" aria-label="NGO modules">{tabs.filter(allowed).map(item => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? 'is-active' : ''} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
     {tab === 'overview' && <Overview context={context} />}{(tab === 'programmes' || tab === 'funding') && <NgoProgrammePanels context={context} view={tab} />}{(tab === 'delivery' || tab === 'people') && <NgoFieldPanels context={context} view={tab} />}{tab === 'compliance' && <Compliance context={context} />}{tab === 'reports' && <Reports context={context} />}{tab === 'security' && <Security context={context} />}
   </div>;
 }
