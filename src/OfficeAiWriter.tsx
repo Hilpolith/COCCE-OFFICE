@@ -422,7 +422,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       : availability === 'not-configured' ? 'AI not configured'
         : availability === 'checking' ? 'Checking service' : availability === 'unavailable' ? 'AI temporarily unavailable' : 'Service status unknown';
   const selectionAvailable = !selection.isCellSelection && selection.text.trim().length > 0;
-  const canRunAiActions = authStatus === 'signed-in' && Boolean(workspaceId) && !workspaceLoading && (availability === 'available' || availability === 'unavailable');
+  const canRunAiActions = authStatus === 'signed-in' && workspaces.length > 0 && Boolean(workspaceId) && !workspaceLoading && (availability === 'available' || availability === 'unavailable');
 
   return <section className="office-ai-panel" aria-label="AI writing studio">
     <button className="office-ai-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
