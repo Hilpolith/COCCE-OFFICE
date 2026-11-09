@@ -1,4 +1,5 @@
 import { ChevronRight, Sparkles } from 'lucide-react';
+import './officeSuiteAiAction.css';
 
 export default function OfficeSuiteAiAction({ workspaceId, suiteLabel, tabLabel }: {
   workspaceId: string;
