@@ -15,6 +15,8 @@ function harness(control = { workspace_id: workspaceId, correspondence_id: corre
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url, init });
     if (url === `${SUPABASE}/auth/v1/user`) return response({ id: 'user-1' });
+    if (url === `${SUPABASE}/rest/v1/rpc/office_list_workspaces`) return response([{ workspace_id: workspaceId, name: 'Synthetic workspace' }]);
+    if (url === `${SUPABASE}/rest/v1/rpc/office_get_workspace_ai_enabled`) return response(true);
     if (url === RPC) return response(control, rpcStatus);
     if (url === OPENROUTER) return response({ model: 'google/gemma-4-31b-it:free', usage: { cost: 0 }, choices: [{ message: { content: 'Suggestion.' } }] });
     throw new Error(`Unexpected URL ${url}`);
