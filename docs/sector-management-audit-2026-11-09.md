@@ -115,3 +115,45 @@ A read-only catalogue query over the connected COCCE database found 117 public `
 The inspected private helpers also use an empty search path and are not executable by `anon`. The `is_active_member` helper is callable by authenticated users and returns only a membership boolean. This targeted review found no anonymous execution path in the Office RPC namespace. It is not a substitute for full role-by-role mutation and data-disclosure tests, which remain CI acceptance gates.
 
 The Supabase security advisor continues to report two ERROR findings on shared legacy `public.orders` and `public.order_items` tables where policies exist but RLS is disabled. These tables are outside COCCE Office's scope and were not changed. Numerous RLS-enabled/no-policy INFO findings on private Office and shared app tables were also left intact; the intended access path is through reviewed membership/role-gated RPCs, not broad table policies.
+
+## Final verification addendum — 2026-11-09
+
+### CI rerun with the previously skipped PDF geometry test enabled
+
+- Workflow run: `42660962033`
+- Commit: `ebae0e9eed3cb947b0323f438a086caf81f808cc`
+- Result: **success**
+- Vitest: **132/132 files; 1,106 passed; 0 skipped**
+- Node acceptance suite: **163 passed; 0 failed; 0 skipped**
+- Hospitality: **46 passed**
+- Institutions workflow suite: **38 passed**
+- Institutions PostgreSQL schema/RLS/grant suite: **38 passed**
+- Government PostgreSQL acceptance: **11 passed**
+- University and Business PostgreSQL validators: passed
+- TypeScript and production Vite build: passed
+
+CI now installs `poppler-utils` alongside PostgreSQL 16. The PDF annotated-copy raster geometry regression executed rather than being skipped; `src/lib/pdfAnnotatedCopy.test.ts` completed all eight tests.
+
+### Final production smoke checks
+
+- Production deployment for the current main commit: `dpl_HzPTyQKgVyCiQt89NryGJsbJRQdG` — **READY**.
+- Production alias: `https://cocce-office.vercel.app`.
+- Served HTML, the exact JavaScript/CSS assets referenced by that HTML, module-preload assets, web manifest, and both app icons returned HTTP 200.
+- The production JavaScript bundle contains the authenticated workspace selector and workspace-cleared / workspace-changed integration events.
+- Vercel runtime error query for the latest 24 hours returned no runtime errors; the recent production error/fatal log query returned no matching entries.
+
+### Final read-only production access review
+
+- 257/257 public `office_*` tables have RLS enabled.
+- No Office table grants direct privileges to `anon`; no Office table grants direct write privileges to `authenticated`.
+- Nine shared collaboration tables grant authenticated SELECT, each protected by an explicit membership/participant/recipient RLS policy.
+- The remaining sector tables are accessed through the authenticated RPC boundary; no broad authenticated table policies were added.
+- All 120 public `office_*` RPC functions were inspected: zero are executable by `anon`; all 108 SECURITY DEFINER functions have a pinned empty search path.
+- The `office_private` helper functions were also inspected: none is executable by `anon`; SECURITY DEFINER helpers pin an empty search path. The schema itself is not usable by `anon`.
+- The two `office_presence` SELECT policies flagged by the advisor have distinct intended scopes: pending-invitation inviter visibility and active-workspace-member visibility. They were reviewed and left unchanged.
+- The only Supabase security-advisor ERROR findings are the pre-existing shared `public.orders` and `public.order_items` tables with RLS disabled despite policies. They are outside the COCCE Office schema/scope and were not modified.
+- No production migrations, business records, authentication settings, or RLS policies were changed during this final verification.
+
+### Release decision
+
+The ten specialist sector acceptance gates and the production smoke checks are complete for this release checkpoint. The one previously skipped test is now executed and passing. Remaining roadmap work such as native Office-format fidelity and expanded OCR is product development beyond the ten-sector acceptance scope. Cloud Drive paid subscription billing remains disabled until its pricing and terms are explicitly approved; no commercial charge path was enabled by this work.
