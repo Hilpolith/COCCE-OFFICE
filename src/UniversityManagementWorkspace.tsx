@@ -1,3 +1,4 @@
+import OfficeSuiteAiAction from './OfficeSuiteAiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import {
@@ -734,6 +735,7 @@ export default function UniversityManagementWorkspace({
           {feedback}
         </div>
       )}
+      <div className="office-suite-ai-toolbar"><OfficeSuiteAiAction workspaceId={workspaceId} suiteLabel="Universities" tabLabel={currentTab.replaceAll("_", " ")} /></div>
       <nav
         className="university-tabs"
         role="tablist"
