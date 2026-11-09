@@ -105,7 +105,7 @@ describe('Office account control', () => {
     mocks.officeApi.createWorkspaceWithSuite.mockImplementation(async () => { created = true; return 'new-office-workspace'; });
 
     render(<OfficeAccountControl />);
-    fireEvent.click(screen.getByRole('button', { name: /Account: synthetic@example.test/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Account: synthetic@example.test/ }));
     await screen.findByLabelText('Organisation or workspace name');
     fireEvent.change(screen.getByLabelText('Organisation or workspace name'), { target: { value: 'Kijiji Academy' } });
     fireEvent.change(screen.getByLabelText('Choose your Office suite'), { target: { value: 'school' } });
