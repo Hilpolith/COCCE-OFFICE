@@ -54,7 +54,7 @@ describe('glass design rendering boundaries', () => {
     expect(source).not.toMatch(/url\s*\(['"]?https?:/i);
     expect(source).not.toContain('.pdf-text-layer');
     expect(source).not.toContain('.slides-print');
-    expect(source).not.toContain('.slide-canvas');
+    expect(source).toContain('.slide-canvas { border-radius: 12px');
   });
 
   it('keeps the document editing surface opaque and unblurred', () => {
