@@ -136,7 +136,7 @@ describe('Docs Writing assistant', () => {
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
     expect(await screen.findByText('No Office workspace yet.')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Draft preview' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Draft' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('lets the writer target one authorised workspace and carries that scope to the server', async () => {
@@ -165,7 +165,7 @@ describe('Docs Writing assistant', () => {
     fireEvent.change(screen.getByPlaceholderText(/Describe the document and provide the facts to use/), {
       target: { value: 'Draft a memo from only the facts in this brief.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Draft preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
     expect(await screen.findByText('A preview edit.')).toBeTruthy();
     const postCall = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
     expect(JSON.parse(String(postCall?.init?.body))).toEqual({
@@ -185,15 +185,15 @@ describe('Docs Writing assistant', () => {
       fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
       await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
       expect(screen.getByText(/Select ordinary text to use excerpt actions/)).toBeTruthy();
-      expect((screen.getByLabelText('Selected excerpt') as HTMLTextAreaElement).value).toBe('');
+      expect((screen.getByLabelText('Selected document text') as HTMLTextAreaElement).value).toBe('');
       const summarizeSelection = screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement;
       expect(summarizeSelection.disabled).toBe(true);
       fireEvent.click(summarizeSelection);
       expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
 
       const prompt = 'Draft a short note from this prompt only.';
-      fireEvent.change(screen.getByPlaceholderText(/Describe what you want drafted/), { target: { value: prompt } });
-      fireEvent.click(screen.getByRole('button', { name: 'Draft preview' }));
+      fireEvent.change(screen.getByPlaceholderText(/Describe the document and provide the facts to use/), { target: { value: prompt } });
+      fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
       expect(await screen.findByText('A preview edit.')).toBeTruthy();
       const draftCall = fetcher.mock.calls.map(([url, init]) => ({ url, init }))
         .find(({ init }) => init?.method === 'POST');
