@@ -646,3 +646,159 @@
     button,.module-card,.quick-action,.document-row,.workspace-option,.surface-option { transition: none; }
   }
 }
+
+
+/* Workspace-specific polish: operational density, clear hierarchy, and consistent touch targets. */
+@media screen {
+  :is(.slides-page,.pdf-page,.team-planner-page,.vault-page,.industry-page) { min-width: 0; }
+  :is(.slides-page-heading,.pdf-title-row,.team-page-heading,.industry-page-heading,.vault-title-row,
+      .docs-page-title-row,.drive-title-row) { gap: 16px; align-items: center; }
+  :is(.slides-page-heading h1,.team-page-heading h1,.industry-page-heading h1,.vault-title-row h1) {
+    letter-spacing: -.045em; line-height: 1.08;
+  }
+  :is(.slides-deck-card,.slides-thumbnail,.pdf-library-item,.team-structure-item,.team-task-row,
+      .vault-folder-item,.vault-file-row,.industry-work-card,.industry-option-card,.industry-office-chip) {
+    border-radius: 16px;
+    border-color: var(--glass-edge);
+    transition: border-color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+  :is(.slides-deck-card:hover,.slides-thumbnail:hover,.pdf-library-item:hover,.team-structure-item:hover,
+      .team-task-row:hover,.vault-folder-item:hover,.vault-file-row:hover,.industry-work-card:hover,
+      .industry-option-card:hover,.industry-office-chip:hover) {
+    border-color: color-mix(in srgb, var(--accent) 34%, var(--glass-edge));
+    box-shadow: 0 10px 26px rgba(40,61,70,.075), inset 0 1px 0 rgba(255,255,255,.7);
+  }
+  .slides-deck-preview { border-radius: 15px; overflow: hidden; }
+  .slides-editor-layout { gap: 14px; }
+  .slides-rail,.slides-canvas-wrap,.slides-library { border-radius: 20px; }
+  .slide-canvas { border-radius: 12px; box-shadow: 0 18px 45px rgba(27,42,54,.16); }
+  .slides-theme-picker select,.slides-deck-name input { border-radius: 12px; }
+  .slides-page-controls,.present-controls { border-radius: var(--office-pill); }
+  .slides-edit-fields input,.slides-edit-fields textarea { border-radius: 13px; }
+  .pdf-workspace-layout { gap: 14px; align-items: start; }
+  .pdf-library,.pdf-viewer-panel { border-radius: 21px; }
+  .pdf-library-heading,.pdf-viewer-toolbar,.pdf-page-toolbar { border-radius: 15px; }
+  .pdf-library-item { padding: 10px; }
+  .pdf-canvas-wrap { border-radius: 17px; overflow: hidden; }
+  .pdf-search-input,.pdf-comment-form textarea { border-radius: 13px; }
+  .pdf-tool-card { border-radius: 16px; }
+  .pdf-selection-toolbar { border-radius: 15px; box-shadow: 0 12px 32px rgba(20,35,42,.16); }
+  .team-planner-grid { gap: 16px; align-items: start; }
+  .team-panel { padding: 20px; }
+  .team-panel-heading { gap: 12px; }
+  .team-panel-title-icon { border-radius: 14px; }
+  .team-filter-row { gap: 8px; }
+  .team-select-wrap select,.team-field input,.team-field select,.team-field textarea { border-radius: 13px; }
+  .team-structure-item,.team-task-row { padding: 12px 13px; }
+  .team-small-icon-button { border-radius: 11px; }
+  .team-task-status-label select { border-radius: var(--office-pill); }
+  .vault-trust-banner,.vault-panel,.vault-lock-panel,.vault-folder-panel,.vault-files-panel,
+  .vault-limitations { border-radius: 21px; }
+  .vault-trust-banner { padding: 17px 19px; }
+  .vault-workspace-grid { gap: 15px; }
+  .vault-file-row,.vault-folder-item { padding: 11px 12px; }
+  .vault-form input,.vault-unlock-form input,.vault-folder-form input { min-height: 43px; }
+  .vault-primary,.vault-toolbar-actions button,.vault-backup-button { border-radius: var(--office-pill); }
+  .industry-page-heading { margin-bottom: 22px; }
+  .industry-office-picker { gap: 8px; }
+  .industry-office-chip { padding: 9px 13px; }
+  .industry-create-card,.industry-work-panel,.industry-add-panel,.industry-empty-office,
+  .industry-privacy-card,.industry-linked-card { border-radius: 21px; }
+  .industry-catalog-grid { gap: 12px; }
+  .industry-option-card { padding: 15px; }
+  .industry-office-form input,.industry-record-form input,.industry-record-form textarea,.industry-search input {
+    border-radius: 13px; min-height: 42px;
+  }
+  .industry-work-layout { gap: 15px; align-items: start; }
+  .industry-stage-column { border-radius: 17px; }
+  .industry-work-card { padding: 13px; }
+  .industry-metric-card { border-radius: 17px; }
+  .industry-work-card h4 { letter-spacing: -.015em; }
+  .industry-move-button { border-radius: var(--office-pill); }
+  .office-account-trigger { border-radius: var(--office-pill); }
+  .office-account-popover { border-radius: 21px; box-shadow: 0 22px 65px rgba(25,42,49,.18); }
+  .office-account-form input,.office-account-action { border-radius: var(--office-pill); }
+  .office-account-heading { border-bottom-color: var(--glass-edge); }
+  .frosted-confirm-dialog { border-radius: 24px; padding: 26px; }
+  .frosted-confirm-kicker { letter-spacing: .12em; }
+  .frosted-confirm-dialog h2 { letter-spacing: -.035em; }
+
+  /* School, university, business, accounting and manufacturing management */
+  :is(.school-sms-stat,.school-sms-overview-note,.school-sms-panel,.school-sms-key-card,
+      .university-panel,.university-metric,.university-key-panel,.business-card,.business-stat,
+      .business-metric-dock,.accounting-card,.accounting-stat,.accounting-metric-dock,
+      .manufacturing-card,.manufacturing-stat,.manufacturing-summary,.manufacturing-action-panel) {
+    border-radius: 19px;
+    box-shadow: 0 10px 28px rgba(40,61,70,.055), inset 0 1px 0 rgba(255,255,255,.68);
+  }
+  :is(.school-sms-module-tabs,.university-tabs,.business-tabs,.accounting-tabs,.manufacturing-tabs) {
+    padding: 5px; border-radius: var(--office-pill); background: var(--glass-surface);
+    border: 1px solid var(--glass-edge);
+  }
+  :is(.school-sms-module-tabs button,.university-tabs button,.business-tabs button,
+      .accounting-tabs button,.manufacturing-tabs button) { border-radius: var(--office-pill); min-height: 37px; }
+  :is(.school-sms-form-grid input,.school-sms-form-grid select,.school-sms-form-grid textarea,
+      .university-form input,.university-form select,.business-form input,.business-form select,
+      .accounting-field input,.accounting-field select,.manufacturing-field input,.manufacturing-field select) {
+    border-radius: 12px; min-height: 41px;
+  }
+  :is(.school-sms-table-wrap,.school-sms-table,.accounting-table,.manufacturing-table-wrap,
+      .manufacturing-table,.university-row,.business-record) { border-radius: 15px; }
+  :is(.school-sms-table th,.school-sms-table td,.manufacturing-table th,.manufacturing-table td) {
+    border-color: var(--glass-edge);
+  }
+  :is(.school-sms-stat,.university-metric,.business-stat,.accounting-stat,.manufacturing-stat) {
+    padding: 15px;
+  }
+  :is(.business-button,.accounting-button,.manufacturing-button,.health-admin-button,
+      .institutions-button,.ngo-tabs button,.ngo-subtabs button) { border-radius: var(--office-pill); }
+  :is(.business-form,.accounting-form,.manufacturing-form,.university-form) { gap: 13px; }
+  :is(.business-alert,.accounting-alert,.manufacturing-alert,.health-admin-alert,
+      .institutions-notice,.ngo-alert,.ngo-feedback) { border-radius: 15px; }
+  :is(.accounting-line,.accounting-balance,.accounting-queue,.manufacturing-summary div) { border-radius: 13px; }
+  .health-admin-hero,.health-admin-key-panel { border-radius: 22px; }
+  .health-admin-unlock-form input { border-radius: var(--office-pill); min-height: 43px; }
+  .hospitality-dock { border-radius: var(--office-pill); padding: 5px; }
+  .hospitality-dock button { border-radius: var(--office-pill); }
+  .hospitality-metric,.hospitality-section,.hospitality-key-card { border-radius: 19px; }
+  .hospitality-field input,.hospitality-field textarea,.hospitality-field select { border-radius: 13px; }
+  .institutions-card,.institutions-panel { border-radius: 20px; }
+  .institutions-table-wrap { border-radius: 16px; overflow: auto; }
+  .institutions-field input,.institutions-field select { border-radius: 13px; min-height: 41px; }
+  .ngo-section,.ngo-metric { border-radius: 20px; }
+  .ngo-tabs,.ngo-subtabs { border-radius: var(--office-pill); padding: 5px; }
+  .ngo-tabs button,.ngo-subtabs button { border-radius: var(--office-pill); }
+  .ngo-field input,.ngo-field select,.ngo-field textarea { border-radius: 13px; min-height: 41px; }
+
+  @media (max-width: 900px) {
+    .pdf-workspace-layout,.team-planner-grid,.vault-workspace-grid,.industry-work-layout { grid-template-columns: minmax(0,1fr); }
+    .slides-editor-layout { grid-template-columns: minmax(0,1fr); }
+    .slides-rail { max-height: 220px; overflow: auto; }
+    .slides-thumbnails { display: flex; overflow-x: auto; }
+    .slides-thumbnail { flex: 0 0 150px; }
+  }
+  @media (max-width: 700px) {
+    :is(.slides-page-heading,.pdf-title-row,.team-page-heading,.industry-page-heading,.vault-title-row,
+        .docs-page-title-row,.drive-title-row) { align-items: flex-start; flex-wrap: wrap; }
+    .slides-heading-actions,.pdf-title-actions,.team-heading-actions,.drive-title-actions { width: 100%; flex-wrap: wrap; }
+    .slides-deck-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .slides-editor-toolbar { flex-wrap: wrap; }
+    .pdf-viewer-toolbar,.pdf-page-toolbar { flex-wrap: wrap; gap: 7px; }
+    .team-panel { padding: 15px; }
+    .team-form-grid { grid-template-columns: minmax(0,1fr); }
+    .team-task-form-row { grid-template-columns: minmax(0,1fr); }
+    .vault-title-row { gap: 12px; }
+    .vault-trust-banner { align-items: flex-start; }
+    .industry-catalog-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .industry-work-layout { grid-template-columns: minmax(0,1fr); }
+    :is(.school-sms-overview-grid,.school-sms-panels-grid,.university-grid,.business-grid,
+        .accounting-grid,.manufacturing-grid,.hospitality-grid) { grid-template-columns: minmax(0,1fr); }
+    .hospitality-dock { max-width: 100%; overflow-x: auto; justify-content: flex-start; }
+  }
+  @media (max-width: 430px) {
+    .slides-deck-grid,.industry-catalog-grid { grid-template-columns: minmax(0,1fr); }
+    .slides-thumbnail { flex-basis: 128px; }
+    .pdf-page-toolbar { justify-content: flex-start; }
+    .office-account-popover { max-width: calc(100vw - 20px); }
+  }
+}
