@@ -831,6 +831,10 @@ export function createOfficeCloudApi(
         true,
       );
     },
+    async abandonUpload(uploadSessionId: string): Promise<void> {
+      if (!uuid(uploadSessionId)) throw stableError(400);
+      await call('abandon_upload', { uploadSessionId });
+    },
     async recover(uploadSessionId: string) {
       if (!uuid(uploadSessionId)) throw stableError(400);
       const result = await call('recover_upload', { uploadSessionId });
