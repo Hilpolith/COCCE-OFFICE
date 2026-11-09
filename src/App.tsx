@@ -181,7 +181,7 @@ function App() {
   }, [workspaceDocuments, query]);
   const selectedDocument = workspaceDocuments.find((document) => document.id === selectedDocumentId) ?? null;
   const lastEdited = [...workspaceDocuments].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.updatedAt;
-  const activeEditorModule = page === 'docs' || page === 'sheets' || page === 'slides' ? page : null;
+  const activeEditorModule = page === 'docs' || page === 'sheets' || page === 'slides' || page === 'pdf' || page === 'vault' ? page : null;
 
   const goTo = (nextPage: PageId) => {
     setPage(nextPage);
@@ -349,7 +349,7 @@ function App() {
   return (
     <FrostedConfirmProvider>
     <main className="app-frame">
-      <aside className="sidebar visionos-dock" aria-label="COCCE Office navigation">
+      <aside className={`sidebar visionos-dock ${mobileMenuOpen ? 'sidebar-open' : ''}`} aria-label="COCCE Office navigation">
         <nav className="visionos-dock-items" aria-label="Primary spaces">
           <button type="button" className={`visionos-dock-button ${page === 'industry' ? 'is-active' : ''}`} aria-label="Spaces" title="Spaces" onClick={() => goTo('industry')}>
             <Building2 size={21} strokeWidth={1.8} />
