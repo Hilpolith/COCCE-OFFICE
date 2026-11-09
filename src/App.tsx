@@ -101,9 +101,9 @@ function App() {
   useEffect(() => {
     const navigateOffice = (event: Event) => {
       const detail = (event as CustomEvent<{ page?: PageId }>).detail;
-      if (detail?.page === 'team') goTo('team');
+      if (detail?.page === 'team') { setPage('team'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery(''); }
     };
-    const workspaceCreated = () => goTo('team');
+    const workspaceCreated = () => { setPage('team'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery(''); };
     window.addEventListener('cocce-office:navigate', navigateOffice);
     window.addEventListener('cocce-office:workspace-created', workspaceCreated);
     return () => {
