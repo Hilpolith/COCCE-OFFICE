@@ -135,15 +135,22 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
     let completed = 0;
     const failures: string[] = [];
     for (const file of incoming) {
+      let pendingSessionId = '';
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const grant = await api.reserve(workspaceId, file.name, bytes, crypto.randomUUID());
         if (grant.status === 'upload_pending') {
+          pendingSessionId = grant.uploadSessionId;
           await api.upload(grant, bytes);
           await api.finalize(grant.uploadSessionId);
+          pendingSessionId = '';
         }
         completed += 1;
       } catch (cause) {
+        if (pendingSessionId) {
+          try { await api.recover(pendingSessionId); }
+          catch { /* Expired upload reservations are also released by the server recovery schedule. */ }
+        }
         failures.push(`${file.name}: ${cause instanceof Error ? cause.message : 'upload failed'}`);
       }
     }
