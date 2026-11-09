@@ -355,7 +355,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
           <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
             <div className="office-ai-consent-mark"><AlertCircle size={19} /></div>
             <div><span className="eyebrow">EXTERNAL AI DATA SHARING</span><h3 id="office-ai-consent-title">Share selected Drive content with COCCE AI?</h3></div>
-            <p id="office-ai-consent-description">The selected file contents will be read from private Office Drive by the authenticated server and sent to OpenRouter's Google AI Studio free-model provider to generate this answer. The file contents are not stored in the COCCE AI chat history. This is not a zero-data-retention guarantee.</p>
+            <p id="office-ai-consent-description">The selected file contents will be read from private Office Drive by the authenticated server and sent to OpenRouter's Google AI Studio free-model provider to generate this answer. OpenRouter currently lists Google AI Studio as retaining prompts for 55 days (and not training on them); review its provider retention details before sharing confidential records. The file contents are not stored in the COCCE AI chat history. This is not a zero-data-retention guarantee.</p>
             <ul>{selectedFileIds.map((fileId) => {
               const file = driveFiles.find((item) => item.fileId === fileId);
               return <li key={fileId}>{file?.displayName ?? 'Selected Drive file'}</li>;
