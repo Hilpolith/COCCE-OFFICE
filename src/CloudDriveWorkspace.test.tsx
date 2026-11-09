@@ -86,7 +86,8 @@ describe('Cloud Drive workspace', () => {
     expect(docxFrame).toContain('sandbox=" "');
     expect(docxFrame).not.toContain('allow-scripts');
     expect(docxFrame).not.toContain('allow-same-origin');
-    expect(frame.getAttribute('srcdoc')).toContain('Imported brief');
+    expect(docxFrame).toContain('srcDoc=');
+    expect(docxFrame).toContain('${preview.docxHtml}');
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(docxFile);
   });
 
