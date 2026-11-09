@@ -17,3 +17,7 @@
 @media(forced-colors:active){.office-editor-chrome,.office-workbench-rail,.office-ai-prompt-panel,.office-ai-prompt-preview,.office-ai-prompt-diff>div,.office-ai-prompt-privacy,.office-ai-prompt-state,.office-storage-pill,.office-module-pill[aria-current=page],.office-workbench-collapse,.office-ai-prompt-input,.office-ai-prompt-run,.office-ai-prompt-secondary{background:Canvas;color:CanvasText;border-color:ButtonText;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}.office-ai-icon,.office-workbench-rail-icon,.office-ai-prompt-state svg,.office-ai-prompt-privacy svg{color:Highlight}.office-ai-prompt-state{forced-color-adjust:auto}}
 }
 @media print{.office-editor-chrome,.office-workbench-rail{display:none!important}.office-workbench-layout,.office-workbench-editor{display:block!important}}
+
+.office-ai-workspace-scope{display:grid;gap:7px;padding:11px 12px;border:1px solid var(--border);border-radius:15px;background:linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,255,255,.018))}
+.office-ai-workspace-scope select{width:100%;min-height:38px;padding:0 11px;border:1px solid var(--border-strong);border-radius:11px;background:var(--surface-soft);color:var(--text);font:inherit;font-size:11px}
+.office-ai-workspace-scope select:disabled{opacity:.65}
