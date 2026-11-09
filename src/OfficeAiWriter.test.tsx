@@ -106,7 +106,7 @@ describe('Docs AI writing studio', () => {
     const fetcher = mockFetch();
     const { editor, chain } = makeEditor();
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
@@ -132,7 +132,7 @@ describe('Docs AI writing studio', () => {
     mocks.listWorkspaces.mockResolvedValue([]);
     const { editor } = makeEditor();
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
     expect(await screen.findByText(/Create or join an Office Team workspace/)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement).disabled).toBe(true);
@@ -143,7 +143,7 @@ describe('Docs AI writing studio', () => {
     const fetcher = mockFetch();
     const { editor } = makeEditor();
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
     const scope = screen.getByLabelText('AI workspace scope') as HTMLSelectElement;
     fireEvent.change(scope, { target: { value: '11111111-1111-4111-8111-111111111111' } });
@@ -159,7 +159,7 @@ describe('Docs AI writing studio', () => {
     const fetcher = mockFetch();
     const { editor } = makeEditor();
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
 
     fireEvent.change(screen.getByPlaceholderText(/Describe what you want drafted/), {
@@ -182,7 +182,7 @@ describe('Docs AI writing studio', () => {
     try {
       expect(editor.state.selection).toBeInstanceOf(CellSelection);
       render(<OfficeAiWriter editor={editor as unknown as Editor} documentTitle="Synthetic table report" onGoToTeam={vi.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
       await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
       expect(screen.getByText(/Table cell ranges are for local formatting/)).toBeTruthy();
       expect((screen.getByLabelText('Selected excerpt') as HTMLTextAreaElement).value).toBe('');
@@ -250,7 +250,7 @@ describe('Docs AI writing studio', () => {
       editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, excerptPosition, excerptPosition + excerpt.length)));
 
       render(<OfficeAiWriter editor={editor as unknown as Editor} onGoToTeam={vi.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
       await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
       fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
       expect(await screen.findByText('A preview edit.')).toBeTruthy();
@@ -271,7 +271,7 @@ describe('Docs AI writing studio', () => {
     const syntheticText = 'Synthetic full document content for consent tests.';
     const { editor, chain } = makeEditor(syntheticText);
     render(<OfficeAiWriter editor={editor} documentTitle="Synthetic local report" onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
@@ -306,7 +306,7 @@ describe('Docs AI writing studio', () => {
     const fetcher = mockFetch();
     const { editor, doc } = makeEditor();
     render(<OfficeAiWriter editor={editor} documentTitle="Synthetic local report" onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
     expect(screen.getByRole('alertdialog')).toBeTruthy();
@@ -331,7 +331,7 @@ describe('Docs AI writing studio', () => {
     const originalText = 'Synthetic full document content for consent tests.';
     const { editor, setDocumentText } = makeEditor(originalText);
     render(<OfficeAiWriter editor={editor} documentTitle="Synthetic local report" onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
@@ -347,7 +347,7 @@ describe('Docs AI writing studio', () => {
     const fetcher = mockFetch();
     const { editor } = makeEditor();
     const view = render(<OfficeAiWriter editor={editor} documentTitle="Original title" onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
     view.rerender(<OfficeAiWriter editor={editor} documentTitle="Renamed document" onGoToTeam={vi.fn()} />);
@@ -360,7 +360,7 @@ describe('Docs AI writing studio', () => {
     const fetcher = mockFetch();
     const { editor } = makeEditor('x'.repeat(OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS + 1));
     render(<OfficeAiWriter editor={editor} documentTitle="Synthetic oversized report" onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
 
@@ -386,7 +386,7 @@ describe('Docs AI writing studio', () => {
     vi.stubGlobal('fetch', fetcher);
     const { editor, chain } = makeEditor();
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
