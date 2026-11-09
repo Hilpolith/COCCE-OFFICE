@@ -377,61 +377,26 @@ function App() {
   return (
     <FrostedConfirmProvider>
     <main className="app-frame">
-      <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`} aria-label="Main navigation">
-        <div className="brand-lockup">
-          <img src="/brand/cocce-office-squircle-icon-256.png" className="brand-mark" alt="COCCE Office" />
-          <div className="brand-copy"><strong>COCCE <span>OFFICE</span></strong><small>Office workspace</small></div>
-          <button className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)}><X size={18} /></button>
-        </div>
-
-        <button className="workspace-switcher" onClick={() => setWorkspaceMenuOpen((open) => !open)} aria-expanded={workspaceMenuOpen}>
-          <span className="workspace-emblem"><BriefcaseBusiness size={16} /></span>
-          <span className="workspace-label"><strong>{activeWorkspace?.name ?? 'Personal space'}</strong><small>{activeWorkspace ? `${activeWorkspace.kind} · ${activeWorkspace.currency}` : 'Local workspace'}</small></span>
-          <ChevronDown size={16} className="muted" />
-        </button>
-        {workspaceMenuOpen && (
-          <div className="workspace-menu glass-popover">
-            <p className="eyebrow">Switch local space</p>
-            <button className={`workspace-option ${state.activeWorkspaceId === null ? 'selected' : ''}`} onClick={() => chooseWorkspace(null)}>
-              <span className="workspace-mini-icon"><BriefcaseBusiness size={15} /></span><span><strong>Personal space</strong><small>This browser only</small></span>{state.activeWorkspaceId === null && <Check size={15} />}
-            </button>
-            {state.workspaces.map((workspace) => (
-              <button key={workspace.id} className={`workspace-option ${state.activeWorkspaceId === workspace.id ? 'selected' : ''}`} onClick={() => chooseWorkspace(workspace.id)}>
-                <span className="workspace-mini-icon"><BriefcaseBusiness size={15} /></span><span><strong>{workspace.name}</strong><small>{workspace.kind} · {workspace.currency}</small></span>{state.activeWorkspaceId === workspace.id && <Check size={15} />}
-              </button>
-            ))}
-            <button className="workspace-create" onClick={() => { setDialog('workspace'); setWorkspaceMenuOpen(false); }}><Plus size={15} /> Create local workspace</button>
-          </div>
-        )}
-
-        <div className="sidebar-section-label">WORKSPACE</div>
-        <nav className="primary-nav">
-          <NavButton active={page === 'home'} icon={<LayoutDashboard size={18} />} label="Overview" onClick={() => goTo('home')} />
-          <button type="button" className={`nav-button nav-group-trigger ${documentPageIds.includes(page) ? 'active' : ''}`} aria-expanded={documentsExpanded} aria-controls="documents-subnav" onClick={toggleDocuments}>
-            <FileText size={18} /><span>Documents</span><ChevronDown size={14} className={`nav-group-caret ${documentsExpanded ? 'is-expanded' : ''}`} />{documentPageIds.includes(page) && <span className="nav-active-marker" />}
+      <aside className="sidebar visionos-dock" aria-label="COCCE Office navigation">
+        <nav className="visionos-dock-items" aria-label="Primary spaces">
+          <button type="button" className={`visionos-dock-button ${page === 'industry' ? 'is-active' : ''}`} aria-label="Spaces" title="Spaces" onClick={() => goTo('industry')}>
+            <Building2 size={21} strokeWidth={1.8} />
           </button>
-          {documentsExpanded && <div className="nav-subgroup" id="documents-subnav">
-            {documentNav.map(({ id, label, icon: Icon }) => <NavButton key={id} className="nav-subbutton" active={page === id} icon={<Icon size={16} />} label={label} onClick={() => goTo(id)} />)}
-          </div>}
-          <button type="button" className={`nav-button nav-group-trigger ${page === 'industry' ? 'active' : ''}`} aria-expanded={officeSuitesExpanded} aria-controls="industry-subnav" onClick={toggleOfficeSuites}>
-            <Building2 size={18} /><span>Office suites</span><ChevronDown size={14} className={`nav-group-caret ${officeSuitesExpanded ? 'is-expanded' : ''}`} />{page === 'industry' && <span className="nav-active-marker" />}
+          <button type="button" className={`visionos-dock-button ${documentPageIds.includes(page) && page !== 'drive' ? 'is-active' : ''}`} aria-label="Documents" title="Documents" onClick={() => goTo('docs')}>
+            <FileText size={21} strokeWidth={1.8} />
           </button>
-          {officeSuitesExpanded && <div className="nav-subgroup" id="industry-subnav">
-            {industryCatalog.map((industry) => <NavButton key={industry.id} className={`nav-subbutton nav-industry-button nav-industry-${industry.id}`} active={page === 'industry' && industryFocus === industry.id} icon={<span className={`nav-industry-dot nav-industry-${industry.id}`} />} label={industry.shortLabel} onClick={() => selectIndustry(industry.id)} />)}
-          </div>}
-          <NavButton active={page === 'team'} icon={<MessageCircle size={18} />} label="Team" onClick={() => goTo('team')} />
+          <button type="button" className={`visionos-dock-button ${page === 'drive' ? 'is-active' : ''}`} aria-label="Drive" title="Drive · cloud files, documents and media" onClick={() => goTo('drive')}>
+            <FolderOpen size={21} strokeWidth={1.8} />
+          </button>
+          <button type="button" className="visionos-dock-button is-unavailable" aria-label="AI Chat (not connected yet)" title="AI Chat · workspace-wide assistant is not connected yet" disabled>
+            <Sparkles size={21} strokeWidth={1.8} />
+          </button>
+          <span className="visionos-dock-divider" aria-hidden="true" />
+          <button type="button" className={`visionos-dock-button ${page === 'settings' ? 'is-active' : ''}`} aria-label="Profile and preferences" title="Profile & preferences" onClick={() => goTo('settings')}>
+            <MoreHorizontal size={21} strokeWidth={1.8} />
+          </button>
         </nav>
-
-        <div className="sidebar-bottom">
-          <div className="sidebar-divider" />
-          <NavButton active={page === 'settings'} icon={<Settings2 size={18} />} label="Preferences" onClick={() => goTo('settings')} />
-          <div className="local-profile">
-            <div className="profile-orb"><span>CO</span></div>
-            <div className="profile-copy"><strong>Workspace profile</strong><small>Team sign-in is separate</small></div>
-            <MoreHorizontal size={17} className="muted" />
-          </div>
-        </div>
-      </aside>
+      </aside>aside>
 
       {mobileMenuOpen && <button className="mobile-scrim" aria-label="Close navigation overlay" onClick={() => setMobileMenuOpen(false)} />}
 
