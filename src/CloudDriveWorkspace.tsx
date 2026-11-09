@@ -57,10 +57,11 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const sequence = useRef(0);
 
+  const schemaReady = config.status === 'ready' && config.schemaReady;
   const api = useMemo(() => {
-    if (!client || config.status !== 'ready' || !config.schemaReady || !userId) return null;
+    if (!client || !schemaReady || !userId) return null;
     return createOfficeCloudApi(client, config.anonKey, userId);
-  }, [client, config, userId]);
+  }, [client, config, schemaReady, userId]);
 
   const loadWorkspaces = useCallback(async () => {
     if (!client) return;
@@ -70,7 +71,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   }, [client]);
 
   useEffect(() => {
-    if (!client || config.status !== 'ready' || !config.schemaReady) { setLoading(false); return; }
+    if (!client || !schemaReady) { setLoading(false); return; }
     let alive = true;
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       if (!alive) return;
@@ -92,7 +93,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
       if (alive) setError(cause instanceof Error ? cause.message : 'Could not load your COCCE workspaces.');
     }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; subscription.unsubscribe(); };
-  }, [client, config.status, config.schemaReady, loadWorkspaces]);
+  }, [client, schemaReady, loadWorkspaces]);
 
   const refresh = useCallback(async () => {
     if (!api || !workspaceId) { setFiles([]); setUsage(null); return; }
