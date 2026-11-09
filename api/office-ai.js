@@ -80,12 +80,12 @@ function isFreeModelUnavailable(status, providerError = {}) {
     || ['model_not_found', 'no_endpoints_found', 'no_available_provider', 'free_model_unavailable'].includes(providerError.code);
 }
 
-function hasPositiveReportedCost(value) {
+function hasVerifiedZeroCost(value) {
   const cost = value?.usage?.cost;
-  if (typeof cost === 'number') return Number.isFinite(cost) && cost > 0;
+  if (typeof cost === 'number') return Number.isFinite(cost) && cost === 0;
   if (typeof cost === 'string' && cost.trim()) {
     const numeric = Number(cost);
-    return Number.isFinite(numeric) && numeric > 0;
+    return Number.isFinite(numeric) && numeric === 0;
   }
   return false;
 }
@@ -339,7 +339,7 @@ async function generateText({ action, prompt, selectedText, documentText, openRo
       return { kind: 'provider-error' };
     }
     const text = data?.choices?.[0]?.message?.content;
-    if (data?.model !== FREE_MODEL_ID || hasPositiveReportedCost(data)) {
+    if (data?.model !== FREE_MODEL_ID || !hasVerifiedZeroCost(data)) {
       return { kind: 'free-model-unavailable' };
     }
     if (typeof text !== 'string' || !text.trim() || text.length > MAX_OUTPUT_CHARS) {
