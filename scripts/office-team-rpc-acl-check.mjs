@@ -25,10 +25,13 @@ before(async () => {
 after(async () => { await db?.close(); });
 
 test('the migration is transactional and only revokes the two intended anonymous RPC grants', () => {
-  assert.match(migration.trim(), /^BEGIN;[\\s\\S]*COMMIT;$/);
-  assert.match(migration, /office_create_invitation\\(uuid, uuid, text, text\\) FROM anon, PUBLIC/i);
-  assert.match(migration, /office_set_member_title\\(uuid, uuid, text\\) FROM anon, PUBLIC/i);
-  assert.doesNotMatch(migration, /\\b(?:DROP|TRUNCATE|DELETE|ALTER TABLE)\\b/i);
+  const normalized = migration.trim();
+  assert.ok(normalized.startsWith('BEGIN;'));
+  assert.ok(normalized.endsWith('COMMIT;'));
+  assert.ok(migration.includes('REVOKE EXECUTE ON FUNCTION public.office_create_invitation(uuid, uuid, text, text) FROM anon, PUBLIC;'));
+  assert.ok(migration.includes('REVOKE EXECUTE ON FUNCTION public.office_set_member_title(uuid, uuid, text) FROM anon, PUBLIC;'));
+  const upper = migration.toUpperCase();
+  for (const forbidden of ['DROP ', 'TRUNCATE ', 'DELETE ', 'ALTER TABLE']) assert.equal(upper.includes(forbidden), false);
 });
 
 test('anonymous execution is removed while authenticated and service-role execution is preserved', async () => {
