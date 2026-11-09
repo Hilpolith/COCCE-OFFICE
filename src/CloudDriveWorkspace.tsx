@@ -4,7 +4,7 @@ import { officeTeamApi, type OfficeWorkspace } from './lib/officeTeamApi';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import { createOfficeCloudApi, OFFICE_CLOUD_MAX_FILE_BYTES } from './lib/officeCloudFiles';
-import type { CloudFile, CloudUsage } from './lib/officeCloudFiles';
+import type { CloudFile, CloudUsage, CloudStoragePlan, CloudStorageSubscription, CloudStorageHistoryEvent } from './lib/officeCloudFiles';
 import { formatFileSize } from './lib/driveStore';
 import { importDocxFile, MAX_DOCX_FILE_BYTES, DOCX_MIME } from './lib/docxInterchange';
 import { AlertCircle, ArrowDownToLine, AudioLines, Building2, Check, Cloud, File as FileIcon, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
@@ -54,6 +54,13 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [files, setFiles] = useState<CloudFile[]>([]);
   const [usage, setUsage] = useState<CloudUsage | null>(null);
+  const [storagePlans, setStoragePlans] = useState<CloudStoragePlan[]>([]);
+  const [storageSubscriptions, setStorageSubscriptions] = useState<CloudStorageSubscription[]>([]);
+  const [storageHistory, setStorageHistory] = useState<CloudStorageHistoryEvent[]>([]);
+  const [showStoragePlans, setShowStoragePlans] = useState(false);
+  const [selectedStoragePlan, setSelectedStoragePlan] = useState<CloudStoragePlan | null>(null);
+  const [autoRenewChoice, setAutoRenewChoice] = useState(false);
+  const [storageBusy, setStorageBusy] = useState(false);
   const [trash, setTrash] = useState(false);
   const [category, setCategory] = useState<Category>('all');
   const [loading, setLoading] = useState(true);
@@ -68,6 +75,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   const sequence = useRef(0);
 
   const schemaReady = config.status === 'ready' ? config.schemaReady : false;
+  const canManageStorage = useMemo(() => ['owner', 'admin'].includes(workspaces.find((space) => space.workspace_id === workspaceId)?.role ?? ''), [workspaces, workspaceId]);
   const api = useMemo(() => {
     if (!client || config.status !== 'ready' || !config.schemaReady || !userId) return null;
     return createOfficeCloudApi(client, config.anonKey, userId);
@@ -86,7 +94,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       if (!alive) return;
       setUserId(session?.user.id ?? '');
-      setFiles([]); setUsage(null); setWorkspaces([]); setWorkspaceId('');
+      setFiles([]); setUsage(null); setStoragePlans([]); setStorageSubscriptions([]); setStorageHistory([]); setWorkspaces([]); setWorkspaceId('');
       if (session) { void loadWorkspaces().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Could not load your COCCE workspaces.')); }
       else setLoading(false);
     });
@@ -122,6 +130,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       setWorkspaceId(nextId);
       setFiles([]);
       setUsage(null);
+      setStoragePlans([]); setStorageSubscriptions([]); setStorageHistory([]);
       setPreview(null);
       setNotice('');
       setError('');
@@ -131,6 +140,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       setWorkspaceId('');
       setFiles([]);
       setUsage(null);
+      setStoragePlans([]); setStorageSubscriptions([]); setStorageHistory([]);
       setPreview(null);
     };
     window.addEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
@@ -142,16 +152,26 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   }, [workspaces, workspaceId]);
 
   const refresh = useCallback(async () => {
-    if (!api || !workspaceId) { setFiles([]); setUsage(null); setHasMore(false); return; }
+    if (!api || !workspaceId) { setFiles([]); setUsage(null); setStoragePlans([]); setStorageSubscriptions([]); setStorageHistory([]); setHasMore(false); return; }
     const current = ++sequence.current;
     setLoading(true); setError('');
     try {
-      const [nextFiles, nextUsage] = await Promise.all([api.list(workspaceId, trash), api.usage(workspaceId)]);
-      if (current === sequence.current) { setFiles(nextFiles); setUsage(nextUsage); setHasMore(nextFiles.length === 50); }
+      const [nextFiles, nextUsage, nextPlans, nextSubscriptions, nextHistory] = await Promise.all([
+        api.list(workspaceId, trash),
+        api.usage(workspaceId),
+        api.storagePlans(workspaceId),
+        canManageStorage ? api.storageSubscriptions(workspaceId) : Promise.resolve([]),
+        canManageStorage ? api.storageHistory(workspaceId) : Promise.resolve([]),
+      ]);
+      if (current === sequence.current) {
+        setFiles(nextFiles); setUsage(nextUsage); setStoragePlans(nextPlans);
+        setStorageSubscriptions(nextSubscriptions); setStorageHistory(nextHistory);
+        setHasMore(nextFiles.length === 50);
+      }
     } catch (cause) {
       if (current === sequence.current) setError(cause instanceof Error ? cause.message : 'Cloud Drive could not be loaded.');
     } finally { if (current === sequence.current) setLoading(false); }
-  }, [api, workspaceId, trash]);
+  }, [api, workspaceId, trash, canManageStorage]);
 
   useEffect(() => { void refresh(); return () => { sequence.current += 1; }; }, [refresh]);
   useEffect(() => {
@@ -250,6 +270,47 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
     finally { setBusy(false); }
   };
 
+  const purchaseStorage = async () => {
+    if (!api || !workspaceId || !selectedStoragePlan || !canManageStorage || storageBusy) return;
+    setStorageBusy(true); setError(''); setNotice('');
+    try {
+      const result = await api.purchaseStorage(workspaceId, selectedStoragePlan.planCode, crypto.randomUUID(), autoRenewChoice);
+      setSelectedStoragePlan(null); setAutoRenewChoice(false); setShowStoragePlans(false);
+      setNotice('Added ' + selectedStoragePlan.displayName + ' to this workspace Drive for ' + selectedStoragePlan.monthlyCoins.toLocaleString() + ' Coins.');
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The storage subscription could not be purchased.');
+    } finally { setStorageBusy(false); }
+  };
+
+  const renewStorage = async (subscription: CloudStorageSubscription) => {
+    if (!api || !canManageStorage || storageBusy) return;
+    if (!await confirm('Renew ' + subscription.displayName + ' storage for ' + subscription.monthlyCoins.toLocaleString() + ' COCCE Coins? This adds one month to the current subscription period.')) return;
+    setStorageBusy(true); setError(''); setNotice('');
+    try {
+      await api.renewStorage(subscription.subscriptionId, crypto.randomUUID());
+      setNotice(subscription.displayName + ' storage subscription renewed.');
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'The storage subscription could not be renewed.'); }
+    finally { setStorageBusy(false); }
+  };
+
+  const toggleStorageAutoRenew = async (subscription: CloudStorageSubscription) => {
+    if (!api || !canManageStorage || storageBusy) return;
+    const next = !subscription.autoRenew;
+    const message = next
+      ? 'Enable automatic monthly renewal for ' + subscription.displayName + ' at ' + subscription.monthlyCoins.toLocaleString() + ' COCCE Coins per month? The account of the administrator enabling it will be charged. A failed payment has a three-day grace period.'
+      : 'Turn off automatic renewal for ' + subscription.displayName + '? The paid storage remains available until ' + new Date(subscription.currentPeriodEnd).toLocaleDateString() + '.';
+    if (!await confirm(message)) return;
+    setStorageBusy(true); setError(''); setNotice('');
+    try {
+      await api.setStorageAutoRenew(subscription.subscriptionId, next);
+      setNotice(next ? 'Automatic storage renewal enabled.' : 'Automatic storage renewal turned off. Current paid access remains until the period ends.');
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'The storage renewal setting could not be changed.'); }
+    finally { setStorageBusy(false); }
+  };
+
   const moveFile = async (file: CloudFile, restore: boolean) => {
     if (!api) return;
     if (!await confirm(restore ? `Restore “${file.displayName}” from workspace trash?` : `Move “${file.displayName}” to this workspace’s trash? Active members may no longer see it in My files.`)) return;
@@ -272,6 +333,59 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       <div className="drive-cloud-quota"><strong>{usage ? formatFileSize(usage.activeStoredBytes) : '—'}</strong><span>of {usage ? formatFileSize(usage.quotaBytes) : '—'} used</span>{usage && <div><i style={{ width: `${Math.min(100, usage.usagePercent)}%` }}/></div>}</div>
       <div className="drive-cloud-actions">{!trash && <button className="button-primary" type="button" onClick={() => inputRef.current?.click()} disabled={!workspaceId || busy}><Upload size={15}/> {busy ? 'Working…' : 'Upload files'}</button>}<input ref={inputRef} className="visually-hidden" type="file" multiple onChange={(event) => { const chosen = event.target.files ? Array.from(event.target.files) : []; event.target.value = ''; if (chosen.length) void upload(chosen); }}/></div>
     </div>
+    <section className="drive-storage-billing glass-card" aria-label="Monthly workspace storage">
+      <div className="drive-storage-billing-head">
+        <div><span className="eyebrow">WORKSPACE STORAGE ADD-ONS</span><h3>More room for your team</h3><p>Monthly add-ons increase the current workspace quota. Your existing files and base allowance stay unchanged.</p></div>
+        <button className="button-secondary" type="button" onClick={() => setShowStoragePlans((value) => !value)} disabled={!workspaceId || loading || storageBusy}>{showStoragePlans ? 'Hide plans' : 'View plans'}</button>
+      </div>
+      <div className="drive-storage-billing-summary">
+        <span>Included quota <strong>{usage ? formatFileSize(usage.baseQuotaBytes) : '—'}</strong></span>
+        <span>Purchased add-ons <strong>{usage ? formatFileSize(usage.purchasedQuotaBytes) : '—'}</strong></span>
+        <span>Total workspace quota <strong>{usage ? formatFileSize(usage.quotaBytes) : '—'}</strong></span>
+      </div>
+      {storageSubscriptions.length > 0 && <div className="drive-storage-subscriptions">
+        <h4>Subscriptions</h4>
+        {storageSubscriptions.map((subscription) => <article className="drive-storage-subscription" key={subscription.subscriptionId}>
+          <div className="drive-storage-subscription-main">
+            <strong>{subscription.displayName} add-on</strong>
+            <span>{subscription.monthlyCoins.toLocaleString()} Coins / month · {formatFileSize(subscription.quotaBytes)}</span>
+            <small>{subscription.status === 'past_due' ? 'Payment due · grace until ' + (subscription.graceUntil ? new Date(subscription.graceUntil).toLocaleDateString() : 'grace period') : subscription.status === 'expired' ? 'Expired' : 'Current period ends ' + new Date(subscription.currentPeriodEnd).toLocaleDateString()}</small>
+          </div>
+          <div className="drive-storage-subscription-actions">
+            {subscription.status !== 'expired' && <button type="button" className="button-secondary" onClick={() => void renewStorage(subscription)} disabled={storageBusy}>Renew now</button>}
+            {subscription.status !== 'expired' && <button type="button" className="button-secondary" onClick={() => void toggleStorageAutoRenew(subscription)} disabled={storageBusy}>{subscription.autoRenew ? 'Turn off auto-renew' : 'Enable auto-renew'}</button>}
+            <span className={subscription.autoRenew ? 'is-renewing' : 'is-manual'}>{subscription.autoRenew ? 'Auto-renew on' : 'Manual renewal'}</span>
+          </div>
+        </article>)}
+      </div>}
+      {showStoragePlans && <div className="drive-storage-plans">
+        <div className="drive-storage-plans-intro"><strong>Choose an additional storage package</strong><span>Prices are monthly. 1 COCCE Coin = TSh 1.</span></div>
+        <div className="drive-storage-plan-grid">
+          {storagePlans.map((plan) => <article className="drive-storage-plan" key={plan.planCode}>
+            <strong>{plan.displayName}</strong><span>{formatFileSize(plan.quotaBytes)} additional</span>
+            <b>{plan.monthlyCoins.toLocaleString()} Coins</b><small>TSh {plan.monthlyCoins.toLocaleString()} / month</small>
+            <button type="button" className="button-primary" onClick={() => { setSelectedStoragePlan(plan); setAutoRenewChoice(false); }} disabled={!canManageStorage || storageBusy}>{canManageStorage ? 'Choose plan' : 'Owner/admin only'}</button>
+          </article>)}
+        </div>
+        {!canManageStorage && <p className="drive-storage-admin-note">Only workspace owners and admins can purchase or manage monthly storage. Ask a workspace administrator to add a package.</p>}
+        <p className="drive-storage-policy">Auto-renew is optional and off by default. If enabled, the administrator who enables it is charged monthly. Failed payments have a three-day grace period; after expiry, only the add-on quota is removed. Existing files are never deleted, but uploads can pause if usage exceeds the remaining quota.</p>
+      </div>}
+      {storageHistory.length > 0 && <details className="drive-storage-history"><summary>Subscription history</summary><ul>{storageHistory.slice(0,12).map((event) => <li key={event.eventId}><span>{event.displayName} · {event.eventType.replaceAll('_',' ')}</span><small>{event.coins ? event.coins.toLocaleString() + ' Coins' : '—'} · {new Date(event.createdAt).toLocaleString()}</small></li>)}</ul></details>}
+      {selectedStoragePlan && <div className="drive-storage-dialog-backdrop">
+        <section className="drive-storage-dialog" role="dialog" aria-modal="true" aria-labelledby="drive-storage-dialog-title">
+          <span className="eyebrow">CONFIRM STORAGE PURCHASE</span>
+          <h3 id="drive-storage-dialog-title">Add {selectedStoragePlan.displayName} to this workspace?</h3>
+          <p>This adds {formatFileSize(selectedStoragePlan.quotaBytes)} to the current workspace quota for one month.</p>
+          <div className="drive-storage-purchase-price"><strong>{selectedStoragePlan.monthlyCoins.toLocaleString()} Coins</strong><span>TSh {selectedStoragePlan.monthlyCoins.toLocaleString()} / month</span></div>
+          <label className="drive-storage-auto-renew-choice"><input type="checkbox" checked={autoRenewChoice} onChange={(event) => setAutoRenewChoice(event.target.checked)}/><span><strong>Automatically renew monthly</strong><small>Off by default. If selected, the administrator purchasing this plan will be charged each month. A failed payment has a three-day grace period.</small></span></label>
+          <p className="drive-storage-dialog-note">After the subscription expires, its add-on quota is removed. Existing files are not deleted; new uploads may pause until usage is below the remaining quota.</p>
+          <div className="drive-storage-dialog-actions">
+            <button type="button" className="button-secondary" onClick={() => setSelectedStoragePlan(null)} disabled={storageBusy}>Cancel</button>
+            <button type="button" className="button-primary" onClick={() => void purchaseStorage()} disabled={storageBusy}>{storageBusy ? 'Processing…' : 'Purchase · ' + selectedStoragePlan.monthlyCoins.toLocaleString() + ' Coins'}</button>
+          </div>
+        </section>
+      </div>}
+    </section>
     <div className="drive-cloud-tabs"><button type="button" className={!trash ? 'is-active' : ''} onClick={() => { setFiles([]); setHasMore(false); setTrash(false); }}>My files</button><button type="button" className={trash ? 'is-active' : ''} onClick={() => { setFiles([]); setHasMore(false); setTrash(true); }}><Trash2 size={14}/> Trash</button></div>
     {!trash && <div className="drive-category-tabs">{([['all','All files'],['documents','Documents'],['images','Images'],['video','Video'],['audio','Audio'],['other','Other']] as const).map(([id,label]) => <button type="button" key={id} className={category===id?'is-active':''} onClick={() => setCategory(id)}>{label}<span>{id==='all'?matching.length:matching.filter((file)=>categoryOf(file)===id).length}</span></button>)}</div>}
     {notice && <div className="drive-feedback" role="status"><Check size={14}/>{notice}</div>}
