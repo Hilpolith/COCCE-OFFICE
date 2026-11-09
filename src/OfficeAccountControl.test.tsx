@@ -69,6 +69,7 @@ describe('Office account control', () => {
     await waitFor(() => expect(mocks.getUser).toHaveBeenCalled());
     fireEvent.click(await screen.findByRole('button', { name: /Account: synthetic@example.test/ }));
     expect(screen.getAllByText('synthetic@example.test').length).toBeGreaterThan(0);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Sign out' }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(mocks.signOut).toHaveBeenCalledWith({ scope: 'local' }));
     expect(await screen.findByRole('button', { name: 'Sign in to COCCE Office' })).toBeTruthy();
@@ -108,7 +109,7 @@ describe('Office account control', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Account: synthetic@example.test/ }));
     await screen.findByLabelText('Organisation or workspace name');
     fireEvent.change(screen.getByLabelText('Organisation or workspace name'), { target: { value: 'Kijiji Academy' } });
-    fireEvent.change(screen.getByLabelText('Choose your Office suite'), { target: { value: 'school' } });
+    fireEvent.change(screen.getByLabelText('Office suite'), { target: { value: 'school' } });
     fireEvent.click(screen.getByRole('button', { name: /Create organisation/ }));
 
     await waitFor(() => expect(mocks.officeApi.createWorkspaceWithSuite).toHaveBeenCalledWith(
