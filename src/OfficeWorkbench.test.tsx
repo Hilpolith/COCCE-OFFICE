@@ -79,17 +79,17 @@ describe('shared Office editor chrome and AI workbench', () => {
 
   it('collapses and expands the AI rail without covering or unmounting the editor', () => {
     render(<OfficeWorkbenchLayout rail={<p>AI rail content</p>}><main>Editor canvas</main></OfficeWorkbenchLayout>);
-    const collapse = screen.getByRole('button', { name: 'Collapse AI workbench' });
+    const collapse = screen.getByRole('button', { name: 'Collapse COCCE AI' });
     const railId = collapse.getAttribute('aria-controls');
     const railContent = railId ? document.getElementById(railId) : null;
 
     expect(railContent?.hidden).toBe(false);
     expect(screen.getByText('Editor canvas')).toBeTruthy();
     fireEvent.click(collapse);
-    expect(screen.getByRole('button', { name: 'Expand AI workbench' }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Expand COCCE AI' }).getAttribute('aria-expanded')).toBe('false');
     expect(railContent?.hidden).toBe(true);
     expect(screen.getByText('Editor canvas')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Expand AI workbench' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand COCCE AI' }));
     expect(railContent?.hidden).toBe(false);
   });
 
