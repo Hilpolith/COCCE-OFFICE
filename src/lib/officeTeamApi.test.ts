@@ -13,11 +13,32 @@ describe('Office collaboration RPC client', () => {
     expect(rpc).toHaveBeenCalledWith('office_list_workspaces', undefined);
   });
 
-  it('sends only the selected public-profile identity and requested member role to the Office invite RPC', async () => {
+  it('sends the selected COCCE identity, permission role, and optional free-text position to the Office invite RPC', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: 'invite-id', error: null });
-    await officeTeamApi.createInvitation(mockClient(rpc), 'workspace-id', 'user-id', 'member');
+    await officeTeamApi.createInvitation(mockClient(rpc), 'workspace-id', 'user-id', 'member', 'Chief Operating Officer');
     expect(rpc).toHaveBeenCalledWith('office_create_invitation', {
-      p_workspace_id: 'workspace-id', p_invitee_id: 'user-id', p_role: 'member',
+      p_workspace_id: 'workspace-id', p_invitee_id: 'user-id', p_role: 'member', p_job_title: 'Chief Operating Officer',
+    });
+  });
+
+  it('joins membership roles with the permission-checked free-text position RPC', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ user_id: 'user-a', role: 'owner', status: 'active' }], error: null })
+      .mockResolvedValueOnce({ data: [{ user_id: 'user-a', job_title: 'Chief Executive Officer' }], error: null });
+    await expect(officeTeamApi.listMembers(mockClient(rpc), 'workspace-id')).resolves.toEqual([
+      { user_id: 'user-a', role: 'owner', status: 'active', job_title: 'Chief Executive Officer' },
+    ]);
+    expect(rpc.mock.calls).toEqual([
+      ['office_list_members', { p_workspace_id: 'workspace-id' }],
+      ['office_list_member_titles', { p_workspace_id: 'workspace-id' }],
+    ]);
+  });
+
+  it('sets a free-text member position through the owner/admin-gated RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
+    await officeTeamApi.setMemberTitle(mockClient(rpc), 'workspace-id', 'user-id', 'VP Operations');
+    expect(rpc).toHaveBeenCalledWith('office_set_member_title', {
+      p_workspace_id: 'workspace-id', p_user_id: 'user-id', p_job_title: 'VP Operations',
     });
   });
 
