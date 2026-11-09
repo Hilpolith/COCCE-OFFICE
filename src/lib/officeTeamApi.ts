@@ -38,7 +38,7 @@ export const officeTeamApi = {
   },
   setMemberTitle: (client: RpcClient, workspaceId: string, userId: string, jobTitle: string) => rpc<void>(client, 'office_set_member_title', { p_workspace_id: workspaceId, p_user_id: userId, p_job_title: jobTitle }),
   searchUsers: (client: RpcClient, workspaceId: string, query: string) => rpc<OfficeSearchResult[]>(client, 'office_search_users', { p_workspace_id: workspaceId, p_query: query }),
-  createInvitation: (client: RpcClient, workspaceId: string, userId: string, role: 'admin' | 'member') => rpc<string>(client, 'office_create_invitation', { p_workspace_id: workspaceId, p_invitee_id: userId, p_role: role }),
+  createInvitation: (client: RpcClient, workspaceId: string, userId: string, role: 'admin' | 'member', jobTitle = '') => rpc<string>(client, 'office_create_invitation', { p_workspace_id: workspaceId, p_invitee_id: userId, p_role: role, p_job_title: jobTitle }),
   listWorkspaceInvitations: (client: RpcClient, workspaceId: string) => rpc<OfficeWorkspaceInvitation[]>(client, 'office_list_workspace_invitations', { p_workspace_id: workspaceId }),
   cancelInvitation: (client: RpcClient, invitationId: string) => rpc<void>(client, 'office_cancel_invitation', { p_invitation_id: invitationId }),
   manageMember: (client: RpcClient, workspaceId: string, userId: string, action: 'role' | 'suspend' | 'restore' | 'remove', role?: 'admin' | 'member') => rpc<void>(client, 'office_manage_member', { p_workspace_id: workspaceId, p_user_id: userId, p_action: action, p_role: role ?? null }),
