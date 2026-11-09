@@ -8,6 +8,14 @@ import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './officeAiWorkspace.css';
 
+const AI_DRIVE_TEXT_EXTENSIONS = new Set([
+  'txt','md','markdown','mdx','csv','tsv','json','jsonl','ndjson','xml','yaml','yml','log',
+  'ts','tsx','js','jsx','mjs','cjs','css','scss','sass','less','html','htm','sql','py','sh','bash','zsh',
+  'toml','ini','conf','properties','dart','java','kt','kts','go','rs','php','rb','swift','c','h','cpp','hpp',
+  'cs','r','lua','ps1','bat','graphql','gql','prisma','vue','svelte','astro',
+]);
+const AI_DRIVE_SENSITIVE_NAME = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
+
 export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }: { initialWorkspaceId?: string; initialPrompt?: string } = {}) {
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
@@ -207,7 +215,11 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setShowDriveConsent(false);
   }, [initialWorkspaceId, workspaces]);
 
-  const supportedDriveFile = (file: CloudFile) => file.sizeBytes <= 512 * 1024 && /\.(txt|md|csv|tsv|json|xml|yaml|yml|log)$/i.test(file.displayName);
+  const supportedDriveFile = (file: CloudFile) => {
+    const name = file.displayName.normalize('NFC').trim();
+    const extension = name.split('.').pop()?.toLowerCase() ?? '';
+    return file.sizeBytes <= 512 * 1024 && AI_DRIVE_TEXT_EXTENSIONS.has(extension) && !AI_DRIVE_SENSITIVE_NAME.test(name);
+  };
 
   const openDriveFiles = async () => {
     if (driveFilesOpen) { setDriveFilesOpen(false); return; }
@@ -245,7 +257,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFiles(files);
       setDriveFileOffsets(Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])));
       setDriveFileHasMore(results.some((result) => result.hasMore) && files.length < 100);
-      if (!files.length) setDriveFilesError('No supported files were found. COCCE Docs and Sheets cloud copies plus .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files up to 512 KiB are supported.');
+      if (!files.length) setDriveFilesError('No supported files were found. COCCE Docs and Sheets copies plus safe text and source-code files (TXT, Markdown, CSV, JSON, TypeScript, SQL, Python and more) up to 512 KiB are supported. Secret, credential and environment files are excluded.');
     } catch (reason) {
       if (generation === driveLoadGeneration.current) setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
     } finally {
