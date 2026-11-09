@@ -107,7 +107,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     // Workspace selection and every selected file are revalidated by the Edge Function.
   };
 
-  const supportedDriveFile = (file: CloudFile) => /\.(txt|md|csv|tsv|json|xml|yaml|yml|log)$/i.test(file.displayName);
+  const supportedDriveFile = (file: CloudFile) => file.sizeBytes <= 512 * 1024 && /\.(txt|md|csv|tsv|json|xml|yaml|yml|log)$/i.test(file.displayName);
 
   const openDriveFiles = async () => {
     if (driveFilesOpen) { setDriveFilesOpen(false); return; }
@@ -129,7 +129,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       }));
       const files = results.flat().filter(supportedDriveFile).slice(0, 80);
       setDriveFiles(files);
-      if (!files.length) setDriveFilesError('No supported text files were found in this workspace scope. Only .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files can be attached.');
+      if (!files.length) setDriveFilesError('No supported text files were found in this workspace scope. Only .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files up to 512 KiB can be attached.');
     } catch (reason) {
       setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
     } finally {
@@ -191,7 +191,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         </section>
         <div className="office-ai-answer" aria-live="polite">{answer ? <><div className="office-ai-answer-label"><Sparkles size={14} /> COCCE AI</div><p>{answer}</p></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose one workspace or all AI-enabled workspaces. Ask for summaries, plans, drafts, and practical next steps.</span></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder="Ask across your workspace…" disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
-        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {selectedFileIds.length ? 'Selected text files are read server-side from their enabled workspace and limited to 3 files, 512 KiB each.' : 'Drive files are never read unless you explicitly select them.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
+        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {selectedFileIds.length ? 'Selected text files are read server-side from their enabled workspace and limited to 3 files, 512 KiB and 8,000 characters each (20,000 total).' : 'Drive files are never read unless you explicitly select them.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
       </>}
       {error && status === 'ready' && <div className="office-ai-error" role="alert"><AlertCircle size={14} /> {error}</div>}
     </section>
