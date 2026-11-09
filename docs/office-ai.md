@@ -73,18 +73,18 @@ The Government correspondence review route is subject to the same workspace AI s
 These Vercel API changes are on `main` but are not considered production-released until the current commit receives a READY deployment. The separate Supabase `office-ai-chat` Edge Function remains ACTIVE version 16 with JWT verification enabled.
 
 
-## Current deployed functions after selected Drive context — 2026-11-09 11:16 UTC
+## Current deployed functions after native Docs/Sheets context — 2026-11-09
 
-- `office-ai-chat` is ACTIVE at version 16 with JWT verification enabled. Its deployment includes the separately tested `drive-context.ts` module.
+- `office-ai-chat` is ACTIVE at version 19 with JWT verification enabled. The deployed bundle includes `drive-context.ts`, which validates and extracts supported plain-text files and native COCCE Docs/Sheets cloud-copy envelopes.
 - `office-cloud-files` is ACTIVE at version 8 with JWT verification enabled. The shared origin validator now governs both normal requests and OPTIONS preflights, including the linked COCCE Office Vercel preview hostname.
 - Production Vercel environment flags `VITE_OFFICE_TEAM_SCHEMA_READY` and `VITE_OFFICE_CLOUD_FILES_READY` are both enabled.
-- The selected Drive context helper and AI workspace UI passed their focused tests (10 tests total). The production TypeScript/Vite build passed at the preceding main revision. The final full-suite rerun is delegated to the new main-branch GitHub Actions run for commit `22b766fe12d871cb8e5036220bfbf9542532e008`; that run was pending at the time of this note.
+- The selected Drive context tests now cover native Docs/Sheets extraction and rejection of unsafe embedded Docs content in addition to workspace scoping, Bunny URL validation, size bounds and SHA-256 verification. The newest relevant GitHub Actions attempts were cancelled while `main` continued receiving concurrent commits; a successful full-suite run has not yet been confirmed.
 - The Vercel production alias has not been updated to these source changes because the team's deployment API quota returned HTTP 402 `api-deployments-free-per-day`. Keep this release marked unreleased until the current main commit has a READY production deployment.
 
 
 ## Latest integrity and CI checkpoint — 2026-11-09 11:19 UTC
 
-The private Cloud Drive link response now includes the stored SHA-256 digest from the verified revision. COCCE AI compares the server-fetched Bunny bytes against that digest before decoding or adding any excerpt to model context. The Cloud Drive Edge Function is ACTIVE at version 8 and COCCE AI is ACTIVE at version 16; both still require JWT verification. The Drive-context test suite now covers the SHA-256 match and mismatch paths.
+The private Cloud Drive link response now includes the stored SHA-256 digest from the verified revision. COCCE AI compares the server-fetched Bunny bytes against that digest before decoding or adding any excerpt to model context. Native Docs HTML is reduced to plain text after rejecting embedded active content; Sheets cells are read as literal strings and formulas are never evaluated. The Cloud Drive Edge Function is ACTIVE at version 8 and COCCE AI is ACTIVE at version 16; both still require JWT verification. The Drive-context test suite now covers the SHA-256 match and mismatch paths.
 
 GitHub Actions run `42607472160` completed successfully for an earlier main revision and executed both the full test command and production build. The latest main commit `f3c29c2d0ef353c980aa75012d686cb101382e60` has its own full validation run queued as `42608122219`; wait for that run to complete before treating the latest SHA as fully verified. Vercel production deployment remains blocked by the team's HTTP 402 `api-deployments-free-per-day` limit.
 
