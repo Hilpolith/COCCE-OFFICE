@@ -124,7 +124,7 @@ test('auto-renew charges the wallet once when due and preserves the subscription
  await enableBilling();
  const bought=await purchase(owner,workspace,'storage_5gb_monthly','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',true);
  const before=await balance(owner);
- await db.query("UPDATE public.office_cloud_storage_subscriptions SET current_period_end=now()-interval '1 hour',next_billing_at=now()-interval '1 hour' WHERE subscription_id=$1",[bought.subscription_id]);
+ await db.query("UPDATE public.office_cloud_storage_subscriptions SET current_period_start=now()-interval '2 months',current_period_end=now()-interval '1 hour',next_billing_at=now()-interval '1 hour' WHERE subscription_id=$1",[bought.subscription_id]);
  const result=await rpc('office_cloud_process_storage_renewals',[100]);
  assert.equal(result.renewed,1); assert.equal(await balance(owner),before-2000);
  assert.equal(Number((await quota(workspace)).subscription_quota_bytes),5_000_000_000);
@@ -133,7 +133,7 @@ test('auto-renew charges the wallet once when due and preserves the subscription
 test('failed auto-renew gets a three-day grace, then expires only its quota without deleting files',async()=>{
  await enableBilling();
  const bought=await purchase(low,lowWorkspace,'storage_5gb_monthly','cccccccc-cccc-4ccc-8ccc-cccccccccccc',true);
- await db.query("UPDATE public.office_cloud_storage_subscriptions SET current_period_end=now()-interval '1 hour',next_billing_at=now()-interval '1 hour' WHERE subscription_id=$1",[bought.subscription_id]);
+ await db.query("UPDATE public.office_cloud_storage_subscriptions SET current_period_start=now()-interval '2 months',current_period_end=now()-interval '1 hour',next_billing_at=now()-interval '1 hour' WHERE subscription_id=$1",[bought.subscription_id]);
  const failed=await rpc('office_cloud_process_storage_renewals',[100]);
  assert.equal(failed.failed,1);
  let sub=(await db.query('SELECT status,grace_until FROM public.office_cloud_storage_subscriptions WHERE subscription_id=$1',[bought.subscription_id])).rows[0];
