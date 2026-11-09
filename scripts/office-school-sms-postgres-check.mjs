@@ -136,7 +136,9 @@ test('School operational reads support deterministic bounded offset pagination',
   assert.equal(second.length, 2);
   assert.equal(third.length, 1);
   assert.equal(new Set(ids).size, 5);
-  assert.deepEqual(first.map((row) => row.term_id), [...first.map((row) => row.term_id)]);
+  assert.ok(first[0].start_date > first[1].start_date);
+  assert.ok(first[1].start_date > second[0].start_date);
+  assert.ok(second[1].start_date > third[0].start_date);
   await expectSqlState(() => read('terms', owner, { offset: -1 }, 2), '22023');
   await expectSqlState(() => read('terms', owner, { offset: 100001 }, 2), '22023');
 });
