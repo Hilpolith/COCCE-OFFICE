@@ -101,7 +101,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('Docs AI writing studio', () => {
+describe('Docs Writing assistant', () => {
   it('sends only the selected excerpt, previews it, and changes the editor only after explicit apply', async () => {
     const fetcher = mockFetch();
     const { editor, chain } = makeEditor();
