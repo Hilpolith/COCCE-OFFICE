@@ -7,7 +7,7 @@ import { createOfficeCloudApi, OFFICE_CLOUD_MAX_FILE_BYTES } from './lib/officeC
 import type { CloudFile, CloudUsage } from './lib/officeCloudFiles';
 import { formatFileSize } from './lib/driveStore';
 import { importDocxFile, MAX_DOCX_FILE_BYTES, DOCX_MIME } from './lib/docxInterchange';
-import { AlertCircle, ArrowDownToLine, AudioLines, Check, Cloud, File, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
+import { AlertCircle, ArrowDownToLine, AudioLines, Check, Cloud, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
 import './drive.css';
 
 type Category = 'all' | 'documents' | 'images' | 'video' | 'audio' | 'other';
