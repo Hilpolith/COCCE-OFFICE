@@ -106,6 +106,7 @@ export default function SchoolManagementWorkspace({
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [fees, setFees] = useState<Fee[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [pages, setPages] = useState<Record<string, { hasMore: boolean; loading: boolean }>>({});
   const [keyConfig, setKeyConfig] = useState<NoticeKey>({ configured: false });
   const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
   const [privateKeyState, setPrivateKeyState] = useState<'unavailable' | 'locked' | 'unlocked'>('unavailable');
@@ -170,10 +171,10 @@ export default function SchoolManagementWorkspace({
     { id: 'terms', label: 'Academic terms', value: terms.length, detail: 'Loaded records', icon: CalendarDays, tone: 'cyan' },
     { id: 'classes', label: 'Classes & streams', value: classes.length, detail: 'Loaded records', icon: Users, tone: 'teal' },
     ...(canRegistrar || canTeacher || canBursar ? [{ id: 'students', label: 'Learner records', value: students.length, detail: 'Loaded · max 200', icon: GraduationCap, tone: 'blue' }] : []),
-    ...(canRegistrar ? [{ id: 'admissions', label: 'Applications', value: applications.length, detail: 'Loaded · max 200', icon: ClipboardCheck, tone: 'orange' }] : []),
-    ...(canTeacher ? [{ id: 'attendance', label: 'Attendance sessions', value: attendance.length, detail: 'Loaded · max 100', icon: Check, tone: 'teal' }, { id: 'grades', label: 'Assessments', value: assessments.length, detail: 'Loaded · max 100', icon: BookOpenCheck, tone: 'violet' }] : []),
-    ...(canBursar ? [{ id: 'fees', label: 'Fee charges', value: fees.length, detail: 'Loaded · max 200', icon: WalletCards, tone: 'orange' }] : []),
-  ], [applications.length, assessments.length, attendance.length, canBursar, canRegistrar, canTeacher, classes.length, fees.length, students.length, terms.length]);
+    ...(canRegistrar ? [{ id: 'admissions', label: 'Applications', value: applications.length, detail: pages.admissions?.hasMore ? 'Loaded · more available' : 'Loaded records', icon: ClipboardCheck, tone: 'orange' }] : []),
+    ...(canTeacher ? [{ id: 'attendance', label: 'Attendance sessions', value: attendance.length, detail: pages.attendance?.hasMore ? 'Loaded · more available' : 'Loaded records', icon: Check, tone: 'teal' }, { id: 'grades', label: 'Assessments', value: assessments.length, detail: pages.gradebook?.hasMore ? 'Loaded · more available' : 'Loaded records', icon: BookOpenCheck, tone: 'violet' }] : []),
+    ...(canBursar ? [{ id: 'fees', label: 'Fee charges', value: fees.length, detail: pages.fees?.hasMore ? 'Loaded · more available' : 'Loaded records', icon: WalletCards, tone: 'orange' }] : []),
+  ], [applications.length, assessments.length, attendance.length, canBursar, canRegistrar, canTeacher, classes.length, fees.length, pages, students.length, terms.length]);
   const attendanceActivity = useMemo(() => {
     const totals = attendance.reduce((acc, session) => {
       session.marks.forEach((mark) => { acc[mark.attendance_status] = (acc[mark.attendance_status] ?? 0) + 1; });
@@ -204,6 +205,22 @@ export default function SchoolManagementWorkspace({
     window.setTimeout(() => document.getElementById(`school-tab-${next.id}`)?.focus(), 0);
   };
 
+  const loadMoreRows = useCallback(async <T,>(resource: string, limit: number, currentRows: T[], setRows: (update: (previous: T[]) => T[]) => void) => {
+    if (!client || pages[resource]?.loading || !pages[resource]?.hasMore) return;
+    const generation = generationRef.current;
+    setPages((old) => ({ ...old, [resource]: { ...old[resource], loading: true } }));
+    try {
+      const next = asRows<T>(await officeSchoolManagementApi.read(client, workspaceId, resource, {}, limit, currentRows.length));
+      if (generation !== generationRef.current) return;
+      setRows((previous) => [...previous, ...next]);
+      setPages((old) => ({ ...old, [resource]: { hasMore: next.length === limit, loading: false } }));
+    } catch (error) {
+      if (generation !== generationRef.current) return;
+      setPages((old) => ({ ...old, [resource]: { ...old[resource], loading: false } }));
+      setFeedback(errorText(error));
+    }
+  }, [client, pages, workspaceId]);
+
   const refresh = useCallback(async () => {
     const generation = ++generationRef.current;
     const current = () => generation === generationRef.current;
@@ -213,6 +230,7 @@ export default function SchoolManagementWorkspace({
       return;
     }
     setStatus((old) => old === 'ready' ? old : 'loading');
+    setPages({});
     try {
       const { data: authData, error: authError } = await client.auth.getUser();
       if (!current()) return;
@@ -241,30 +259,37 @@ export default function SchoolManagementWorkspace({
       const nextSubjects = asRows<Subject>(bootstrap.subjects);
       setTerms(nextTerms); setClasses(nextClasses); setSubjects(nextSubjects);
       const requests: Promise<void>[] = [];
+      const loadList = async <T,>(resource: string, limit: number, setter: (rows: T[]) => void) => {
+        const rows = asRows<T>(await officeSchoolManagementApi.read(client, workspaceId, resource, {}, limit));
+        if (!current()) return;
+        setter(rows);
+        setPages((old) => ({ ...old, [resource]: { hasMore: rows.length === limit, loading: false } }));
+      };
       if (nextIsAdmin || nextRole === 'registrar') {
-        requests.push((async () => { setApplications(asRows<Application>(await officeSchoolManagementApi.read(client, workspaceId, 'admissions'))); })());
+        requests.push(loadList<Application>('admissions', 200, setApplications));
         requests.push((async () => {
           const configRow = asRecord(await officeSchoolManagementApi.read(client, workspaceId, 'key_config')) as NoticeKey;
+          if (!current()) return;
           setKeyConfig(configRow);
           setPrivateKeyState((old) => old === 'unlocked' && privateKey ? 'unlocked' : configRow.configured ? 'locked' : 'unavailable');
         })());
       } else { setApplications([]); }
       if (nextIsAdmin) {
-        requests.push((async () => { setStaffRoles(asRows<StaffRoleRow>(await officeSchoolManagementApi.read(client, workspaceId, 'staff'))); })());
-        requests.push((async () => { setClassStaff(asRows<ClassStaffRow>(await officeSchoolManagementApi.read(client, workspaceId, 'class_staff'))); })());
+        requests.push(loadList<StaffRoleRow>('staff', 100, setStaffRoles));
+        requests.push(loadList<ClassStaffRow>('class_staff', 100, setClassStaff));
       } else { setStaffRoles([]); setClassStaff([]); }
       if (nextIsAdmin || ['registrar','teacher','bursar'].includes(nextRole)) {
-        requests.push((async () => { setStudents(asRows<Student>(await officeSchoolManagementApi.read(client, workspaceId, 'students', {}, 200))); })());
+        requests.push(loadList<Student>('students', 200, setStudents));
       } else { setStudents([]); }
       if (nextIsAdmin || nextRole === 'teacher' || nextRole === 'registrar') {
-        requests.push((async () => { setAttendance(asRows<AttendanceSession>(await officeSchoolManagementApi.read(client, workspaceId, 'attendance', {}, 100))); })());
-        requests.push((async () => { setAssessments(asRows<Assessment>(await officeSchoolManagementApi.read(client, workspaceId, 'gradebook', {}, 100))); })());
+        requests.push(loadList<AttendanceSession>('attendance', 100, setAttendance));
+        requests.push(loadList<Assessment>('gradebook', 100, setAssessments));
       } else { setAttendance([]); setAssessments([]); }
       if (nextIsAdmin || nextRole === 'bursar') {
-        requests.push((async () => { setFees(asRows<Fee>(await officeSchoolManagementApi.read(client, workspaceId, 'fees', {}, 200))); })());
+        requests.push(loadList<Fee>('fees', 200, setFees));
       } else { setFees([]); }
       if (nextIsAdmin || nextRole === 'registrar' || nextRole === 'teacher') {
-        requests.push((async () => { setNotices(asRows<Notice>(await officeSchoolManagementApi.read(client, workspaceId, 'notices', {}, 100))); })());
+        requests.push(loadList<Notice>('notices', 100, setNotices));
       } else { setNotices([]); }
       await Promise.all(requests);
       if (!current()) return;
