@@ -52,7 +52,9 @@ function safeStyleForElement(element: HTMLElement, tag: string): string {
     const family = element.style.fontFamily.split(',')[0]?.trim().replace(/^['"]|['"]$/g, '') ?? '';
     const allowedFonts = new Set(['arial', 'aptos', 'calibri', 'cambria', 'georgia', 'times new roman', 'verdana', 'tahoma', 'trebuchet ms', 'courier new', 'consolas', 'inter']);
     if (allowedFonts.has(family.toLowerCase())) styles.push(`font-family:"${family.replaceAll('"', '')}"`);
-    const size = element.style.fontSize.trim();
+    const rawStyle = element.getAttribute('style') ?? '';
+    const rawFontSize = rawStyle.match(/(?:^|;)\\s*font-size\\s*:\\s*([^;]+)\\s*(?:;|$)/i)?.[1]?.trim() ?? '';
+    const size = element.style.fontSize.trim() || rawFontSize;
     const match = size.match(/^(\d{1,2})(pt|px)$/i);
     if (match && Number(match[1]) >= 8 && Number(match[1]) <= 72) styles.push(`font-size:${size}`);
   }
