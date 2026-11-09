@@ -54,11 +54,11 @@ describe('School Management client encryption and RPC adapter', () => {
       .mockResolvedValueOnce({ data: { role: 'registrar' }, error: null })
       .mockResolvedValueOnce({ data: { application_id: 'synthetic-id' }, error: null });
     const client = mockClient(rpc);
-    await expect(officeSchoolManagementApi.read(client, 'workspace-1', 'bootstrap', {}, 1000)).resolves.toEqual({ role: 'registrar' });
+    await expect(officeSchoolManagementApi.read(client, 'workspace-1', 'bootstrap', {}, 1000, 50)).resolves.toEqual({ role: 'registrar' });
     await expect(officeSchoolManagementApi.command(client, 'workspace-1', 'create_application', { ciphertext: 'c2VudGlubmVs' }))
       .resolves.toEqual({ application_id: 'synthetic-id' });
     expect(rpc).toHaveBeenNthCalledWith(1, 'office_school_read', {
-      p_workspace_id: 'workspace-1', p_resource: 'bootstrap', p_filter: {}, p_limit: 200,
+      p_workspace_id: 'workspace-1', p_resource: 'bootstrap', p_filter: { offset: 50 }, p_limit: 200,
     });
     expect(rpc).toHaveBeenNthCalledWith(2, 'office_school_command', {
       p_workspace_id: 'workspace-1', p_action: 'create_application', p_payload: { ciphertext: 'c2VudGlubmVs' },
