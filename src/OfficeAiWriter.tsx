@@ -126,6 +126,8 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       } catch {
         if (active) {
           setAvailability('unavailable');
+          setWorkspaces([]);
+          setWorkspaceId('');
           setWorkspaceLoading(false);
         }
       }
