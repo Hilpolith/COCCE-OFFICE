@@ -19,7 +19,7 @@ before(async()=>{
   'CREATE SCHEMA auth;',
   'CREATE TABLE auth.users(id uuid PRIMARY KEY);',
   "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;",
-  'CREATE TABLE public.profiles(id uuid PRIMARY KEY REFERENCES auth.users(id),cocce_coins integer NOT NULL DEFAULT 0);',
+  'CREATE TABLE public.profiles(id uuid PRIMARY KEY REFERENCES auth.users(id),cocce_coins integer NOT NULL DEFAULT 0,wallet_pin_hash text);',
   "CREATE TABLE public.wallet_transactions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,type text NOT NULL CHECK(type IN ('purchase','campaign','transfer_sent','transfer_received','vip_purchase')),amount integer NOT NULL,description text,related_id uuid REFERENCES public.profiles(id),created_at timestamptz DEFAULT now(),balance bigint DEFAULT 0,hidden_by_owner boolean NOT NULL DEFAULT false);",
   "CREATE FUNCTION public.test_wallet_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF coalesce(current_setting('wallet.atomic_writer',true),'')<>'v2' THEN RAISE EXCEPTION 'wallet writes require atomic operation' USING ERRCODE='42501'; END IF; RETURN NEW; END; $$;",
   "CREATE FUNCTION public.test_wallet_balance() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE v bigint; BEGIN PERFORM 1 FROM public.profiles WHERE id=NEW.user_id FOR UPDATE; SELECT balance INTO v FROM public.wallet_transactions WHERE user_id=NEW.user_id ORDER BY created_at DESC,id DESC LIMIT 1; NEW.balance:=coalesce(v,0)+NEW.amount; IF NEW.balance<0 THEN RAISE EXCEPTION 'insufficient wallet coins' USING ERRCODE='P0001'; END IF; UPDATE public.profiles SET cocce_coins=NEW.balance WHERE id=NEW.user_id; RETURN NEW; END; $$;",
@@ -58,11 +58,15 @@ async function balance(user){
 async function quota(workspaceId){
  return (await db.query('SELECT base_quota_bytes,purchased_quota_bytes,subscription_quota_bytes,quota_bytes FROM public.office_cloud_workspace_quotas WHERE workspace_id=$1',[workspaceId])).rows[0];
 }
+async function enableBilling(){ await db.exec("UPDATE public.office_cloud_storage_billing_config SET enabled=true,price_approved_at=now(),wallet_security_approved_at=now() WHERE singleton=true"); }
 async function purchase(user,space,plan,key,auto=false){
  return rpc('office_cloud_purchase_storage_subscription',[user,space,plan,key,auto]);
 }
 
 test('seeds the six approved monthly plans and exposes them only through the membership-checked API',async()=>{
+ const disabledPlans=await rpc('office_cloud_list_storage_plans',[owner,workspace]);
+ assert.deepEqual(disabledPlans,[]);
+ await enableBilling();
  const plans=await rpc('office_cloud_list_storage_plans',[owner,workspace]);
  assert.deepEqual(plans.map(p=>[p.display_name,p.quota_bytes,p.monthly_coins]),[
   ['5 GB',5_000_000_000,2000],['25 GB',25_000_000_000,5000],
@@ -94,6 +98,7 @@ test('requires workspace owner/admin and purchase is idempotent, atomic, and add
 });
 
 test('insufficient coins roll back the subscription, quota row and ledger debit',async()=>{
+ await enableBilling();
  const before=await balance(low);
  await expectError(()=>purchase(low,lowWorkspace,'storage_25gb_monthly','88888888-8888-4888-8888-888888888888',false),'P0001');
  assert.equal(await balance(low),before);
@@ -102,6 +107,7 @@ test('insufficient coins roll back the subscription, quota row and ledger debit'
 });
 
 test('manual renewal extends a period once and records purchase plus renewal history',async()=>{
+ await enableBilling();
  const bought=await purchase(owner,workspace,'storage_5gb_monthly','99999999-9999-4999-8999-999999999999',false);
  const before=await balance(owner), key='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
  const first=await rpc('office_cloud_renew_storage_subscription',[owner,bought.subscription_id,key]);
@@ -115,6 +121,7 @@ test('manual renewal extends a period once and records purchase plus renewal his
 });
 
 test('auto-renew charges the wallet once when due and preserves the subscription quota',async()=>{
+ await enableBilling();
  const bought=await purchase(owner,workspace,'storage_5gb_monthly','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',true);
  const before=await balance(owner);
  await db.query("UPDATE public.office_cloud_storage_subscriptions SET current_period_end=now()-interval '1 hour',next_billing_at=now()-interval '1 hour' WHERE subscription_id=$1",[bought.subscription_id]);
@@ -124,6 +131,7 @@ test('auto-renew charges the wallet once when due and preserves the subscription
 });
 
 test('failed auto-renew gets a three-day grace, then expires only its quota without deleting files',async()=>{
+ await enableBilling();
  const bought=await purchase(low,lowWorkspace,'storage_5gb_monthly','cccccccc-cccc-4ccc-8ccc-cccccccccccc',true);
  await db.query("UPDATE public.office_cloud_storage_subscriptions SET current_period_end=now()-interval '1 hour',next_billing_at=now()-interval '1 hour' WHERE subscription_id=$1",[bought.subscription_id]);
  const failed=await rpc('office_cloud_process_storage_renewals',[100]);
@@ -140,6 +148,7 @@ test('failed auto-renew gets a three-day grace, then expires only its quota with
 });
 
 test('auto-renew opt-out cancels at period end without another debit',async()=>{
+ await enableBilling();
  const bought=await purchase(owner,workspace,'storage_5gb_monthly','dddddddd-dddd-4ddd-8ddd-dddddddddddd',true);
  await rpc('office_cloud_set_storage_subscription_auto_renew',[owner,bought.subscription_id,false]);
  const before=await balance(owner);
@@ -157,4 +166,25 @@ test('billing RPCs and subscription tables remain unavailable to browser roles',
  assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.office_cloud_purchase_storage_subscription(uuid,uuid,text,uuid,boolean)','EXECUTE') AS ok")).rows[0].ok,false);
  assert.equal((await db.query("SELECT has_function_privilege('service_role','public.office_cloud_purchase_storage_subscription(uuid,uuid,text,uuid,boolean)','EXECUTE') AS ok")).rows[0].ok,true);
  assert.equal((await db.query("SELECT has_function_privilege('service_role','public.office_cloud_process_storage_renewals(integer)','EXECUTE') AS ok")).rows[0].ok,false);
+});
+
+
+test('wallet PIN attempt guard is private and progressively locks after repeated failures',async()=>{
+ const initial=await rpc('office_cloud_wallet_pin_guard',[owner,null]);
+ assert.equal(initial.allowed,true);
+ for(let attempt=1;attempt<=5;attempt++){
+  const result=await rpc('office_cloud_wallet_pin_guard',[owner,false]);
+  if(attempt<5) assert.equal(result.allowed,true);
+  else assert.equal(result.allowed,false);
+ }
+ const locked=await rpc('office_cloud_wallet_pin_guard',[owner,null]);
+ assert.equal(locked.allowed,false);
+ assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.office_cloud_wallet_pin_guard(uuid,boolean)','EXECUTE') AS ok")).rows[0].ok,false);
+});
+
+test('server-side billing remains disabled until both owner approval flags are set',async()=>{
+ const plans=await rpc('office_cloud_list_storage_plans',[owner,workspace]);
+ assert.deepEqual(plans,[]);
+ await expectError(()=>purchase(owner,workspace,'storage_5gb_monthly','eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',false),'55000');
+ assert.equal((await db.query("SELECT enabled,price_approved_at,wallet_security_approved_at FROM public.office_cloud_storage_billing_config WHERE singleton=true")).rows[0].enabled,false);
 });
