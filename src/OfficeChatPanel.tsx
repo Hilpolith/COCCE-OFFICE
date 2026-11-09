@@ -67,10 +67,12 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     const ordered = nextMessages.slice().reverse();
     setMessages(ordered);
     setReads(nextReads);
-    if (document.visibilityState === 'visible') {
+    const latestMessageId = ordered[ordered.length - 1]?.message_id ?? null;
+    const ownRead = nextReads.find((reader) => reader.user_id === user.id)?.last_read_message_id ?? null;
+    if (latestMessageId && latestMessageId !== ownRead && document.visibilityState === 'visible') {
       await officeTeamApi.markConversationRead(client, conversationId);
     }
-  }, [client, conversationId]);
+  }, [client, conversationId, user.id]);
 
   useEffect(() => {
     let alive = true;
@@ -114,6 +116,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
 
   const uploadFiles = async (files: File[]) => {
     if (!files.length) return;
+    if (pending.length + files.length > 10) { setError('A message can include up to 10 attachments.'); return; }
     const scope = conversationId;
     setUploading(true);
     setError('');
@@ -185,7 +188,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     const scope = conversationId;
     try {
       setError('');
-      await officeTeamApi.sendRichMessage(client, conversationId, clean, attachmentMessageType(pending), pending, reply?.message_id ?? null);
+      await officeTeamApi.sendRichMessage(client, conversationId, clean || (pending.length ? 'Attachment' : ''), attachmentMessageType(pending), pending, reply?.message_id ?? null);
       if (scopeRef.current !== scope) return;
       setBody('');
       setPending([]);
@@ -221,7 +224,8 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
       const file = files.find((item) => item.fileId === attachment.fileId);
       if (!file) throw new Error('This attachment is no longer available in the workspace cloud.');
       const bytes = await cloud.download(file);
-      const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mimeType }));
+      const safeBuffer = bytes.slice().buffer as ArrayBuffer;
+      const url = URL.createObjectURL(new Blob([safeBuffer], { type: attachment.mimeType }));
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = attachment.name;
@@ -249,7 +253,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
           <div className="office-chat-message-head"><strong>{own ? 'You' : message.author_name}</strong><time>{new Date(message.created_at).toLocaleString()}</time></div>
           {message.reply_to_message_id && <div className="office-chat-reply-preview"><Reply size={12} /><span>{message.reply_author_name || 'Earlier message'}: {message.reply_body || 'Reply'}</span></div>}
           {message.deleted_at ? <p className="office-chat-deleted">This message was deleted</p> : <>
-            {message.body && <p className="office-chat-message-body">{message.body}</p>}
+            {message.body && !(message.body === 'Attachment' && message.attachments.length > 0) && <p className="office-chat-message-body">{message.body}</p>}
             {message.attachments.map((attachment) => <div className="office-chat-attachment" key={attachment.fileId}>
               <span><Paperclip size={14} /><span><strong>{attachment.name}</strong><small>{formatBytes(attachment.sizeBytes)} · {attachment.mimeType}</small></span></span>
               <button type="button" onClick={() => void downloadAttachment(attachment)} aria-label={'Download ' + attachment.name}><Download size={15} /></button>
