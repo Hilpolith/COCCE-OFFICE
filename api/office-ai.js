@@ -185,7 +185,7 @@ function validateBody(body) {
     if (Object.hasOwn(body, 'selectedText')) return { error: 'DRAFT_MUST_NOT_INCLUDE_SELECTION' };
     if (typeof body.prompt !== 'string' || !body.prompt.trim()) return { error: 'PROMPT_REQUIRED' };
     if (body.prompt.length > MAX_PROMPT_CHARS) return { error: 'PROMPT_TOO_LONG' };
-    return { action, prompt: body.prompt.trim(), selectedText: '' };
+    return { action, workspaceId: body.workspaceId, prompt: body.prompt.trim(), selectedText: '' };
   }
 
   if (typeof body.selectedText !== 'string' || !body.selectedText.trim()) return { error: 'SELECTION_REQUIRED' };
@@ -194,11 +194,11 @@ function validateBody(body) {
   if (action === 'custom') {
     if (typeof body.prompt !== 'string' || !body.prompt.trim()) return { error: 'PROMPT_REQUIRED' };
     if (body.prompt.length > MAX_PROMPT_CHARS) return { error: 'PROMPT_TOO_LONG' };
-    return { action, prompt: body.prompt.trim(), selectedText: body.selectedText };
+    return { action, workspaceId: body.workspaceId, prompt: body.prompt.trim(), selectedText: body.selectedText };
   }
 
   if (Object.hasOwn(body, 'prompt')) return { error: 'UNEXPECTED_PROMPT' };
-  return { action, prompt: ACTION_INSTRUCTIONS[action], selectedText: body.selectedText };
+  return { action, workspaceId: body.workspaceId, prompt: ACTION_INSTRUCTIONS[action], selectedText: body.selectedText };
 }
 
 async function readWorkspaceAiControl({ workspaceId, token, anonKey, fetchImpl }) {
