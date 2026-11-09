@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { loadSelectedDriveFiles, type DriveContextError } from "./drive-context.ts";
+import { isUuid, loadSelectedDriveFiles, MAX_DRIVE_FILES, type DriveContextError } from "./drive-context.ts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const FREE_MODEL = "google/gemma-4-31b-it:free";
@@ -20,7 +20,6 @@ function isAllowedOrigin(origin: string): boolean {
 const MAX_PROMPT = 1600;
 const MAX_HISTORY = 24;
 const MAX_BODY_BYTES = 8_000;
-const MAX_DRIVE_FILES = 3;
 const FREE_FAILURES = new Set([404, 408, 424, 429, 500, 502, 503, 504]);
 const requests = new Map<string, { startedAt: number; count: number }>();
 
