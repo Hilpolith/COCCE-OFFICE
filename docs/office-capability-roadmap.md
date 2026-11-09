@@ -110,3 +110,21 @@ The new custom image-generation step remains intentionally deferred. In the mean
 - Docs' formatting ribbon now includes inline code, code blocks, and clear-formatting actions while keeping heading levels aligned with the existing safe HTML/DOCX interchange contract. It does not claim full Microsoft Word parity.
 - The Office AI Edge Function now accepts only the production Office origin, localhost development, and the exact linked Vercel team deployment hostname pattern. JWT and workspace membership checks remain mandatory; CORS is not treated as authentication.
 - The workspace AI function was redeployed with JWT verification still enabled. The connected production project environment confirms the public COCCE Auth configuration, Office schema gate, and server-only OpenRouter key are present; secret values were not read.
+
+
+## 2026-11-09 continuation verification
+
+The follow-up implementation has now been validated from a clean shallow clone of the public `main` branch in an isolated Vercel sandbox:
+
+- `pnpm install --frozen-lockfile` completed successfully.
+- `pnpm build` completed successfully (`tsc -b` and Vite production build). Vite still reports the existing large PDF worker/chunk advisory; this is a performance warning, not a build failure.
+- `PG_BINDIR=/usr/lib/postgresql/18/bin pnpm test` completed with exit code 0. This runs the Vitest suite and the repository's SQL-backed sector regression suites. PostgreSQL 18 was used because the sandbox image did not include the PostgreSQL 16 binaries hard-coded as the local script default; the SQL validation itself completed successfully.
+- `pnpm lint` completed with exit code 0. Oxlint reports warnings (including existing intentional control-character validation regexes and React effect warnings); there are no lint errors.
+- The Cloud Drive component test suite passed, including membership-scoped listing, explicit upload confirmation, finalisation and preview checks. The existing PDF workspace test was made asynchronous-safe by waiting for the viewer's search field to reappear after a workspace switch.
+- The Office chat polling interval type and optional cloud attachment file-ID handling were corrected so TypeScript can build cleanly.
+
+The `office-ai-chat` Edge Function is ACTIVE at version 7 in the existing COCCE Supabase project, with JWT verification enabled. Its deployed code checks membership through the authenticated RPCs, honours the per-workspace AI enable/disable setting, samples at most 20 authorised workspaces, and never treats client-supplied conversation IDs or file contents as trusted context. The AI context opt-out is available in the UI.
+
+The production alias `https://cocce-office.vercel.app` was checked and returned HTTP 200 with the COCCE Office HTML title. This confirms the currently aliased site responds; it does **not** mean the new source has been deployed.
+
+A new production deployment was requested but Vercel rejected the deployment API call with HTTP 402, `api-deployments-free-per-day`: more than 100 deployment API calls have been made for the team and Vercel instructed waiting 24 hours. The mapped Vercel CLI fallback was not available in the sandbox (no Vercel CLI executable or Vercel credentials were present). Therefore the latest `main` source is pushed and verified by clean build/tests, but production deployment remains blocked by the Vercel team deployment limit. Do not mark this release READY until a deployment of the current main commit is created and reaches READY.
