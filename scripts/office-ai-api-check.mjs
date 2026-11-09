@@ -390,7 +390,7 @@ test('rejects any response not proven to be the fixed free model or reporting po
   assert.equal(wrongModelResponse.body.error, 'FREE_MODEL_UNAVAILABLE');
   assert.equal(Object.hasOwn(wrongModelResponse.body, 'text'), false);
 
-  const missingCost = makeHarness({ reportedCost: undefined });
+  const missingCost = makeHarness({ reportedCost: null });
   const missingCostResponse = await invoke(missingCost.handler, { body: { action: 'summarize', selectedText: 'Excerpt.' } });
   assert.equal(missingCostResponse.statusCode, 503);
   assert.equal(missingCostResponse.body.error, 'FREE_MODEL_UNAVAILABLE');
