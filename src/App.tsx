@@ -99,6 +99,20 @@ function App() {
   });
 
   useEffect(() => {
+    const navigateOffice = (event: Event) => {
+      const detail = (event as CustomEvent<{ page?: PageId }>).detail;
+      if (detail?.page === 'team') goTo('team');
+    };
+    const workspaceCreated = () => goTo('team');
+    window.addEventListener('cocce-office:navigate', navigateOffice);
+    window.addEventListener('cocce-office:workspace-created', workspaceCreated);
+    return () => {
+      window.removeEventListener('cocce-office:navigate', navigateOffice);
+      window.removeEventListener('cocce-office:workspace-created', workspaceCreated);
+    };
+  }, []);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = state.theme;
     document.documentElement.style.setProperty('--accent', state.accent);
   }, [state.theme, state.accent]);
