@@ -41,3 +41,14 @@ Local validation includes `src/lib/officeAi.test.ts` for payload minimization an
 An earlier controlled production smoke on 2026-11-03 with an existing COCCE test account confirmed the AI route was configured and authenticated; the synthetic selected-text request returned `503 FREE_MODEL_UNAVAILABLE` without generated text, while a direct synthetic preflight returned HTTP 429. This was a point-in-time rate-limit observation, not a guarantee of current availability; the fixed model still has no paid-model or alternate-provider fallback. No real document content was used. Recheck availability with synthetic content after a release.
 
 Vercel's function platform has an independent request limit ([Function limits](https://vercel.com/docs/functions/limitations)); this route rejects JSON bodies above 40 KB and checks `Content-Length` early when available.
+
+
+## Workspace-wide COCCE AI (November 2026)
+
+The separate COCCE AI destination can now be scoped to one workspace or **All authorised workspaces**. Workspace context is optional and can be turned off before sending a prompt. The Edge Function validates the signed-in COCCE user and checks workspace membership through `office_list_workspaces`. It then obtains conversation lists and message excerpts only through the existing membership-aware `office_list_conversations` and `office_list_messages` RPCs. The browser never supplies conversation IDs or message contents as trusted context.
+
+For bounded requests, the all-workspaces mode considers up to 20 workspaces and samples up to two conversations and two recent messages per workspace. A single-workspace request uses the same bounded sample for that workspace. Message text is truncated to 600 characters per message and labelled as untrusted context; messages cannot override system instructions. Context is not written back into chats. The request cap remains 12 per user per 10-minute warm Edge Function instance, and the model remains pinned to the free Google Gemma endpoint with paid fallback disabled.
+
+This release does **not** read Drive file contents, private sector records, Vault items, or local browser files. It also does not run unattended automations. Drive file retrieval would require an explicit user-selected file flow and a separate permission-aware file-context contract; it must not be inferred from workspace membership alone. If workspace conversation history is switched off, only the typed prompt is sent.
+
+The Edge Function is deployed as `office-ai-chat` with JWT verification enabled. The November 2026 deployment uses the membership-aware workspace RPCs and has no service-role credential in the browser.
