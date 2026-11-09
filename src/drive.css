@@ -36,3 +36,6 @@
 .drive-cloud-panel .drive-empty>svg{color:var(--accent)}
 @media(max-width:760px){.drive-cloud-controls{grid-template-columns:1fr 1fr}.drive-cloud-controls>label{grid-column:1/-1}.drive-cloud-actions{grid-column:1/-1}.drive-cloud-actions button{width:100%}}
 @media(max-width:520px){.drive-mode-tabs{width:100%}.drive-mode-tabs button{flex:1;padding:0 10px}.drive-cloud-heading{align-items:flex-start}.drive-cloud-heading>.button-secondary{font-size:0;padding:0 11px}.drive-cloud-heading>.button-secondary svg{margin:0}.drive-cloud-controls{grid-template-columns:1fr}.drive-cloud-controls>label,.drive-cloud-actions{grid-column:auto}}
+
+.drive-cloud-load-more{display:flex;justify-content:center;padding:6px 0 14px}
+.drive-preview-docx{width:100%;min-height:65vh;border:0;border-radius:14px;background:#fff}
