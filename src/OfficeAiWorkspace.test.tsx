@@ -161,6 +161,33 @@ describe('COCCE AI workspace context', () => {
   });
 
 
+  it('keeps a multi-turn chat thread and sends only the bounded prior turns back to the server', async () => {
+    render(<OfficeAiWorkspace initialWorkspaceId="workspace-one" initialPrompt="Prepare a short project plan." />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
+    expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText('Ask across your workspace…'), { target: { value: 'Add a risk section to that plan.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenLastCalledWith('office-ai-chat', {
+      body: {
+        action: 'chat',
+        workspaceId: 'workspace-one',
+        prompt: 'Add a risk section to that plan.',
+        includeConversations: true,
+        history: [
+          { role: 'user', content: 'Prepare a short project plan.' },
+          { role: 'assistant', content: 'A tested workspace summary.' },
+        ],
+      },
+    }));
+    expect(screen.getAllByText('A tested workspace summary.')).toHaveLength(2);
+    expect(screen.getByText('Add a risk section to that plan.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+    expect(screen.queryByText('Prepare a short project plan.')).toBeNull();
+    expect(screen.queryByText('A tested workspace summary.')).toBeNull();
+  });
+
   it('offers source-code text files while hiding likely secrets and credentials', async () => {
     const workspaceId = '11111111-1111-4111-8111-111111111111';
     mocks.listWorkspaces.mockResolvedValue([{ workspace_id: workspaceId, name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
