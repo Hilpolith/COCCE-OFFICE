@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadSelectedDriveFiles } from './drive-context';
+import { isSupportedDriveTextFile, loadSelectedDriveFiles } from './drive-context';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const otherWorkspaceId = '22222222-2222-4222-8222-222222222222';
@@ -175,6 +175,16 @@ describe('COCCE AI selected Drive context', () => {
       : new Response(bytes));
     await expect(loadSelectedDriveFiles([fileId], enabled, supabaseUrl, 'key', 'jwt', fetchImpl))
       .rejects.toMatchObject({ status: 415, code: 'DRIVE_DOCS_COPY_UNSAFE' });
+  });
+
+
+  it('supports common source-code text while excluding likely secret and credential files', () => {
+    for (const name of ['src/main.ts','components/App.tsx','server/index.js','styles/theme.scss','db/schema.sql','scripts/build.py','README.mdx','config/app.toml']) {
+      expect(isSupportedDriveTextFile(name)).toBe(true);
+    }
+    for (const name of ['.env','.env.example','secrets.json','credentials.json','service-account.json','private-key.json','notes.txt','movie.mp4','archive.zip']) {
+      expect(isSupportedDriveTextFile(name)).toBe(false);
+    }
   });
 
 });
