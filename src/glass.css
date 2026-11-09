@@ -810,3 +810,5 @@
     backdrop-filter: var(--glass-filter);
   }
 }
+
+:root .office-suite-ai-menu { -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
