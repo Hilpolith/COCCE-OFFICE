@@ -101,3 +101,12 @@ The current main branch adds the following work on top of the ten-sector foundat
 - The Google OAuth redirect is explicitly pinned to the COCCE Office origin for production and the active Vercel preview origin for preview builds. The auth panel uses the COCCE Office app mark.
 
 The new custom image-generation step remains intentionally deferred. In the meantime, the existing `cocce-light-frosted-ambient.webp` asset is reused as a subtle, responsive ambient texture beneath the VisionOS glass surfaces; this is a temporary reuse, not a newly generated asset. Production Vercel deployment and full test/build verification remain release gates; code pushed to main is not considered production-ready until a new deployment reaches READY and the build/test suite passes.
+
+
+### Follow-on refinements — 2026-11-09
+
+- Cloud Drive now pages through large workspaces in 50-file batches rather than silently limiting the visible library to the first page. Trash listing is independent of the currently selected file-type filter.
+- Cloud Drive adds a sandboxed, script-disabled DOCX reading preview using the existing bounded local DOCX importer. It is capped at 5 MiB, strips unsupported content through the established sanitizer, and surfaces import warnings. The verified original remains downloadable; larger or unsupported Office formats remain download-only.
+- Docs' formatting ribbon now includes inline code, code blocks, and clear-formatting actions while keeping heading levels aligned with the existing safe HTML/DOCX interchange contract. It does not claim full Microsoft Word parity.
+- The Office AI Edge Function now accepts only the production Office origin, localhost development, and the exact linked Vercel team deployment hostname pattern. JWT and workspace membership checks remain mandatory; CORS is not treated as authentication.
+- The workspace AI function was redeployed with JWT verification still enabled. The connected production project environment confirms the public COCCE Auth configuration, Office schema gate, and server-only OpenRouter key are present; secret values were not read.
