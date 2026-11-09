@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 // Disposable in-memory PostgreSQL only. No network, credentials, real identities or files.
 const migration = await readFile(new URL('../docs/proposals/office-school-management-20261106.sql', import.meta.url), 'utf8');
-const paginationMigration = await readFile(new URL('../supabase/migrations/20261109200000_office_school_read_offset_pagination.sql', import.meta.url), 'utf8');
+const paginationMigration = await readFile(new URL('../supabase/migrations/20261109152012_office_school_read_offset_pagination.sql', import.meta.url), 'utf8');
 const owner = '11111111-1111-4111-8111-111111111111';
 const teacher = '22222222-2222-4222-8222-222222222222';
 const registrar = '33333333-3333-4333-8333-333333333333';
