@@ -359,6 +359,11 @@ begin
        or v_existing.auto_renew <> coalesce(p_auto_renew, false) then
       raise exception 'Storage purchase idempotency key payload mismatch' using errcode = '22023';
     end if;
+    select coalesce((
+      select w.balance from public.wallet_transactions w
+      where w.user_id = p_actor_id
+      order by w.created_at desc, w.id desc limit 1
+    ), 0) into v_balance;
     return jsonb_build_object(
       'subscription_id', v_existing.subscription_id,
       'plan_code', v_existing.plan_code,
@@ -791,7 +796,7 @@ begin
             coins, quota_bytes, period_start, period_end
           ) values (
             v_sub.subscription_id, v_sub.workspace_id, v_sub.billing_user_id, 'renewal_failed',
-            v_sub.plan_code, v_sub.monthly_coins, v_sub.quota_bytes,
+            v_sub.plan_code, 0, v_sub.quota_bytes,
             v_sub.current_period_start, v_sub.current_period_end
           );
         end if;
