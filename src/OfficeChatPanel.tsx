@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
-import { CheckCheck, Download, Mic, Paperclip, Pencil, Radio, Reply, Send, Square, Trash2, X } from 'lucide-react';
+import { CheckCheck, Download, Mic, Paperclip, Pencil, Play, Radio, Reply, Send, Square, Trash2, X } from 'lucide-react';
 import { createOfficeCloudApi } from './lib/officeCloudFiles';
 import type { CloudFile } from './lib/officeCloudFiles';
 import { officeTeamApi } from './lib/officeTeamApi';
@@ -19,7 +19,30 @@ type Props = {
 };
 
 const MAX_CHAT_FILE_BYTES = 25 * 1024 * 1024;
+
 const formatBytes = (value: number) => value < 1024 * 1024 ? Math.max(1, Math.round(value / 1024)) + ' KB' : (value / (1024 * 1024)).toFixed(1) + ' MB';
+function previewMimeType(attachment: OfficeChatAttachment) {
+  const supplied = attachment.mimeType.split(';')[0].trim().toLowerCase();
+  if (supplied && supplied !== 'application/octet-stream') return supplied;
+  const name = attachment.name.toLowerCase();
+  if (name.endsWith('.png')) return 'image/png';
+  if (/\.(jpe?g)$/.test(name)) return 'image/jpeg';
+  if (name.endsWith('.gif')) return 'image/gif';
+  if (name.endsWith('.webp')) return 'image/webp';
+  if (name.endsWith('.avif')) return 'image/avif';
+  if (/\.(mp4|m4v)$/.test(name)) return 'video/mp4';
+  if (name.endsWith('.webm')) return 'video/webm';
+  if (name.endsWith('.mov')) return 'video/quicktime';
+  if (name.endsWith('.wav')) return 'audio/wav';
+  if (name.endsWith('.ogg')) return 'audio/ogg';
+  if (name.endsWith('.m4a')) return 'audio/mp4';
+  if (name.endsWith('.aac')) return 'audio/aac';
+  if (name.endsWith('.flac')) return 'audio/flac';
+  if (name.endsWith('.mp3')) return 'audio/mpeg';
+  return supplied || 'application/octet-stream';
+}
+const SAFE_PREVIEW_MIMES = new Set(['image/png','image/jpeg','image/gif','image/webp','image/avif','video/mp4','video/webm','video/quicktime','audio/webm','audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/aac','audio/flac']);
+const canPreviewAttachment = (attachment: OfficeChatAttachment) => SAFE_PREVIEW_MIMES.has(previewMimeType(attachment));
 
 function attachmentMessageType(items: OfficeChatAttachment[]): 'text' | 'image' | 'video' | 'audio' | 'document' | 'mixed' {
   if (items.length > 1) return 'mixed';
@@ -45,10 +68,13 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [live, setLive] = useState(false);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [waveforms, setWaveforms] = useState<Record<string, number[]>>({});
   const fileInput = useRef<HTMLInputElement>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const recordingStream = useRef<MediaStream | null>(null);
   const recordingParts = useRef<BlobPart[]>([]);
+  const previewUrlsRef = useRef<Record<string, string>>({});
   const scopeRef = useRef(conversationId);
 
   useEffect(() => {
@@ -58,6 +84,10 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     setEditing(null);
     setPending([]);
     setError('');
+    for (const url of Object.values(previewUrlsRef.current)) URL.revokeObjectURL(url);
+    previewUrlsRef.current = {};
+    setPreviewUrls({});
+    setWaveforms({});
   }, [conversationId]);
 
   const refresh = useCallback(async () => {
@@ -122,6 +152,8 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
       try { activeRecorder.stop(); } catch { /* It may already be stopped. */ }
     }
     recordingStream.current?.getTracks().forEach((track) => track.stop());
+    for (const url of Object.values(previewUrlsRef.current)) URL.revokeObjectURL(url);
+    previewUrlsRef.current = {};
   }, []);
 
   const uploadFiles = async (files: File[]) => {
@@ -229,19 +261,24 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'The message could not be deleted.'); }
   };
 
+  const readAttachmentBlob = async (attachment: OfficeChatAttachment) => {
+    let file: CloudFile | null = null;
+    for (let offset = 0; offset <= 10000; offset += 50) {
+      const page = await cloud.list(workspaceId, false, offset);
+      file = page.find((item) => item.fileId === attachment.fileId) ?? null;
+      if (file || page.length < 50) break;
+    }
+    if (!file) throw new Error('This attachment is no longer available in the workspace cloud.');
+    const bytes = await cloud.download(file);
+    const safeBuffer = bytes.slice().buffer as ArrayBuffer;
+    return new Blob([safeBuffer], { type: previewMimeType(attachment) });
+  };
+
   const downloadAttachment = async (attachment: OfficeChatAttachment) => {
     try {
       setError('');
-      let file: CloudFile | null = null;
-      for (let offset = 0; offset <= 10000; offset += 50) {
-        const page = await cloud.list(workspaceId, false, offset);
-        file = page.find((item) => item.fileId === attachment.fileId) ?? null;
-        if (file || page.length < 50) break;
-      }
-      if (!file) throw new Error('This attachment is no longer available in the workspace cloud.');
-      const bytes = await cloud.download(file);
-      const safeBuffer = bytes.slice().buffer as ArrayBuffer;
-      const url = URL.createObjectURL(new Blob([safeBuffer], { type: attachment.mimeType }));
+      const blob = await readAttachmentBlob(attachment);
+      const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = attachment.name;
@@ -250,6 +287,45 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
       window.setTimeout(() => URL.revokeObjectURL(url), 1500);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The attachment could not be downloaded.');
+    }
+  };
+
+  const previewAttachment = async (attachment: OfficeChatAttachment) => {
+    const existing = previewUrls[attachment.fileId];
+    if (existing) {
+      URL.revokeObjectURL(existing);
+      delete previewUrlsRef.current[attachment.fileId];
+      setPreviewUrls((current) => { const next = { ...current }; delete next[attachment.fileId]; return next; });
+      setWaveforms((current) => { const next = { ...current }; delete next[attachment.fileId]; return next; });
+      return;
+    }
+    const scope = conversationId;
+    try {
+      setError('');
+      const blob = await readAttachmentBlob(attachment);
+      const url = URL.createObjectURL(blob);
+      if (scopeRef.current !== scope) { URL.revokeObjectURL(url); return; }
+      previewUrlsRef.current[attachment.fileId] = url;
+      setPreviewUrls((current) => ({ ...current, [attachment.fileId]: url }));
+      if (previewMimeType(attachment).startsWith('audio/') && typeof window.AudioContext !== 'undefined') {
+        let context: AudioContext | null = null;
+        try {
+          context = new window.AudioContext();
+          const decoded = await context.decodeAudioData(await blob.arrayBuffer());
+          const samples = decoded.getChannelData(0);
+          const bars = Array.from({ length: 36 }, (_, index) => {
+            const start = Math.floor(index * samples.length / 36);
+            const end = Math.max(start + 1, Math.floor((index + 1) * samples.length / 36));
+            let peak = 0;
+            for (let cursor = start; cursor < Math.min(end, samples.length); cursor += 1) peak = Math.max(peak, Math.abs(samples[cursor]));
+            return Math.max(7, Math.round(peak * 100));
+          });
+          if (scopeRef.current === scope) setWaveforms((current) => ({ ...current, [attachment.fileId]: bars }));
+        } catch { /* Audio playback remains available when waveform decoding is unsupported. */ }
+        finally { await context?.close().catch(() => undefined); }
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The attachment preview could not be loaded.');
     }
   };
 
@@ -270,10 +346,26 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
           {message.reply_to_message_id && <div className="office-chat-reply-preview"><Reply size={12} /><span>{message.reply_author_name || 'Earlier message'}: {message.reply_body || 'Reply'}</span></div>}
           {message.deleted_at ? <p className="office-chat-deleted">This message was deleted</p> : <>
             {message.body && !(message.body === 'Attachment' && message.attachments.length > 0) && <p className="office-chat-message-body">{message.body}</p>}
-            {message.attachments.map((attachment) => <div className="office-chat-attachment" key={attachment.fileId}>
-              <span><Paperclip size={14} /><span><strong>{attachment.name}</strong><small>{formatBytes(attachment.sizeBytes)} · {attachment.mimeType}</small></span></span>
-              <button type="button" onClick={() => void downloadAttachment(attachment)} aria-label={'Download ' + attachment.name}><Download size={15} /></button>
-            </div>)}
+            {message.attachments.map((attachment) => {
+              const mime = previewMimeType(attachment);
+              const previewUrl = previewUrls[attachment.fileId];
+              const previewable = canPreviewAttachment(attachment);
+              return <div className="office-chat-attachment-wrap" key={attachment.fileId}>
+                <div className="office-chat-attachment">
+                  <span><Paperclip size={14} /><span><strong>{attachment.name}</strong><small>{formatBytes(attachment.sizeBytes)} · {mime}</small></span></span>
+                  <span className="office-chat-attachment-actions">
+                    {previewable && <button type="button" onClick={() => void previewAttachment(attachment)} aria-label={(previewUrl ? 'Hide preview of ' : 'Preview ') + attachment.name}>{previewUrl ? <X size={15} /> : <Play size={15} />}</button>}
+                    <button type="button" onClick={() => void downloadAttachment(attachment)} aria-label={'Download ' + attachment.name}><Download size={15} /></button>
+                  </span>
+                </div>
+                {previewUrl && mime.startsWith('image/') && <img className="office-chat-image-preview" src={previewUrl} alt={attachment.name} loading="lazy" />}
+                {previewUrl && mime.startsWith('video/') && <video className="office-chat-video-preview" src={previewUrl} controls preload="metadata" />}
+                {previewUrl && mime.startsWith('audio/') && <div className="office-chat-audio-preview">
+                  {waveforms[attachment.fileId] && <div className="office-chat-waveform" aria-hidden="true">{waveforms[attachment.fileId].map((height, index) => <span key={index} style={{ height: height + '%' }} />)}</div>}
+                  <audio src={previewUrl} controls preload="metadata" />
+                </div>}
+              </div>;
+            })}
             {editing?.message_id === message.message_id ? <div className="office-chat-edit"><textarea value={editBody} onChange={(event) => setEditBody(event.target.value)} maxLength={4000} /><button type="button" onClick={() => void saveEdit()}>Save</button><button type="button" onClick={() => setEditing(null)}>Cancel</button></div> : <div className="office-chat-message-actions">
               <button type="button" onClick={() => setReply(message)}><Reply size={13} /> Reply</button>
               {own && <button type="button" onClick={() => { setEditing(message); setEditBody(message.body); }} disabled={message.attachments.length > 0}><Pencil size={13} /> Edit</button>}
