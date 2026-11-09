@@ -424,73 +424,61 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
   const selectionAvailable = !selection.isCellSelection && selection.text.trim().length > 0;
   const canRunAiActions = authStatus === 'signed-in' && workspaces.length > 0 && Boolean(workspaceId) && !workspaceLoading && (availability === 'available' || availability === 'unavailable');
 
-  return <section className="office-ai-panel" aria-label="AI writing studio">
+  return <section className="office-ai-panel" aria-label="AI writing assistant">
     <button className="office-ai-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>AI writing studio</strong><small>Edit selected text or draft with COCCE AI</small></span></span>
+      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>Writing assistant</strong><small>Work with selected text or draft</small></span></span>
       <span className="office-ai-disclosure-status">{availabilityLabel}{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
     </button>
 
     {expanded && <div className="office-ai-body">
-      <p className="office-ai-privacy"><ShieldCheck size={16} /><span>Nothing is uploaded automatically. Selection actions send only selected text; drafts send only your prompt. Full-document summaries require a separate confirmation.</span></p>
-      <p className="office-ai-help">User-triggered text is sent through OpenRouter to its fixed free Google AI Studio model. The current provider policy lists 55-day prompt retention and no training. No paid model or alternate provider fallback is used; send only text you are permitted to share.</p>
-      <label className="office-ai-field office-ai-workspace-scope"><span className="office-ai-label">AI workspace scope</span><select aria-label="AI workspace scope" value={workspaceId} disabled={workspaceLoading || workspaces.length === 0} onChange={(event) => { setWorkspaceId(event.target.value); setResult(''); setPreviewTarget(null); setError(''); }}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map((space) => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select><span className="office-ai-help">The server checks membership and the owner/admin AI switch for every request. Disabled workspaces are excluded.</span></label>
-      {authStatus === 'signed-in' && !workspaceLoading && workspaces.length === 0 && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Create or join an Office Team workspace before using the writing assistant. No document text has been sent.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Open Team</button></div>}
-      {selection.isCellSelection && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Table cell ranges are for local formatting, not excerpt selection. Select ordinary text for excerpt AI actions; prompt-only drafts remain separate, and full-document summaries still require their separate confirmation.</span></div>}
+      <label className="office-ai-field office-ai-workspace-scope"><span className="office-ai-label">Workspace</span><select aria-label="AI workspace scope" value={workspaceId} disabled={workspaceLoading || workspaces.length === 0} onChange={(event) => { setWorkspaceId(event.target.value); setResult(''); setPreviewTarget(null); setError(''); }}><option value="*">All AI-enabled workspaces</option>{workspaces.map((space) => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label>
+      <p className="office-ai-privacy"><ShieldCheck size={15} /><span>Nothing is sent automatically. Only the text or prompt you choose to submit is shared.</span></p>
+      <details className="office-ai-privacy-details"><summary>Privacy and model details</summary><p>Requests use the fixed free Google AI Studio model through the COCCE Office server route. No paid-model or alternate-provider fallback is used. The provider's current policy lists 55-day prompt retention and no training. Do not send text you are not permitted to share.</p></details>
 
-      {authStatus === 'misconfigured' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Cloud AI uses the existing COCCE Auth connection. This deployment is not configured for that connection.</span></div>}
-      {authStatus === 'signed-out' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Sign in with an existing COCCE account to use cloud AI. Office does not create separate accounts.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Open Team sign-in</button></div>}
-      {authStatus === 'signed-in' && availability === 'not-configured' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Cloud AI is not enabled on this deployment yet. Your document remains local and no text has been sent.</span></div>}
-      {authStatus === 'signed-in' && availability === 'unavailable' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>The free model may be temporarily unavailable or rate-limited. No paid model or alternate provider will be used; try again later.</span></div>}
+      {authStatus === 'signed-in' && !workspaceLoading && workspaces.length === 0 && <div className="office-ai-state" role="status"><AlertCircle size={15} /><span>No Office workspace yet.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Create workspace</button></div>}
+      {selection.isCellSelection && <div className="office-ai-state" role="status"><AlertCircle size={15} /><span>Select ordinary text to use excerpt actions.</span></div>}
+      {authStatus === 'misconfigured' && <div className="office-ai-state" role="status"><AlertCircle size={15} /><span>COCCE account connection is unavailable.</span></div>}
+      {authStatus === 'signed-out' && <div className="office-ai-state" role="status"><AlertCircle size={15} /><span>Sign in with your COCCE account to use AI.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Sign in</button></div>}
+      {authStatus === 'signed-in' && availability === 'not-configured' && <div className="office-ai-state" role="status"><AlertCircle size={15} /><span>COCCE AI is not configured on this deployment.</span></div>}
+      {authStatus === 'signed-in' && availability === 'unavailable' && <div className="office-ai-state" role="status"><AlertCircle size={15} /><span>The free AI service is temporarily unavailable. Try again later.</span></div>}
 
       <div className="office-ai-selection-block">
-        <div className="office-ai-section-heading"><div><span className="eyebrow">WORK ON A SELECTION</span><h3>Writing and review</h3></div><span className="office-ai-count">{selection.text.length.toLocaleString()} / {OFFICE_AI_MAX_SELECTION_CHARS.toLocaleString()} chars</span></div>
-        <label className="office-ai-label" htmlFor="office-ai-selected-text">Selected excerpt</label>
-        <textarea id="office-ai-selected-text" className="office-ai-textarea office-ai-selection-preview" value={selection.text} readOnly placeholder="Select a passage in the document to enable these actions." aria-describedby="office-ai-selection-help" />
-        <div id="office-ai-selection-help" className="office-ai-help">Only this selected excerpt is sent for these actions. Choose a saved workflow or add your own instruction below.</div>
-        <div className="office-ai-actions">
-          {OFFICE_AI_ACTIONS.map((action) => <button key={action.id} className="office-ai-action-button" disabled={busy || !selectionAvailable || !canRunAiActions} onClick={() => { void runAction(action.id); }} title={action.hint}>{action.label}</button>)}
+        <div className="office-ai-section-heading"><div><span className="eyebrow">SELECTED TEXT</span><h3>Quick actions</h3></div><span className="office-ai-count">{selection.text.length.toLocaleString()} chars</span></div>
+        <textarea id="office-ai-selected-text" className="office-ai-textarea office-ai-selection-preview" value={selection.text} readOnly placeholder="Select a passage in your document." aria-label="Selected document text" />
+        <div className="office-ai-actions office-ai-quick-actions">
+          {OFFICE_AI_ACTIONS.slice(0, 3).map((action) => <button key={action.id} className="office-ai-action-button" disabled={busy || !selectionAvailable || !canRunAiActions} onClick={() => { void runAction(action.id); }} title={action.hint}>{action.label}</button>)}
         </div>
+        <details className="office-ai-accordion"><summary>More actions <span>{OFFICE_AI_ACTIONS.length - 3}</span></summary><div className="office-ai-actions office-ai-more-actions">
+          {OFFICE_AI_ACTIONS.slice(3).map((action) => <button key={action.id} className="office-ai-action-button" disabled={busy || !selectionAvailable || !canRunAiActions} onClick={() => { void runAction(action.id); }} title={action.hint}>{action.label}</button>)}
+        </div></details>
         <div className="office-ai-custom-row">
-          <label className="office-ai-field"><span className="office-ai-label">Custom instruction</span><input value={customInstruction} maxLength={OFFICE_AI_MAX_PROMPT_CHARS} onChange={(event) => setCustomInstruction(event.target.value)} placeholder="e.g. Make this client-friendly and warm" /></label>
+          <label className="office-ai-field"><span className="office-ai-label">Ask AI to</span><input value={customInstruction} maxLength={OFFICE_AI_MAX_PROMPT_CHARS} onChange={(event) => setCustomInstruction(event.target.value)} placeholder="e.g. Make this clearer and more confident" /></label>
           <button className="office-ai-primary-button" disabled={busy || !selectionAvailable || !canRunAiActions || !customInstruction.trim()} onClick={() => { void runAction('custom', customInstruction); }}><WandSparkles size={15} /> Run</button>
         </div>
-        <div className="office-ai-help">Custom instruction: {customInstruction.length.toLocaleString()} / {OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters.</div>
       </div>
 
-      <div className="office-ai-document-block">
-        <div className="office-ai-section-heading"><div><span className="eyebrow">FULL DOCUMENT · CONFIRM FIRST</span><h3>Summarize the open document</h3></div></div>
-        <p className="office-ai-help">This separate action can send the complete plain-text document, but only after you review and confirm what will be sent. The request is limited to {OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS.toLocaleString()} characters and {Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB serialized; larger documents are rejected locally and are never truncated or chunked.</p>
-        <button ref={documentSummaryTriggerRef} type="button" className="office-ai-primary-button" disabled={busy || !canRunAiActions} onClick={openDocumentSummaryConfirmation}><Sparkles size={15} /> Summarize full document</button>
-      </div>
+      <details className="office-ai-accordion office-ai-extra"><summary><span>Draft from a prompt</span><span><FileText size={14} /></span></summary><div className="office-ai-extra-body">
+        <label className="office-ai-field"><span className="office-ai-label">Starter</span><select value={draftTemplate} onChange={(event) => { const template = OFFICE_AI_DRAFT_TEMPLATES.find((item) => item.id === event.target.value); setDraftTemplate(event.target.value); if (template) setDraftPrompt(template.prompt); }}><option value="">Choose a starter…</option>{OFFICE_AI_DRAFT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}</select></label>
+        <label className="office-ai-field"><span className="office-ai-label">What should AI write?</span><textarea className="office-ai-textarea" value={draftPrompt} maxLength={OFFICE_AI_MAX_PROMPT_CHARS} onChange={(event) => setDraftPrompt(event.target.value)} placeholder="Describe the document and provide the facts to use. Unknown details will be marked as placeholders." rows={4} /></label>
+        <div className="office-ai-draft-footer"><span className="office-ai-help">Prompt only · preview before inserting</span><button className="office-ai-primary-button" disabled={busy || !draftPrompt.trim() || !canRunAiActions} onClick={() => { void runAction('draft'); }}><Sparkles size={15} /> Draft</button></div>
+      </div></details>
 
-      <div className="office-ai-divider" />
+      <details className="office-ai-accordion office-ai-extra"><summary><span>Summarize full document</span><span><FileText size={14} /></span></summary><div className="office-ai-extra-body">
+        <p className="office-ai-help">The complete document text is sent only after you review and confirm. Maximum {OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS.toLocaleString()} characters per request.</p>
+        <button ref={documentSummaryTriggerRef} type="button" className="office-ai-primary-button" disabled={busy || !canRunAiActions} onClick={openDocumentSummaryConfirmation}><Sparkles size={15} /> Review and summarize</button>
+      </div></details>
 
-      <div className="office-ai-draft-block">
-        <div className="office-ai-section-heading"><div><span className="eyebrow">START SOMETHING NEW</span><h3>Draft from a prompt</h3></div></div>
-        <p className="office-ai-help">Drafting sends only the prompt below—never the current selection or the rest of the document.</p>
-        <label className="office-ai-field"><span className="office-ai-label">Starter template</span><select value={draftTemplate} onChange={(event) => {
-          const template = OFFICE_AI_DRAFT_TEMPLATES.find((item) => item.id === event.target.value);
-          setDraftTemplate(event.target.value);
-          if (template) setDraftPrompt(template.prompt);
-        }}><option value="">Choose a starter…</option>{OFFICE_AI_DRAFT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}</select></label>
-        <label className="office-ai-field"><span className="office-ai-label">Brief and details</span><textarea className="office-ai-textarea" value={draftPrompt} maxLength={OFFICE_AI_MAX_PROMPT_CHARS} onChange={(event) => setDraftPrompt(event.target.value)} placeholder="Describe what you want drafted and provide the facts to use. Unknown details will be marked as placeholders." rows={4} /></label>
-        <div className="office-ai-draft-footer"><span className="office-ai-help">{draftPrompt.length.toLocaleString()} / {OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters · output appears in a preview first</span><button className="office-ai-primary-button" disabled={busy || !draftPrompt.trim() || !canRunAiActions} onClick={() => { void runAction('draft'); }}><Sparkles size={15} /> Draft preview</button></div>
-      </div>
-
-      <div className="office-ai-divider" />
-
-      <div className="office-ai-workflows-block">
-        <div className="office-ai-section-heading"><div><span className="eyebrow">REUSABLE RECIPES</span><h3>Saved workflows</h3></div><button className="office-ai-inline-button" onClick={() => setWorkflowFormOpen((open) => !open)}><Plus size={14} /> Save a workflow</button></div>
-        <p className="office-ai-help">Saved workflows stay in this browser and send only the selected excerpt when run.</p>
+      <details className="office-ai-accordion office-ai-extra"><summary><span>Saved workflows</span><span>{workflows.length}</span></summary><div className="office-ai-extra-body">
+        <div className="office-ai-section-heading"><h3>Reusable instructions</h3><button className="office-ai-inline-button" onClick={() => setWorkflowFormOpen((open) => !open)}><Plus size={14} /> Save</button></div>
         {workflowFormOpen && <div className="office-ai-workflow-form">
-          <label className="office-ai-field"><span className="office-ai-label">Name</span><input value={workflowName} maxLength={60} onChange={(event) => setWorkflowName(event.target.value)} placeholder="e.g. Executive-ready summary" /></label>
-          <label className="office-ai-field"><span className="office-ai-label">Instructions</span><textarea className="office-ai-textarea" value={workflowInstruction} maxLength={OFFICE_AI_MAX_PROMPT_CHARS} onChange={(event) => setWorkflowInstruction(event.target.value)} placeholder="Describe how to transform or review the selected text." rows={3} /></label>
-          <div className="office-ai-form-actions"><span className="office-ai-help">Saved locally only · {workflows.length}/{OFFICE_AI_MAX_SAVED_WORKFLOWS}</span><button className="office-ai-primary-button" onClick={saveWorkflow}><Save size={14} /> Save on this device</button></div>
+          <label className="office-ai-field"><span className="office-ai-label">Name</span><input value={workflowName} maxLength={60} onChange={(event) => setWorkflowName(event.target.value)} placeholder="e.g. Executive summary" /></label>
+          <label className="office-ai-field"><span className="office-ai-label">Instructions</span><textarea className="office-ai-textarea" value={workflowInstruction} maxLength={OFFICE_AI_MAX_PROMPT_CHARS} onChange={(event) => setWorkflowInstruction(event.target.value)} placeholder="Describe the reusable instruction." rows={3} /></label>
+          <div className="office-ai-form-actions"><span className="office-ai-help">Saved in this browser · {workflows.length}/{OFFICE_AI_MAX_SAVED_WORKFLOWS}</span><button className="office-ai-primary-button" onClick={saveWorkflow}><Save size={14} /> Save</button></div>
         </div>}
-        {workflows.length > 0 ? <div className="office-ai-workflow-list">{workflows.map((workflow) => <div className="office-ai-workflow" key={workflow.id}><div className="office-ai-workflow-copy"><strong>{workflow.name}</strong><span>{workflow.instruction}</span></div><button className="office-ai-action-button" disabled={busy || !selectionAvailable || !canRunAiActions} onClick={() => { void runAction('custom', workflow.instruction); }}>Run on selection</button><button className="office-ai-icon-button" aria-label={`Delete ${workflow.name}`} title="Remove saved workflow" onClick={() => deleteWorkflow(workflow.id)}><X size={15} /></button></div>)}</div> : <div className="office-ai-empty">No saved workflows yet. Save a reusable instruction above.</div>}
-      </div>
+        {workflows.length > 0 ? <div className="office-ai-workflow-list">{workflows.map((workflow) => <div className="office-ai-workflow" key={workflow.id}><div className="office-ai-workflow-copy"><strong>{workflow.name}</strong><span>{workflow.instruction}</span></div><button className="office-ai-action-button" disabled={busy || !selectionAvailable || !canRunAiActions} onClick={() => { void runAction('custom', workflow.instruction); }}>Run</button><button className="office-ai-icon-button" aria-label={`Delete ${workflow.name}`} title="Remove workflow" onClick={() => deleteWorkflow(workflow.id)}><X size={15} /></button></div>)}</div> : <div className="office-ai-empty">No saved workflows yet.</div>}
+      </div></details>
 
-      {busy && <div className="office-ai-progress" role="status"><LoaderCircle size={16} className="office-ai-spinner" /> Preparing an AI preview…</div>}
+      {busy && <div className="office-ai-progress" role="status"><LoaderCircle size={16} className="office-ai-spinner" /> Preparing preview…</div>}
       {error && <div className="office-ai-message office-ai-error" role="alert"><AlertCircle size={15} />{error}</div>}
       {notice && <div className="office-ai-message office-ai-notice" role="status"><Check size={15} />{notice}</div>}
 
@@ -519,14 +507,14 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       </div>}
 
       {result && previewTarget && <section className="office-ai-result" aria-labelledby="office-ai-result-title">
-        <div className="office-ai-result-heading"><div><span className="eyebrow">REVIEW BEFORE APPLYING</span><h3 id="office-ai-result-title">AI preview</h3></div><button className="office-ai-icon-button" aria-label="Discard AI preview" onClick={() => { setResult(''); setPreviewTarget(null); }}><X size={16} /></button></div>
-        {previewTarget.kind === 'selection' && <details className="office-ai-source"><summary>Sent excerpt ({previewTarget.selectedText.length.toLocaleString()} characters)</summary><pre>{previewTarget.selectedText}</pre></details>}
-        {previewTarget.kind === 'document-summary' && <p className="office-ai-document-source">Summary based on the full document ({previewTarget.sourceChars?.toLocaleString()} characters) you confirmed. The document remains unchanged until you insert this preview.</p>}
+        <div className="office-ai-result-heading"><div><span className="eyebrow">PREVIEW</span><h3 id="office-ai-result-title">Review AI result</h3></div><button className="office-ai-icon-button" aria-label="Discard AI preview" onClick={() => { setResult(''); setPreviewTarget(null); }}><X size={16} /></button></div>
+        {previewTarget.kind === 'selection' && <details className="office-ai-source"><summary>Sent excerpt ({previewTarget.selectedText.length.toLocaleString()} chars)</summary><pre>{previewTarget.selectedText}</pre></details>}
+        {previewTarget.kind === 'document-summary' && <p className="office-ai-document-source">Based on the full document you confirmed. The document is unchanged until you insert this preview.</p>}
         <pre className="office-ai-result-text">{result}</pre>
-        <div className="office-ai-result-footer"><span className="office-ai-help">AI can make mistakes. Review the text; it is not inserted until you choose.</span><button className="office-ai-primary-button" onClick={applyResult}><Check size={15} />{previewTarget.kind === 'selection' ? 'Replace selection' : previewTarget.kind === 'draft' ? 'Insert at cursor' : 'Insert summary at cursor'}</button></div>
+        <div className="office-ai-result-footer"><span className="office-ai-help">Review before applying. Nothing is inserted automatically.</span><button className="office-ai-primary-button" onClick={applyResult}><Check size={15} />{previewTarget.kind === 'selection' ? 'Replace selection' : previewTarget.kind === 'draft' ? 'Insert at cursor' : 'Insert summary'}</button></div>
       </section>}
 
-      <p className="office-ai-footnote">Cloud actions use OpenRouter's fixed <code>google/gemma-4-31b-it:free</code> model through the Office server route and require an existing COCCE account. The model and provider are fixed server-side, with no paid-model or alternate-provider fallback. Responses are shown here for review; no AI action runs in the background, and no document file is uploaded.</p>
+      <p className="office-ai-footnote">AI results stay in preview until you apply them.</p>
     </div>}
   </section>;
 }
