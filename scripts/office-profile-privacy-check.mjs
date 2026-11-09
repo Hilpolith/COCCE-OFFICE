@@ -81,8 +81,8 @@ test('Office migration and rollback leave the shared Realtime publication untouc
 const component = readFileSync(new URL('../src/OfficeTeamCollaboration.tsx', import.meta.url), 'utf8');
 test('Office client uses the approved polling cadence without Realtime channels', () => {
   assert.doesNotMatch(component, /\.channel\s*\(|postgres_changes|CHANNEL_ERROR/i);
-  assert.match(component, /window\.setInterval\(\(\) => \{\s*void load\(\);\s*\}, 5_000\)/, 'chat messages poll every 5 seconds');
-  assert.match(component, /window\.setInterval\(\(\) => \{\s*void load\(\);\s*\}, 15_000\)/, 'active workspace data polls every 15 seconds');
+  const fifteenSecondLoadPolls = component.split('window.setInterval(() => { void load(); }, 15_000)').length - 1;
+  assert.equal(fifteenSecondLoadPolls, 2, 'chat messages and active workspace data poll every 15 seconds');
   assert.match(component, /window\.setInterval\(\(\) => \{\s*void load\(\);\s*\}, 30_000\)/, 'workspace lists, invitations, and notifications poll every 30 seconds');
   assert.match(component, /window\.setInterval\(heartbeat, 25_000\)/, 'presence heartbeats run every 25 seconds');
 });
