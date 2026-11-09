@@ -13,7 +13,7 @@ const draft = {
 async function openDraft() {
   render(<App />);
   fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
   fireEvent.click(screen.getByRole('button', { name: /Saved title/ }));
   await screen.findByRole('textbox', { name: 'Document content' }, { timeout: 5000 });
 }
@@ -54,7 +54,7 @@ describe('local Docs recovery integration', () => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULT_STATE, documents: [{ ...draft, content: '', richText: '<p>Find the needleword here</p>' }] }));
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Search local documents' }), { target: { value: 'needleword' } });
     expect(screen.getByRole('button', { name: /Saved title/ })).toBeTruthy();
   });
@@ -116,7 +116,7 @@ describe('local Docs recovery integration', () => {
     vi.stubEnv('VITE_COCCE_SUPABASE_ANON_KEY', '');
     vi.stubEnv('VITE_OFFICE_TEAM_SCHEMA_READY', 'false');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Team' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Team & collaboration' }));
     expect(await screen.findByRole('heading', { name: 'Organize the work' })).toBeTruthy();
     expect(screen.getByText(/COCCE Auth is not configured/i)).toBeTruthy();
     expect(screen.getByText(/local planning only/i)).toBeTruthy();
@@ -127,17 +127,20 @@ describe('local Docs recovery integration', () => {
 
   it('keeps document destinations under one tab and exposes industry suites separately', () => {
     render(<App />);
-    expect(screen.queryByRole('button', { name: 'Docs' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Government' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Schools' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open Docs' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Spaces' }));
+    expect(screen.getByRole('heading', { name: 'Create an industry office' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Government/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /School/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    expect(screen.getByRole('button', { name: 'Docs' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Sheets' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Slides' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Office suites' }));
-    expect(screen.getByRole('button', { name: 'Government' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Accounting' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Accounting' }));
+    expect(screen.getByRole('button', { name: 'Open Docs' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Sheets' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Slides' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open PDF' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Vault' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Spaces' }));
+    expect(screen.getByRole('button', { name: /Accounting/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Accounting/ }));
     expect(screen.getByRole('heading', { name: 'Create an industry office' })).toBeTruthy();
     expect(screen.getByText(/Existing local preview items are never copied/i)).toBeTruthy();
   });
@@ -145,7 +148,7 @@ describe('local Docs recovery integration', () => {
   it('opens the device-local Vault from application navigation', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Vault' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vault' }));
     expect(await screen.findByRole('heading', { name: 'Start a local Vault' })).toBeTruthy();
     expect(screen.getByText(/not cloud storage or enterprise access control/i)).toBeTruthy();
   });
