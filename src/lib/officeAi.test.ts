@@ -45,6 +45,7 @@ describe('Office AI request boundaries', () => {
   it('builds a selection request without document metadata or unrelated content', () => {
     expect(buildOfficeAiRequest('summarize', 'Only this excerpt', '')).toEqual({
       action: 'summarize',
+      workspaceId: '*',
       selectedText: 'Only this excerpt',
     });
   });
@@ -52,6 +53,7 @@ describe('Office AI request boundaries', () => {
   it('builds a prompt-only draft and never attaches selected document text', () => {
     expect(buildOfficeAiRequest('draft', '', '  Write a meeting recap  ')).toEqual({
       action: 'draft',
+      workspaceId: '*',
       prompt: 'Write a meeting recap',
     });
     expect(() => buildOfficeAiRequest('draft', 'existing document text', 'Write a recap')).toThrow('never includes selected document text');
@@ -59,8 +61,8 @@ describe('Office AI request boundaries', () => {
 
   it('builds a distinct full-document request containing only the supplied plain text', () => {
     const payload = buildOfficeAiDocumentSummaryRequest('Synthetic full document only.');
-    expect(payload).toEqual({ action: 'document_summary', documentText: 'Synthetic full document only.' });
-    expect(Object.keys(payload).sort()).toEqual(['action', 'documentText']);
+    expect(payload).toEqual({ action: 'document_summary', workspaceId: '*', documentText: 'Synthetic full document only.' });
+    expect(Object.keys(payload).sort()).toEqual(['action', 'documentText', 'workspaceId']);
     expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBeLessThan(OFFICE_AI_MAX_REQUEST_BYTES);
   });
 
@@ -97,7 +99,7 @@ describe('Office AI request boundaries', () => {
         Authorization: 'Bearer session-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ action: 'concise', selectedText: 'A selected paragraph.' }),
+      body: JSON.stringify({ action: 'concise', workspaceId: '*', selectedText: 'A selected paragraph.' }),
       cache: 'no-store',
     }));
   });
@@ -109,7 +111,7 @@ describe('Office AI request boundaries', () => {
     expect(fetcher).toHaveBeenCalledWith('/api/office-ai', expect.objectContaining({
       method: 'POST',
       headers: { Authorization: 'Bearer session-token', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'document_summary', documentText: 'Synthetic full document body.' }),
+      body: JSON.stringify({ action: 'document_summary', workspaceId: '*', documentText: 'Synthetic full document body.' }),
       cache: 'no-store',
     }));
     expect(String(fetcher.mock.calls[0][1]?.body)).not.toContain('documentTitle');
@@ -117,7 +119,7 @@ describe('Office AI request boundaries', () => {
 
   it('rejects a multibyte document request before network access when its serialized body exceeds the cap', async () => {
     const fetcher = vi.fn(async () => jsonResponse({ text: 'Should not be called.' }));
-    await expect(requestOfficeAi('session-token', { action: 'document_summary', documentText: '😀'.repeat(10_000) }, fetcher))
+    await expect(requestOfficeAi('session-token', { action: 'document_summary', workspaceId: '*', documentText: '😀'.repeat(10_000) }, fetcher))
       .rejects.toMatchObject({ code: 'DOCUMENT_TOO_LARGE' });
     expect(fetcher).not.toHaveBeenCalled();
   });
@@ -126,7 +128,7 @@ describe('Office AI request boundaries', () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({
       error: 'AI_NOT_CONFIGURED', message: 'Cloud AI is not configured on this deployment yet.',
     }, 503));
-    await expect(requestOfficeAi('session-token', { action: 'draft', prompt: 'Write a short note.' }, fetcher))
+    await expect(requestOfficeAi('session-token', { action: 'draft', workspaceId: '*', prompt: 'Write a short note.' }, fetcher))
       .rejects.toMatchObject({ code: 'AI_NOT_CONFIGURED', message: 'Cloud AI is not configured on this deployment yet.' });
   });
 });
