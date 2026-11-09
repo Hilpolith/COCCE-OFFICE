@@ -11,7 +11,7 @@ const enabled = [{ workspace_id: workspaceId, name: 'Operations' }];
 
 function cloudLink(overrides: Record<string, unknown> = {}) {
   return Response.json({
-    fileId, workspaceId, displayName: 'policy.md', sizeBytes: 5, url: bunnyUrl, ...overrides,
+    fileId, workspaceId, displayName: 'policy.md', sizeBytes: 7, url: bunnyUrl, ...overrides,
   });
 }
 
