@@ -297,12 +297,12 @@ test('accepts a bounded multibyte synthetic full document and preserves the exac
 });
 
 test('accepts exactly 38,000 serialized bytes and rejects the next byte before Auth', async () => {
-  const emptyPayload = JSON.stringify({ action: 'document_summary', documentText: '' });
+  const emptyPayload = JSON.stringify({ action: 'document_summary', workspaceId: TEST_WORKSPACE_ID, documentText: '' });
   const remainingBytes = 38_000 - Buffer.byteLength(emptyPayload, 'utf8');
   const cjkCharacters = Math.floor(remainingBytes / 3);
   const asciiRemainder = remainingBytes - cjkCharacters * 3;
   const documentText = '界'.repeat(cjkCharacters) + 'x'.repeat(asciiRemainder);
-  const body = JSON.stringify({ action: 'document_summary', documentText });
+  const body = JSON.stringify({ action: 'document_summary', workspaceId: TEST_WORKSPACE_ID, documentText });
   assert.equal(Buffer.byteLength(body, 'utf8'), 38_000);
   assert.ok(documentText.length <= 20_000);
 
@@ -311,7 +311,7 @@ test('accepts exactly 38,000 serialized bytes and rejects the next byte before A
   assert.equal(accepted.statusCode, 200);
   const callsAfterAccepted = calls.length;
 
-  const oneByteTooLarge = JSON.stringify({ action: 'document_summary', documentText: `${documentText}x` });
+  const oneByteTooLarge = JSON.stringify({ action: 'document_summary', workspaceId: TEST_WORKSPACE_ID, documentText: `${documentText}x` });
   assert.equal(Buffer.byteLength(oneByteTooLarge, 'utf8'), 38_001);
   const rejected = await invoke(handler, { body: oneByteTooLarge, contentLength: 38_001 });
   assert.equal(rejected.statusCode, 413);
