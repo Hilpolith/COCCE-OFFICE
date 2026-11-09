@@ -8,6 +8,8 @@ import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './officeAiWorkspace.css';
 
+type AiChatTurn = { role: 'user' | 'assistant'; content: string };
+
 const AI_DRIVE_TEXT_EXTENSIONS = new Set([
   'txt','md','markdown','mdx','csv','tsv','json','jsonl','ndjson','xml','yaml','yml','log',
   'ts','tsx','js','jsx','mjs','cjs','css','scss','sass','less','html','htm','sql','py','sh','bash','zsh',
@@ -34,7 +36,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
-  const [answer, setAnswer] = useState('');
+  const [turns, setTurns] = useState<AiChatTurn[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
   const [busy, setBusy] = useState(false);
   const [showDriveConsent, setShowDriveConsent] = useState(false);
@@ -56,7 +58,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFileHasMore(false);
       setDriveFilesOpen(false);
       setWorkspaceId('');
-      setAnswer('');
+      setTurns([]);
       setPrompt('');
       setShowDriveConsent(false);
       setDriveFilesError('');
@@ -316,18 +318,19 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     if (!client || !workspaceId || !prompt.trim() || busy) return;
     if (selectedFileIds.length > 0 && !confirmedDriveSharing) { setShowDriveConsent(true); return; }
     setShowDriveConsent(false);
+    const question = prompt.trim();
+    const history = turns.slice(-12).map((turn) => ({ role: turn.role, content: turn.content.slice(-3000) }));
     const requestGeneration = ++aiRequestGeneration.current;
     setBusy(true);
     setError('');
-    setAnswer('');
     try {
       const { data, error: invokeError } = await client.functions.invoke('office-ai-chat', {
-        body: { action: 'chat', workspaceId, prompt: prompt.trim(), includeConversations: includeWorkspaceContext, ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}) },
+        body: { action: 'chat', workspaceId, prompt: question, includeConversations: includeWorkspaceContext, ...(history.length ? { history } : {}), ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}) },
       });
       if (requestGeneration !== aiRequestGeneration.current) return;
       if (invokeError) throw new Error(invokeError.message || 'COCCE AI request failed.');
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
-      setAnswer(data.text);
+      setTurns((current) => [...current, { role: 'user', content: question }, { role: 'assistant', content: data.text }].slice(-20));
       setPrompt('');
     } catch (reason) {
       if (requestGeneration === aiRequestGeneration.current) setError(reason instanceof Error ? reason.message : 'COCCE AI could not complete the request.');
@@ -361,7 +364,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
             {driveFilesError && <p className="office-ai-drive-error" role="status">{driveFilesError}</p>}
           </div>}
         </section>
-        <div className="office-ai-answer" aria-live="polite">{answer ? <><div className="office-ai-answer-label"><Sparkles size={14} /> COCCE AI</div><p>{answer}</p></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose one workspace or all AI-enabled workspaces. Ask for summaries, plans, drafts, and practical next steps.</span></div>}</div>
+        <div className="office-ai-answer" aria-live="polite">{turns.length ? <><div className="office-ai-thread-toolbar"><span>{turns.length / 2} {turns.length === 2 ? 'exchange' : 'exchanges'} · this tab only</span><button type="button" className="office-ai-inline-button" onClick={() => { setTurns([]); setPrompt(''); setError(''); }} disabled={busy}>New chat</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div><p>{turn.content}</p></article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose one workspace or all AI-enabled workspaces. Ask for summaries, plans, drafts, and practical next steps.</span></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder="Ask across your workspace…" disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
         {showDriveConsent && <div className="office-ai-consent-backdrop">
           <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
