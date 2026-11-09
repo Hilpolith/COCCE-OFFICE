@@ -46,10 +46,12 @@ test('AI checks every selected workspace setting and skips disabled workspaces',
   assert.match(edge, /function isAllowedOrigin/);
   assert.match(edge, /cocce-office\(\?:-\[a-z0-9-\]\+\)\?-hilpolithrothschild-7822s-projects/);
   assert.match(edge, /if \(origin && !isAllowedOrigin\(origin\)\)/);
-  assert.match(edge, /aiEnabled === true/);
+  assert.match(edge, /data === true/);
   assert.match(edge, /WORKSPACE_AI_DISABLED/);
   assert.match(edge, /includeConversations !== false/);
-  assert.match(edge, /enabledWorkspaces\.slice\(0, 20\)/);
+  assert.match(edge, /boundedWorkspaces = selectedWorkspaces\.slice\(0, 20\)/);
+  assert.match(edge, /Promise\.all\(boundedWorkspaces\.map/);
+  assert.match(edge, /WORKSPACE_AI_CONTROL_UNAVAILABLE/);
   assert.match(edge, /office_list_conversations/);
   assert.match(edge, /office_list_messages/);
 });
