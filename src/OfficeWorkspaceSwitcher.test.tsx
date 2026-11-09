@@ -95,7 +95,7 @@ describe('global Office workspace selection', () => {
   });
 
   it('clears the previous account workspace immediately when the signed-in COCCE user changes', async () => {
-    let resolveNextWorkspaces: ((value: typeof workspaceB[]) => void) | null = null;
+    let resolveNextWorkspaces: ((value: Array<typeof workspaceB>) => void) | null = null;
     let loadCount = 0;
     mocks.listWorkspaces.mockImplementation(() => {
       loadCount += 1;
