@@ -50,6 +50,8 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   const [trash, setTrash] = useState(false);
   const [category, setCategory] = useState<Category>('all');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -97,12 +99,12 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   }, [client, schemaReady, loadWorkspaces]);
 
   const refresh = useCallback(async () => {
-    if (!api || !workspaceId) { setFiles([]); setUsage(null); return; }
+    if (!api || !workspaceId) { setFiles([]); setUsage(null); setHasMore(false); return; }
     const current = ++sequence.current;
     setLoading(true); setError('');
     try {
       const [nextFiles, nextUsage] = await Promise.all([api.list(workspaceId, trash), api.usage(workspaceId)]);
-      if (current === sequence.current) { setFiles(nextFiles); setUsage(nextUsage); }
+      if (current === sequence.current) { setFiles(nextFiles); setUsage(nextUsage); setHasMore(nextFiles.length === 50); }
     } catch (cause) {
       if (current === sequence.current) setError(cause instanceof Error ? cause.message : 'Cloud Drive could not be loaded.');
     } finally { if (current === sequence.current) setLoading(false); }
@@ -123,6 +125,21 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
     return needle ? files.filter((file) => `${file.displayName} ${mimeOf(file)}`.toLocaleLowerCase().includes(needle)) : files;
   }, [files, query]);
   const visible = useMemo(() => category === 'all' ? matching : matching.filter((file) => categoryOf(file) === category), [matching, category]);
+
+  const loadMore = async () => {
+    if (!api || !workspaceId || loadingMore || !hasMore) return;
+    setLoadingMore(true); setError('');
+    try {
+      const page = await api.list(workspaceId, trash, files.length);
+      setFiles((current) => {
+        const seen = new Set(current.map((file) => file.fileId));
+        return [...current, ...page.filter((file) => !seen.has(file.fileId))];
+      });
+      setHasMore(page.length === 50);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'More cloud files could not be loaded.');
+    } finally { setLoadingMore(false); }
+  };
 
   const upload = async (selected: FileList | File[]) => {
     if (!api || !workspaceId) return;
@@ -227,6 +244,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
         </article>;
       })}</div>
       : <div className="drive-empty glass-card"><FolderOpen size={24}/><h3>{query ? 'No matching files' : trash ? 'Workspace trash is empty' : 'Your cloud Drive is ready'}</h3><p>{query ? 'Try another search.' : 'Upload files to make a private, integrity-checked workspace copy. Local files are never uploaded automatically.'}</p></div>}
+    {hasMore && !loading && <div className="drive-cloud-load-more"><button type="button" className="button-secondary" onClick={() => void loadMore()} disabled={loadingMore || busy}>{loadingMore ? 'Loading more…' : 'Load more files'}</button></div>}
     {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.docxWarnings?.length ? <p className="drive-feedback">{preview.docxWarnings.join(' ')}</p> : null}{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.docxHtml ? <iframe className="drive-preview-pdf drive-preview-docx" title={preview.file.displayName} sandbox="" srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"></head><body style="font:15px/1.7 system-ui,sans-serif;color:#202433;padding:28px;max-width:850px;margin:auto">${preview.docxHtml}</body></html>`}/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? previewText || 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
   </section>;
 }
