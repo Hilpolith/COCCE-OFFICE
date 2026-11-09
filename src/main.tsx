@@ -5,6 +5,7 @@ import App from './App.tsx'
 import './glass.css'
 import './reimagine.css'
 import './visionOS.css'
+import './visionOSDock.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
