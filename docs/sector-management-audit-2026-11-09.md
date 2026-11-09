@@ -30,7 +30,7 @@ The connected database has corresponding sector migrations and dedicated read/co
 
 ## Test coverage visible in package scripts
 
-The package now includes dedicated PostgreSQL acceptance suites for Government, School, University, Business, Accounting, Manufacturing, Healthcare Administration, Healthcare residency approvals, NGO, Hospitality, and Institutions. The School Postgres script is named for SMS, but its fixture is byte-for-byte identical to the integrated production School migration and its eight tests cover bootstrap, terms/classes/subjects, timetable, encrypted student identity, admissions, enrollment, attendance, grading, receipts, parent notices, and role/workspace isolation. Business and University have isolated PostgreSQL schema validators; Institutions has an isolated schema/RLS/grant validator. The new Government suite runs the actual migration chain in PGlite and passes 11 tests. A clean network-enabled sandbox run of the full Vitest suite passed 127 test files and 1,052 tests (one skipped); `tsc -b` and `vite build` also passed. The focused navigation/Government/account/glass regression subset passed 26/26 tests. The university and business PostgreSQL validators are wired into CI, but their PG16 CI run has not yet completed.
+The package includes dedicated acceptance coverage for Government, School, University, Business, Accounting, Manufacturing, Healthcare Administration, healthcare residency approvals, NGO, Hospitality, and Institutions. The School acceptance harness now applies the baseline School SQL plus the production offset-pagination migration and passes nine tests covering bootstrap, deterministic bounded pagination, terms/classes/subjects, timetable, encrypted student identity, admissions/enrollment, attendance/grading, receipts, parent notices, and role/workspace isolation. Business and University have isolated PostgreSQL schema/workflow validators; Institutions has isolated schema/RLS/grant validation. Government acceptance passes 11 tests. The latest full GitHub Actions run is recorded below; its successful counts supersede earlier local snapshots.
 
 ## Security and data-access observations
 
@@ -52,6 +52,54 @@ The package now includes dedicated PostgreSQL acceptance suites for Government, 
 
 The latest code deployment for `main` is READY and corresponds to commit `dc63aa98bf5f26b78a5d615b90827ae63dcdaebe` (`Code-split all ten sector management workspaces`). The audit-document-only follow-up commit is `aea960365a6a2a41ed8f4d813ad92496efb68279` and does not change application code. All ten specialist sector components are now lazy-loaded. The main application JavaScript chunk fell from approximately 1,711.81 kB (gzip 451.92 kB) to 885.04 kB (gzip 249.73 kB), about a 48% reduction in the main chunk. The build still reports separate large Docs/PDF chunks; this is a performance warning, not a failed build. Production READY confirms deployability, not completion of all ten sector workflows.
 
+
+
+## Latest full acceptance and production release — 2026-11-09
+
+This section is the authoritative release checkpoint and supersedes the earlier pending-CI and deployment notes above.
+
+### Full CI result
+
+- GitHub Actions run: `42647820453`
+- Validated main commit: `311ef82dd30a1770c0893037c91b5f53b71ec39e`
+- Result: **success**
+- Vitest: **132/132 files**, **1,105 passed**, **1 skipped**
+- Node acceptance suite: **163 passed**
+- Hospitality: **46 passed**
+- Institutions: **38 passed**
+- Institutions PostgreSQL schema/RLS/grant suite: **38 passed**
+- Government PostgreSQL acceptance: **11 passed**
+- University PostgreSQL schema, role, approval, retry and workflow validators: passed
+- Business PostgreSQL schema, 40 distinct command workflows and 27 paginated read-resource regressions: passed
+- Production TypeScript and Vite build: passed
+
+The workflow installs PostgreSQL 16 and executes the dedicated database validators against that CI environment. The School pagination acceptance harness separately passed all nine SQL-backed tests, including deterministic multi-page reads and rejection of negative or over-limit offsets.
+
+### Workspace, AI and Drive regressions
+
+The passing suite now covers authenticated workspace selection, suite assignment, account-switch cleanup, revoked-membership cleanup, delayed-session race protection, cross-workspace isolation, permission-aware AI context, disabled AI workspace settings, Drive listing/preview/upload behavior, and Docs AI consent/result insertion. School registers now expose load-more controls for admissions, learners, attendance, assessments, fees and notices; the server read RPC accepts bounded offsets.
+
+### Production deployment and smoke verification
+
+- READY production deployment: `dpl_HLGwsrg2FoYe7ewHTbVtr3dyT1cC`
+- Deployed source commit: `b003490af1f4c2efa93fe40c4099c2cc5ec9ddbb`
+- Alias: `https://cocce-office.vercel.app`
+- The validated main commit `311ef82` is the direct child of the deployed commit and changes only the case-insensitive SQL ACL assertion in `scripts/office-ai-chat-context-check.mjs`; application source is identical.
+- Production HTML, JavaScript and CSS returned HTTP 200. The Vercel runtime-error query for the preceding hour returned no errors.
+- Latest Vite output: main application chunk approximately 949.92 kB (267.21 kB gzip). Compared with the earlier 1,711.81 kB / 451.92 kB gzip baseline, the main chunk remains approximately 44.5% smaller raw and 40.9% smaller gzipped. Specialist sector workspaces remain lazy-loaded; separate Docs/PDF chunks still produce a Vite size warning, not a failed build.
+
+### Production database and billing safety
+
+- Read-only production catalog review found 257 `office_*` tables; all 257 have RLS enabled.
+- No `anon` SELECT or write grants were found on those tables.
+- 120 Office RPC functions were inspected; none is executable by `anon`. The 108 security-definer functions use an empty pinned search path.
+- Production migration history records `20261109152012` (`office_school_read_offset_pagination`) as applied. The live School read RPC was inspected and contains the bounded 1–200 page-size and 0–100,000 offset checks.
+- The monthly Cloud Drive storage-subscription migration remains unapplied in production. The Vercel approval feature flag is absent, so subscription purchase and automated wallet billing remain disabled pending explicit owner approval of pricing and terms.
+- No production business records, authentication configuration, or RLS policies were modified during this completion pass. The School pagination migration was already present in the production migration ledger when inspected; it was not applied by this audit.
+
+### Remaining product boundaries (not release blockers)
+
+COCCE Office is not yet a full Microsoft Office/GenOffice replacement. Native-format fidelity, broader spreadsheet formula support, richer Docs/Slides/PDF editing, OCR, and the remaining roadmap capabilities are still bounded product work. The ten specialist management systems now pass the configured acceptance chain; this does not claim statutory or regulatory certification for every sector.
 
 ## Focused Office RPC privilege review — 2026-11-09
 
