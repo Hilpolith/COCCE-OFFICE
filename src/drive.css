@@ -10,3 +10,29 @@
 .drive-category-tabs button.is-active{border-color:rgba(255,255,255,.28);background:linear-gradient(135deg,rgba(255,255,255,.18),rgba(255,255,255,.08));color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 4px 14px rgba(0,0,0,.12)}
 .drive-category-tabs button span{min-width:17px;height:17px;display:inline-grid;place-items:center;padding:0 4px;border-radius:999px;background:rgba(255,255,255,.09);color:inherit;font-size:9px;font-variant-numeric:tabular-nums}
 @media(max-width:620px){.drive-category-tabs{margin-right:-2px;padding-bottom:10px}.drive-category-tabs button{min-height:32px;padding:0 10px}}
+
+
+.drive-mode-tabs{display:flex;align-items:center;gap:7px;margin:0 0 17px;padding:5px;width:max-content;max-width:100%;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(255,255,255,.045);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.drive-mode-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:35px;padding:0 15px;border:1px solid transparent;border-radius:999px;background:transparent;color:var(--muted);font-size:10px;font-weight:700;cursor:pointer}
+.drive-mode-tabs button.is-active{border-color:rgba(255,255,255,.2);background:linear-gradient(135deg,rgba(255,255,255,.19),rgba(255,255,255,.075));color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.17),0 5px 15px rgba(0,0,0,.12)}
+.drive-cloud-panel{display:grid;gap:15px;min-width:0}
+.drive-cloud-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.drive-cloud-heading h2{display:flex;align-items:center;gap:9px;margin:5px 0;font-size:23px;letter-spacing:-.035em}
+.drive-cloud-heading h2 svg{color:var(--accent)}
+.drive-cloud-heading p{margin:0;color:var(--muted);font-size:11px;line-height:1.5}
+.drive-cloud-controls{display:grid;grid-template-columns:minmax(180px,1fr) minmax(170px,.8fr) auto;align-items:end;gap:13px;padding:15px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(140deg,rgba(255,255,255,.09),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+.drive-cloud-controls>label{display:grid;gap:7px;color:var(--muted);font-size:10px;font-weight:700}
+.drive-cloud-controls select{width:100%;min-height:40px;padding:0 11px;border:1px solid var(--border-strong);border-radius:12px;background:rgba(20,23,38,.5);color:var(--text);font-size:11px}
+.drive-cloud-quota{display:grid;gap:4px;color:var(--muted);font-size:10px}
+.drive-cloud-quota strong{color:var(--text);font-size:16px;font-variant-numeric:tabular-nums}
+.drive-cloud-quota>div{height:5px;margin-top:5px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.1)}
+.drive-cloud-quota i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#78d9c3,#a8b8ff)}
+.drive-cloud-tabs{display:flex;gap:8px;border-bottom:1px solid var(--border)}
+.drive-cloud-tabs button{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 13px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-size:11px;cursor:pointer}
+.drive-cloud-tabs button.is-active{border-bottom-color:var(--accent);color:var(--text)}
+.drive-cloud-panel .drive-empty{display:grid;justify-items:center;gap:9px;padding:32px;text-align:center}
+.drive-cloud-panel .drive-empty h3{margin:0;color:var(--text);font-size:14px}
+.drive-cloud-panel .drive-empty p{max-width:450px;margin:0;color:var(--muted);font-size:11px;line-height:1.6}
+.drive-cloud-panel .drive-empty>svg{color:var(--accent)}
+@media(max-width:760px){.drive-cloud-controls{grid-template-columns:1fr 1fr}.drive-cloud-controls>label{grid-column:1/-1}.drive-cloud-actions{grid-column:1/-1}.drive-cloud-actions button{width:100%}}
+@media(max-width:520px){.drive-mode-tabs{width:100%}.drive-mode-tabs button{flex:1;padding:0 10px}.drive-cloud-heading{align-items:flex-start}.drive-cloud-heading>.button-secondary{font-size:0;padding:0 11px}.drive-cloud-heading>.button-secondary svg{margin:0}.drive-cloud-controls{grid-template-columns:1fr}.drive-cloud-controls>label,.drive-cloud-actions{grid-column:auto}}
