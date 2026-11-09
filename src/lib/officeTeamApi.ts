@@ -37,6 +37,8 @@ export const officeTeamApi = {
     return members.map((member) => ({ ...member, job_title: titleByUser.get(member.user_id) ?? '' }));
   },
   setMemberTitle: (client: RpcClient, workspaceId: string, userId: string, jobTitle: string) => rpc<void>(client, 'office_set_member_title', { p_workspace_id: workspaceId, p_user_id: userId, p_job_title: jobTitle }),
+  getWorkspaceAiEnabled: (client: RpcClient, workspaceId: string) => rpc<boolean>(client, 'office_get_workspace_ai_enabled', { p_workspace_id: workspaceId }),
+  setWorkspaceAiEnabled: (client: RpcClient, workspaceId: string, enabled: boolean) => rpc<void>(client, 'office_set_workspace_ai_enabled', { p_workspace_id: workspaceId, p_enabled: enabled }),
   searchUsers: (client: RpcClient, workspaceId: string, query: string) => rpc<OfficeSearchResult[]>(client, 'office_search_users', { p_workspace_id: workspaceId, p_query: query }),
   createInvitation: (client: RpcClient, workspaceId: string, userId: string, role: 'admin' | 'member', jobTitle = '') => rpc<string>(client, 'office_create_invitation', { p_workspace_id: workspaceId, p_invitee_id: userId, p_role: role, p_job_title: jobTitle }),
   listWorkspaceInvitations: (client: RpcClient, workspaceId: string) => rpc<OfficeWorkspaceInvitation[]>(client, 'office_list_workspace_invitations', { p_workspace_id: workspaceId }),
