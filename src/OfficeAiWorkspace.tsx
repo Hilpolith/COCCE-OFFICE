@@ -80,7 +80,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       if (event === 'SIGNED_OUT' || !session) {
         setWorkspaces([]);
         setUserId('');
-        setDriveFiles([]); setSelectedFileIds([]); setDriveFilesOpen(false);
+        setDriveFiles([]); setSelectedFileIds([]); setDriveFileOffsets({}); setDriveFileHasMore(false); setDriveFilesOpen(false);
         setWorkspaceId('');
         setAnswer('');
         setStatus('signed-out');
@@ -110,6 +110,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setError('');
     setDriveFiles([]);
     setSelectedFileIds([]);
+    setDriveFileOffsets({});
+    setDriveFileHasMore(false);
     setDriveFilesError('');
     setDriveFilesOpen(false);
     // Workspace selection and every selected file are revalidated by the Edge Function.
@@ -136,13 +138,13 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         try {
           const page = await api.list(space.workspace_id, false, 0);
           const rows = page.slice(0, pageSize);
-          return { workspaceId: space.workspace_id, files: rows, offset: rows.length, hasMore: page.length > rows.length };
+          return { workspaceId: space.workspace_id, files: rows, offset: rows.length, hasMore: page.length === 50 };
         } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset: 0, hasMore: false }; }
       }));
       const files = results.flatMap((result) => result.files).filter(supportedDriveFile).slice(0, 80);
       setDriveFiles(files);
       setDriveFileOffsets(Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])));
-      setDriveFileHasMore(results.some((result) => result.hasMore));
+      setDriveFileHasMore(results.some((result) => result.hasMore) && files.length < 80);
       if (!files.length) setDriveFilesError('No supported text files were found in this workspace scope. Only .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files up to 512 KiB can be attached.');
     } catch (reason) {
       setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
@@ -172,12 +174,11 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset, hasMore: false }; }
       }));
       const more = results.flatMap((result) => result.files).filter(supportedDriveFile);
-      setDriveFiles((current) => {
-        const seen = new Set(current.map((file) => file.fileId));
-        return [...current, ...more.filter((file) => !seen.has(file.fileId))].slice(0, 80);
-      });
+      const seen = new Set(driveFiles.map((file) => file.fileId));
+      const nextFiles = [...driveFiles, ...more.filter((file) => !seen.has(file.fileId))].slice(0, 80);
+      setDriveFiles(nextFiles);
       setDriveFileOffsets((current) => ({ ...current, ...Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])) }));
-      setDriveFileHasMore(results.some((result) => result.hasMore));
+      setDriveFileHasMore(results.some((result) => result.hasMore) && nextFiles.length < 80);
     } catch (reason) {
       setDriveFilesError(reason instanceof Error ? reason.message : 'More private Drive files could not be loaded.');
     } finally { setDriveFilesLoading(false); }
