@@ -51,6 +51,8 @@ test('AI Drive context is explicit, bounded, server-fetched and workspace-author
   assert.match(driveContext, /enabledById\.has\(link\.workspaceId\)/);
   assert.match(driveContext, /signed\.origin !== BUNNY_DOWNLOAD_ORIGIN/);
   assert.match(driveContext, /new TextDecoder\('utf-8', \{ fatal: true \}\)/);
+  assert.match(driveContext, /crypto\.subtle\.digest\('SHA-256'/);
+  assert.match(driveContext, /actualSha256 !== link\.sha256Hex/);
   assert.match(driveContext, /DRIVE_FILE_NOT_TEXT/);
 });
 
