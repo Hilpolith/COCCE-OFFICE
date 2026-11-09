@@ -19,7 +19,12 @@ function mimeOf(file: CloudFile) {
   if (/\.(mp4|m4v)$/.test(name)) return 'video/mp4';
   if (name.endsWith('.webm')) return 'video/webm';
   if (name.endsWith('.mov')) return 'video/quicktime';
-  if (/\.(mp3|wav|ogg|m4a|aac|flac)$/.test(name)) return 'audio/mpeg';
+  if (name.endsWith('.mp3')) return 'audio/mpeg';
+  if (name.endsWith('.wav')) return 'audio/wav';
+  if (name.endsWith('.ogg')) return 'audio/ogg';
+  if (name.endsWith('.m4a')) return 'audio/mp4';
+  if (name.endsWith('.aac')) return 'audio/aac';
+  if (name.endsWith('.flac')) return 'audio/flac';
   if (name.endsWith('.pdf')) return 'application/pdf';
   if (/\.(txt|md|markdown|csv|json|xml|yaml|yml|log)$/.test(name)) return 'text/plain';
   return 'application/octet-stream';
