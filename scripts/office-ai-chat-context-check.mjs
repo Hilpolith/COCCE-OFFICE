@@ -59,7 +59,7 @@ test('chat media previews use a strict MIME allowlist and release object URLs', 
 test('restored message-search migration retains server-side membership and ACL guards', () => {
   assert.match(migration, /office_private\.is_active_member/);
   assert.match(migration, /office_private\.can_read_conversation/);
-  assert.match(migration, /m\.deleted_at IS NULL/);
+  assert.match(migration, /m\.deleted_at\s+is\s+null/i);
   assert.match(migration, /SECURITY DEFINER/);
   assert.match(migration, /REVOKE ALL ON FUNCTION/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION .*authenticated, service_role/);
