@@ -78,7 +78,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
 
   useEffect(() => {
     let alive = true;
-    let fallback: number | null = null;
+    let fallback: ReturnType<typeof window.setInterval> | null = null;
     const poll = () => {
       if (fallback) return;
       fallback = window.setInterval(() => { void refresh().catch((cause) => { if (alive) setError(cause instanceof Error ? cause.message : 'Could not refresh chat.'); }); }, 15000);
@@ -139,9 +139,10 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
         if (reservation.status === 'upload_pending') {
           await cloud.upload(reservation, bytes);
           const result = await cloud.finalize(reservation.uploadSessionId);
-          if (!result.fileId) throw new Error('Cloud upload finalized without a file ID.');
+          if (typeof result.fileId !== 'string' || !result.fileId) throw new Error('Cloud upload finalized without a file ID.');
           fileId = result.fileId;
         } else {
+          if (typeof reservation.fileId !== 'string' || !reservation.fileId) throw new Error('Cloud upload reservation did not return a file ID.');
           fileId = reservation.fileId;
         }
         const attachment = { fileId, name: file.name, sizeBytes: file.size, mimeType: file.type || 'application/octet-stream' };
