@@ -1,3 +1,4 @@
+import OfficeSuiteAiAction from './OfficeSuiteAiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import {
@@ -181,6 +182,7 @@ function Workspace({ workspaceId, officeName = "COCCE Office", country = "Tanzan
     {status === "ready" && bootstrap && !isHealthAdminStorageReady(bootstrap) && <Notice><strong>Clinical storage location is not approved.</strong> PHI reads, writes, attachment uploads and exports are blocked until the owner-controlled deployment review enables an approved location.</Notice>}
     {feedback && status === "ready" && <Notice role="status">{feedback}</Notice>}
     {status === "ready" && <>
+      <div className="office-suite-ai-toolbar"><OfficeSuiteAiAction workspaceId={workspaceId} suiteLabel="Health Administration" tabLabel={activePanel.replaceAll("_", " ")} /></div>
       <nav className="health-admin-tabs" aria-label="Health Administration sections">{visiblePanels.map((item) => <button key={item.id} className={activePanel === item.id ? "active" : ""} aria-current={activePanel === item.id ? "page" : undefined} onClick={() => { lockPrivate(); setPanel(item.id); }}><item.icon size={16} aria-hidden="true" />{item.label}</button>)}</nav>
       <section className="health-admin-key-panel" aria-label="Private records key"><div><span className="health-admin-eyebrow">Private records</span><strong>{recordsKey ? "Unlocked in memory" : "Locked"}</strong><p>Keys and decrypted clinical text never enter browser storage.</p></div>{recordsKey ? <Button onClick={() => { lockPrivate(); setFeedbackSafe("Private records locked and decrypted rows cleared."); }}><LockKeyhole size={15} /> Lock</Button> : <form className="health-admin-unlock-form" onSubmit={unlock}><label>Passphrase<input type="password" name="passphrase" autoComplete="off" required /></label><Button className="primary" disabled={busy}><LockKeyhole size={15} /> Unlock</Button></form>}</section>
       <section className="health-admin-content" aria-live="polite">{activePanel === "overview" || ["patients", "appointments", "encounters", "diagnostics", "inpatient", "pharmacy", "billing"].includes(activePanel) ? <HealthAdminClinicalPanels {...panelProps} /> : <HealthAdminOperationsPanels {...panelProps} area={activePanel === "assets" ? "assets" : activePanel === "facilities" ? "facilities" : activePanel === "privacy" ? "privacy" : "reports"} />}</section>
