@@ -193,6 +193,14 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       if (current === sequence.current) setError(cause instanceof Error ? cause.message : 'Cloud Drive could not be loaded.');
     } finally { if (current === sequence.current) setLoading(false); }
   }, [api, workspaceId, trash, canManageStorage, storageSubscriptionsReady]);
+
+  useEffect(() => {
+    if (api && workspaceId) void refresh();
+    else {
+      setFiles([]); setUsage(null); setHasMore(false);
+    }
+  }, [api, workspaceId, refresh]);
+
   const matching = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return needle ? files.filter((file) => `${file.displayName} ${mimeOf(file)}`.toLocaleLowerCase().includes(needle)) : files;
