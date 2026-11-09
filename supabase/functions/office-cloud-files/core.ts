@@ -17,6 +17,18 @@ const ALLOWED_ORIGINS = new Set([
   'https://cocce-office.vercel.app',
   'http://localhost:5173',
 ]);
+
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === 'https:'
+      && parsed.origin === origin
+      && /^cocce-office(?:-[a-z0-9-]+)?-hilpolithrothschild-7822s-projects\.vercel\.app$/i.test(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 const UUID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const UUID_RE = new RegExp(`^${UUID_PATTERN}$`, 'i');
 const DECLARED_MIME_RE = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/;
@@ -73,7 +85,7 @@ function corsHeaders(origin: string | null): Headers {
     'X-Content-Type-Options': 'nosniff',
     'Vary': 'Origin',
   });
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     headers.set('Access-Control-Allow-Origin', origin);
     headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
     headers.set('Access-Control-Allow-Headers', 'authorization, apikey, content-type, x-client-info');
@@ -548,7 +560,7 @@ export function createOfficeCloudHandler({
 } = {}): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
     const origin = request.headers.get('origin');
-    if (origin && !ALLOWED_ORIGINS.has(origin)) return jsonResponse(null, 403, { error: 'ORIGIN_NOT_ALLOWED', message: 'This Office origin is not allowed.' });
+    if (origin && !isAllowedOrigin(origin)) return jsonResponse(null, 403, { error: 'ORIGIN_NOT_ALLOWED', message: 'This Office origin is not allowed.' });
     if (request.method === 'OPTIONS') {
       if (origin && !ALLOWED_ORIGINS.has(origin)) return jsonResponse(null, 403, { error: 'ORIGIN_NOT_ALLOWED', message: 'This Office origin is not allowed.' });
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
@@ -894,7 +906,8 @@ export function createOfficeCloudHandler({
           nowMs: now(), responseContentType: 'application/octet-stream', responseContentDisposition: disposition,
         });
         return jsonResponse(origin, 200, {
-          purpose: body.purpose, fileId: file.fileId, url,
+          purpose: body.purpose, fileId: file.fileId, workspaceId: file.workspaceId,
+          displayName: file.displayName, sizeBytes: file.sizeBytes, url,
           expiresInSeconds: DOWNLOAD_URL_TTL_SECONDS,
           contentType: 'application/octet-stream',
           contentDisposition: disposition,
