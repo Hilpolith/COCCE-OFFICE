@@ -57,7 +57,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const sequence = useRef(0);
 
-  const schemaReady = config.status === 'ready' && config.schemaReady;
+  const schemaReady = config.status === 'ready' ? config.schemaReady : false;
   const api = useMemo(() => {
     if (!client || !schemaReady || !userId) return null;
     return createOfficeCloudApi(client, config.anonKey, userId);
