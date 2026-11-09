@@ -138,4 +138,26 @@ describe('COCCE AI workspace context', () => {
     }));
     expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
   });
+  it('clears the selected workspace and ignores an in-flight answer after workspace access is cleared', async () => {
+    let resolveChat: ((value: { data: { text: string }; error: null }) => void) | null = null;
+    mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
+      args.body.action === 'status'
+        ? { data: { configured: true }, error: null }
+        : new Promise((resolve) => { resolveChat = resolve; })
+    ));
+
+    render(<OfficeAiWorkspace initialWorkspaceId="workspace-one" initialPrompt="Summarise the confidential project." />);
+    const selector = await screen.findByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement;
+    await waitFor(() => expect(selector.value).toBe('workspace-one'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(2));
+
+    window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
+    expect((screen.getByPlaceholderText('Ask across your workspace…') as HTMLTextAreaElement).value).toBe('');
+    expect((screen.getByPlaceholderText('Ask across your workspace…') as HTMLTextAreaElement).disabled).toBe(true);
+
+    resolveChat?.({ data: { text: 'PRIVATE RESPONSE FROM THE PREVIOUS WORKSPACE' }, error: null });
+    await waitFor(() => expect(screen.queryByText('PRIVATE RESPONSE FROM THE PREVIOUS WORKSPACE')).toBeNull());
+  });
+
 });
