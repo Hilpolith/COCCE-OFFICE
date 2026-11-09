@@ -527,9 +527,9 @@ export function createOfficeCloudApi(
         return item as unknown as CloudStorageHistoryEvent;
       });
     },
-    async purchaseStorage(workspaceId: string, planCode: string, idempotencyKey: string, autoRenew = false) {
-      if (!uuid(workspaceId) || !uuid(idempotencyKey) || !/^storage_(5gb|25gb|100gb|250gb|1tb|2tb)_monthly$/.test(planCode)) throw stableError(400);
-      const result = await call('purchase_storage', { workspaceId, planCode, idempotencyKey, autoRenew });
+    async purchaseStorage(workspaceId: string, planCode: string, idempotencyKey: string, walletPin: string, autoRenew = false) {
+      if (!uuid(workspaceId) || !uuid(idempotencyKey) || !/^storage_(5gb|25gb|100gb|250gb|1tb|2tb)_monthly$/.test(planCode) || !/^\\d{4}$/.test(walletPin)) throw stableError(400);
+      const result = await call('purchase_storage', { workspaceId, planCode, idempotencyKey, walletPin, autoRenew });
       const purchase = result.purchase;
       if (!record(purchase) || !uuid(purchase.subscriptionId) || typeof purchase.planCode !== 'string'
         || typeof purchase.displayName !== 'string' || !byteCount(purchase.quotaBytes, false)
@@ -543,18 +543,18 @@ export function createOfficeCloudApi(
         currentPeriodEnd: string; balance: number | null; replayed: boolean;
       };
     },
-    async renewStorage(subscriptionId: string, idempotencyKey: string) {
-      if (!uuid(subscriptionId) || !uuid(idempotencyKey)) throw stableError(400);
-      const result = await call('renew_storage', { subscriptionId, idempotencyKey });
+    async renewStorage(subscriptionId: string, idempotencyKey: string, walletPin: string) {
+      if (!uuid(subscriptionId) || !uuid(idempotencyKey) || !/^\\d{4}$/.test(walletPin)) throw stableError(400);
+      const result = await call('renew_storage', { subscriptionId, idempotencyKey, walletPin });
       const renewal = result.renewal;
       if (!record(renewal) || !uuid(renewal.subscriptionId)
         || !['active','past_due','expired'].includes(String(renewal.status))
         || !date(renewal.currentPeriodEnd) || typeof renewal.replayed !== 'boolean') throw stableError();
       return renewal as { subscriptionId: string; status: 'active' | 'past_due' | 'expired'; currentPeriodEnd: string; replayed: boolean; balance: number | null };
     },
-    async setStorageAutoRenew(subscriptionId: string, autoRenew: boolean) {
-      if (!uuid(subscriptionId) || typeof autoRenew !== 'boolean') throw stableError(400);
-      const result = await call('set_storage_auto_renew', { subscriptionId, autoRenew });
+    async setStorageAutoRenew(subscriptionId: string, autoRenew: boolean, walletPin?: string) {
+      if (!uuid(subscriptionId) || typeof autoRenew !== 'boolean' || (autoRenew && !/^\\d{4}$/.test(walletPin ?? ''))) throw stableError(400);
+      const result = await call('set_storage_auto_renew', { subscriptionId, autoRenew, ...(autoRenew ? { walletPin } : {}) });
       const subscription = result.subscription;
       if (!record(subscription) || !uuid(subscription.subscriptionId)
         || typeof subscription.autoRenew !== 'boolean' || typeof subscription.cancelAtPeriodEnd !== 'boolean'
