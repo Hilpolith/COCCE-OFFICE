@@ -41,7 +41,7 @@ describe('Docs local DOCX import UI', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
     expect(screen.queryByText(/Import a new local document from a limited DOCX subset/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
@@ -67,7 +67,7 @@ describe('Docs local DOCX import UI', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
     fireEvent.click(screen.getByRole('button', { name: /Existing draft/ }));
     fireEvent.click(await screen.findByRole('button', { name: /Export \.docx/ }));
 
@@ -82,7 +82,7 @@ describe('Docs local DOCX import UI', () => {
     const network = vi.spyOn(globalThis, 'fetch');
     const firstRender = render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
     fireEvent.click(screen.getByRole('button', { name: /Existing draft/ }));
     const content = await screen.findByRole('textbox', { name: 'Document content' });
     fireEvent.click(await screen.findByRole('button', { name: 'Insert' }));
@@ -103,7 +103,7 @@ describe('Docs local DOCX import UI', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
     fireEvent.click(screen.getByRole('button', { name: /Existing draft/ }));
     const reloaded = await screen.findByRole('textbox', { name: 'Document content' });
     await waitFor(() => expect(reloaded.querySelectorAll('table tr')).toHaveLength(3));
@@ -124,7 +124,7 @@ describe('Docs local DOCX import UI', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
 
@@ -143,7 +143,7 @@ describe('Docs local DOCX import UI', () => {
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
     fireEvent.click(screen.getByRole('button', { name: 'Import DOCX' }));
     fireEvent.change(screen.getByLabelText('Choose a DOCX file'), { target: { files: [file] } });
 
