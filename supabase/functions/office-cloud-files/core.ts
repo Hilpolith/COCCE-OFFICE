@@ -631,80 +631,23 @@ function errorMessage(status: number): string {
 
 type WalletPinFailure = { status: number; error: string; message: string };
 async function verifyOfficeWalletPin(
-  config: CloudConfig,
-  actorId: string,
+  _config: CloudConfig,
+  _actorId: string,
   pin: string,
-  fetcher: Fetcher,
+  _fetcher: Fetcher,
 ): Promise<WalletPinFailure | null> {
-  // PINs are only handled in this Edge Function's memory. Never log or return
-  // the submitted PIN or the private profile field.
+  // The legacy profiles.wallet_pin_hash field is not a password hash: a
+  // read-only format audit found raw four-digit values for some accounts.
+  // Never compare or expose that field. Storage purchases stay fail-closed
+  // until COCCE Wallet supplies a reviewed, salted server-side verifier.
   if (!/^\d{4}$/.test(pin)) {
     return { status: 400, error: 'INVALID_WALLET_PIN_FORMAT', message: 'Enter your four-digit COCCE Wallet PIN.' };
   }
-  const current = rpcObject(await officeRpc(config, 'office_cloud_wallet_pin_guard', {
-    p_actor_id: actorId, p_success: null,
-  }, fetcher));
-  if (!current || typeof current.allowed !== 'boolean') throw new Error('Wallet PIN guard response was invalid.');
-  if (!current.allowed) {
-    return { status: 429, error: 'WALLET_PIN_LOCKED', message: 'Too many incorrect wallet PIN attempts. Try again in 15 minutes.' };
-  }
-
-  const profileUrl = new URL('/rest/v1/profiles', config.supabaseUrl);
-  profileUrl.searchParams.set('id', 'eq.' + actorId);
-  profileUrl.searchParams.set('select', 'wallet_pin_hash');
-  let response: Response;
-  try {
-    response = await fetcher(profileUrl.toString(), {
-      method: 'GET',
-      headers: {
-        apikey: config.serviceRoleKey,
-        Authorization: 'Bearer ' + config.serviceRoleKey,
-        Accept: 'application/json',
-      },
-      cache: 'no-store',
-      redirect: 'error',
-      credentials: 'omit',
-      referrerPolicy: 'no-referrer',
-      signal: AbortSignal.timeout(8_000),
-    });
-  } catch {
-    throw new Error('Wallet PIN verification is temporarily unavailable.');
-  }
-  if (!response.ok) {
-    await response.body?.cancel().catch(() => undefined);
-    throw new Error('Wallet PIN verification is temporarily unavailable.');
-  }
-  let storedPin: unknown = null;
-  try {
-    const rows: unknown = await response.json();
-    if (Array.isArray(rows) && rows.length === 1 && rows[0] && typeof rows[0] === 'object') {
-      storedPin = (rows[0] as Record<string, unknown>).wallet_pin_hash;
-    }
-  } catch {
-    throw new Error('Wallet PIN verification returned an invalid profile response.');
-  }
-  if (typeof storedPin !== 'string' || !/^\d{4}$/.test(storedPin)) {
-    return {
-      status: 409,
-      error: 'WALLET_PIN_UNAVAILABLE',
-      message: 'A supported four-digit Wallet PIN is not configured for this account. Update it in COCCE Wallet before purchasing storage.',
-    };
-  }
-  if (storedPin !== pin) {
-    const failed = rpcObject(await officeRpc(config, 'office_cloud_wallet_pin_guard', {
-      p_actor_id: actorId, p_success: false,
-    }, fetcher));
-    if (!failed || typeof failed.allowed !== 'boolean') throw new Error('Wallet PIN guard response was invalid.');
-    if (!failed.allowed) {
-      return { status: 429, error: 'WALLET_PIN_LOCKED', message: 'Too many incorrect wallet PIN attempts. Try again in 15 minutes.' };
-    }
-    return { status: 403, error: 'INVALID_WALLET_PIN', message: 'The COCCE Wallet PIN is incorrect.' };
-  }
-  const accepted = rpcObject(await officeRpc(config, 'office_cloud_wallet_pin_guard', {
-    p_actor_id: actorId, p_success: true,
-  }, fetcher));
-  if (!accepted || accepted.allowed !== true) throw new Error('Wallet PIN verification could not be completed.');
-  return null;
+  return {
+    status: 409,
+    error: 'WALLET_PIN_VERIFIER_UNAVAILABLE',
+    message: 'Secure server-side COCCE Wallet PIN verification is not ready for storage billing. No payment was taken.',
+  };
 }
 
 export function createOfficeCloudHandler({
