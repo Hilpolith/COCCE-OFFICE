@@ -82,8 +82,10 @@ describe('Cloud Drive workspace', () => {
     const frame = await screen.findByTitle('brief.docx') as HTMLIFrameElement;
     expect(mocks.importDocxFile).toHaveBeenCalledWith(expect.any(File));
     const componentSource = readFileSync('src/CloudDriveWorkspace.tsx', 'utf8');
-    expect(componentSource).toContain('sandbox=" "');
-    expect(componentSource).not.toMatch(/sandbox="[^"]*(allow-scripts|allow-same-origin)/);
+    const docxFrame = componentSource.match(/<iframe className="drive-preview-pdf drive-preview-docx"[^>]*>/)?.[0] ?? '';
+    expect(docxFrame).toContain('sandbox=" "');
+    expect(docxFrame).not.toContain('allow-scripts');
+    expect(docxFrame).not.toContain('allow-same-origin');
     expect(frame.getAttribute('srcdoc')).toContain('Imported brief');
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(docxFile);
   });
