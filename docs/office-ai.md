@@ -59,7 +59,7 @@ Workspace owners and administrators can disable or re-enable COCCE AI per worksp
 
 ## Deployment verification — 2026-11-09
 
-The current workspace-wide Edge Function is ACTIVE as version 15 in the existing COCCE Supabase project, with `verify_jwt=true`. Its deployment was inspected after release and includes the all-authorised-workspaces loop and workspace-level AI gate. The `office_get_workspace_ai_enabled(uuid)` RPC returns a boolean and is executable by authenticated users only; it checks active membership server-side before returning the setting. The workspace/conversation/message RPCs likewise require authenticated execution and membership checks. The private `office-cloud-files` Edge Function is ACTIVE version 7 with JWT verification; its `get_link` action now returns the verified file ID, workspace ID, display name, size and SHA-256 digest to the server-side AI reader, while the signed Bunny URL never reaches the browser AI payload.
+The current workspace-wide Edge Function is ACTIVE as version 16 in the existing COCCE Supabase project, with `verify_jwt=true`. Its deployment was inspected after release and includes the all-authorised-workspaces loop and workspace-level AI gate. The `office_get_workspace_ai_enabled(uuid)` RPC returns a boolean and is executable by authenticated users only; it checks active membership server-side before returning the setting. The workspace/conversation/message RPCs likewise require authenticated execution and membership checks. The private `office-cloud-files` Edge Function is ACTIVE version 8 with JWT verification; its `get_link` action now returns the verified file ID, workspace ID, display name, size and SHA-256 digest to the server-side AI reader, while the signed Bunny URL never reaches the browser AI payload.
 
 The repository's full `pnpm test` suite passed in an isolated sandbox using PostgreSQL 18 for the repository's SQL-backed migration checks. The clean TypeScript/Vite build passed. Production Vercel deployment is currently blocked by the team's HTTP 402 `api-deployments-free-per-day` limit; no production release is claimed for this code until a deployment of the current `main` commit reaches READY.
 
@@ -70,13 +70,13 @@ The Docs writing studio now requires an explicit workspace scope: one authorised
 
 The Government correspondence review route is subject to the same workspace AI switch in addition to its existing record eligibility and non-sensitive-text checks. This keeps the owner/admin AI setting consistent across the dedicated COCCE AI chat and Docs writing actions. Local-only documents are not automatically uploaded; the user must still choose what text to send and confirm full-document summaries separately.
 
-These Vercel API changes are on `main` but are not considered production-released until the current commit receives a READY deployment. The separate Supabase `office-ai-chat` Edge Function remains ACTIVE version 15 with JWT verification enabled.
+These Vercel API changes are on `main` but are not considered production-released until the current commit receives a READY deployment. The separate Supabase `office-ai-chat` Edge Function remains ACTIVE version 16 with JWT verification enabled.
 
 
 ## Current deployed functions after selected Drive context — 2026-11-09 11:16 UTC
 
-- `office-ai-chat` is ACTIVE at version 14 with JWT verification enabled. Its deployment includes the separately tested `drive-context.ts` module.
-- `office-cloud-files` is ACTIVE at version 6 with JWT verification enabled. The shared origin validator now governs both normal requests and OPTIONS preflights, including the linked COCCE Office Vercel preview hostname.
+- `office-ai-chat` is ACTIVE at version 16 with JWT verification enabled. Its deployment includes the separately tested `drive-context.ts` module.
+- `office-cloud-files` is ACTIVE at version 8 with JWT verification enabled. The shared origin validator now governs both normal requests and OPTIONS preflights, including the linked COCCE Office Vercel preview hostname.
 - Production Vercel environment flags `VITE_OFFICE_TEAM_SCHEMA_READY` and `VITE_OFFICE_CLOUD_FILES_READY` are both enabled.
 - The selected Drive context helper and AI workspace UI passed their focused tests (10 tests total). The production TypeScript/Vite build passed at the preceding main revision. The final full-suite rerun is delegated to the new main-branch GitHub Actions run for commit `22b766fe12d871cb8e5036220bfbf9542532e008`; that run was pending at the time of this note.
 - The Vercel production alias has not been updated to these source changes because the team's deployment API quota returned HTTP 402 `api-deployments-free-per-day`. Keep this release marked unreleased until the current main commit has a READY production deployment.
@@ -84,6 +84,6 @@ These Vercel API changes are on `main` but are not considered production-release
 
 ## Latest integrity and CI checkpoint — 2026-11-09 11:19 UTC
 
-The private Cloud Drive link response now includes the stored SHA-256 digest from the verified revision. COCCE AI compares the server-fetched Bunny bytes against that digest before decoding or adding any excerpt to model context. The Cloud Drive Edge Function is ACTIVE at version 7 and COCCE AI is ACTIVE at version 15; both still require JWT verification. The Drive-context test suite now covers the SHA-256 match and mismatch paths.
+The private Cloud Drive link response now includes the stored SHA-256 digest from the verified revision. COCCE AI compares the server-fetched Bunny bytes against that digest before decoding or adding any excerpt to model context. The Cloud Drive Edge Function is ACTIVE at version 8 and COCCE AI is ACTIVE at version 16; both still require JWT verification. The Drive-context test suite now covers the SHA-256 match and mismatch paths.
 
 GitHub Actions run `42607472160` completed successfully for an earlier main revision and executed both the full test command and production build. The latest main commit `f3c29c2d0ef353c980aa75012d686cb101382e60` has its own full validation run queued as `42608122219`; wait for that run to complete before treating the latest SHA as fully verified. Vercel production deployment remains blocked by the team's HTTP 402 `api-deployments-free-per-day` limit.
