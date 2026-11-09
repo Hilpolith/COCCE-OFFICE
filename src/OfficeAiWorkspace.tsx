@@ -122,7 +122,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const openDriveFiles = async () => {
     if (driveFilesOpen) { setDriveFilesOpen(false); return; }
     setDriveFilesOpen(true);
-    if (!client || !userId || !config.anonKey || driveFilesLoading) return;
+    if (!client || config.status !== 'ready' || !userId || driveFilesLoading) return;
     setDriveFilesLoading(true);
     setDriveFilesError('');
     try {
@@ -154,10 +154,11 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   };
 
   const loadMoreDriveFiles = async () => {
-    if (!client || !userId || !config.anonKey || driveFilesLoading || !driveFileHasMore) return;
+    if (!client || config.status !== 'ready' || !userId || driveFilesLoading || !driveFileHasMore) return;
     setDriveFilesLoading(true);
     setDriveFilesError('');
     try {
+      if (!config.schemaReady) throw new Error('Private Cloud Drive is not enabled for this Office deployment.');
       const api = createOfficeCloudApi(client, config.anonKey, userId);
       const scope = workspaceId === '*' ? workspaces.slice(0, 20) : workspaces.filter((space) => space.workspace_id === workspaceId);
       const enabledScope = (await Promise.all(scope.map(async (space) => {
