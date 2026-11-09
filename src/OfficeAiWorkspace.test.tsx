@@ -60,6 +60,28 @@ describe('COCCE AI workspace context', () => {
     expect(selector.value).toBe('workspace-two');
   });
 
+  it('loads additional Drive file pages for a selected workspace', async () => {
+    const workspaceId = '11111111-1111-4111-8111-111111111111';
+    mocks.listWorkspaces.mockResolvedValue([{ workspace_id: workspaceId, name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
+    const file = (index: number) => ({
+      fileId: `33333333-3333-4333-8333-${String(index + 1).padStart(12, '0')}`,
+      workspaceId, displayName: `file-${index}.md`, sizeBytes: 123,
+      createdAt: '2026-11-09T00:00:00Z', sha256Hex: '0'.repeat(64),
+    });
+    const list = vi.fn(async (_id: string, _trash: boolean, offset: number) => offset === 0
+      ? Array.from({ length: 50 }, (_, index) => file(index))
+      : offset === 50 ? [file(50)] : []);
+    mocks.createOfficeCloudApi.mockReturnValue({ list });
+    render(<OfficeAiWorkspace />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), { target: { value: workspaceId } });
+    fireEvent.click(screen.getByRole('button', { name: 'Browse Drive' }));
+    expect(await screen.findByText('file-0.md')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more files' }));
+    expect(await screen.findByText('file-50.md')).toBeTruthy();
+    expect(list).toHaveBeenCalledWith(workspaceId, false, 50);
+  });
+
   it('does not offer Drive files from workspaces with AI disabled', async () => {
     const enabledId = '11111111-1111-4111-8111-111111111111';
     const disabledId = '22222222-2222-4222-8222-222222222222';
