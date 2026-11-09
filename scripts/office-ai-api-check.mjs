@@ -132,6 +132,18 @@ test('fails closed when the workspace AI control RPC cannot be checked', async (
   assert.equal(providerCallFrom(calls), undefined);
 });
 
+test('all-workspaces scope checks no more than 20 authorised workspace switches', async () => {
+  const workspaceRows = Array.from({ length: 24 }, (_, index) => ({
+    workspace_id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    name: `Synthetic workspace ${index + 1}`,
+  }));
+  const { handler, calls } = makeHarness({ workspaceRows });
+  const res = await invoke(handler, { body: { workspaceId: '*', action: 'summarize', selectedText: 'Excerpt.' } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls.filter((call) => call.input.endsWith('/rpc/office_get_workspace_ai_enabled')).length, 20);
+  assert.ok(providerCallFrom(calls));
+});
+
 test('POST sends only an explicitly selected excerpt to the fixed free OpenRouter model', async () => {
   const { handler, calls } = makeHarness();
   const res = await invoke(handler, { body: { action: 'summarize', selectedText: 'Only the passage the user selected.' } });
