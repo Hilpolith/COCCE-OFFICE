@@ -16,6 +16,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { OfficeDocument } from './lib/localStore';
 import { activeDocsTable, countDocsTablesWithoutHeaderRow, DOCS_TABLE_LIMITS, DOCS_TABLE_LIMITS_COPY, docsTableDocumentViolation, docsTableGridViolation, inspectDocsTableUsage } from './lib/docsTableLimits';
 import { initialDocumentHtml, plainTextToRichHtml, richTextToPlainText, sanitizeRichTextHtmlWithWarnings } from './lib/documentEditor';
+import { DocsHighlight, DocsLink, DocsTextAlign, DocsTextStyle, safeDocsLinkHref } from './lib/docsFormattingExtensions';
 import {
   createDocsReviewComment, deleteDocsReviewComment, listDocsReviewComments,
   mapDocsReviewCommentAnchors, MAX_DOCS_REVIEW_COMMENT_CHARS, MAX_DOCS_REVIEW_COMMENTS_PER_DOCUMENT,
@@ -31,8 +32,8 @@ import DocsCloudPanel from './DocsCloudPanel';
 import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import './docs.css';
 import {
-  ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
-  FileText, Heading1, Heading2, Heading3, Italic, List, ListOrdered, LockKeyhole, MessageSquarePlus, Code, Eraser,
+  AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
+  FileText, Heading1, Heading2, Heading3, Highlighter, Italic, Link2, List, ListOrdered, LockKeyhole, MessageSquarePlus, Code, Eraser, Minus, Palette,
   Pilcrow, Quote, Redo2, Replace, Rows3, Search, Strikethrough, Table2, Trash2, RotateCcw,
   Underline as UnderlineIcon, Undo2, X,
 } from 'lucide-react';
@@ -247,6 +248,10 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const [initialHtml] = useState(() => initialDocumentHtml(document.content, document.richText));
   const [insertRows, setInsertRows] = useState('3');
   const [insertColumns, setInsertColumns] = useState('3');
+  const [fontFamily, setFontFamily] = useState('Arial');
+  const [fontSize, setFontSize] = useState('12pt');
+  const [textColor, setTextColor] = useState('#202733');
+  const [highlightColor, setHighlightColor] = useState('#fff2a8');
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState('');
   const [findReplacement, setFindReplacement] = useState('');
@@ -269,7 +274,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const editor = useEditor({
     extensions: [StarterKit.configure({
       heading: { levels: [1, 2, 3] }, link: false, underline: false,
-    }), Underline, TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } }), reviewCommentExtension, tableGuard],
+    }), Underline, TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } }), DocsTextStyle, DocsHighlight, DocsLink, DocsTextAlign, reviewCommentExtension, tableGuard],
     content: initialHtml,
     editorProps: {
       attributes: { class: 'rich-text-editor', role: 'textbox', 'aria-label': 'Document content', 'aria-multiline': 'true', spellcheck: 'true' },
@@ -630,6 +635,31 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     } catch (error) {
       setFindNotice({ text: error instanceof Error ? error.message : 'Replace all failed; no text was changed.', error: true });
     }
+  };
+
+  const applyTextAlign = (alignment: 'left' | 'center' | 'right' | 'justify') => {
+    if (!editor) return;
+    editor.chain().focus()
+      .updateAttributes('paragraph', { textAlign: alignment })
+      .updateAttributes('heading', { textAlign: alignment })
+      .run();
+  };
+
+  const insertLink = () => {
+    if (!editor) return;
+    if (editor.state.selection.empty) {
+      setTableNotice('Select the text you want to turn into a link.');
+      return;
+    }
+    const entered = window.prompt('Enter an https://, http:// or mailto: link');
+    if (!entered) return;
+    const href = safeDocsLinkHref(entered);
+    if (!href) {
+      setTableNotice('Only valid http, https and mailto links are supported.');
+      return;
+    }
+    setTableNotice('');
+    editor.chain().focus().setMark('docsLink', { href }).run();
   };
 
   const exportMarkdown = async () => {
