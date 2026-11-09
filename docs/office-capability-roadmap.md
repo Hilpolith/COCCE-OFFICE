@@ -159,7 +159,7 @@ GitHub Actions run `42607472160` completed successfully for an earlier main revi
 
 ### Current release gate (2026-11-09)
 
-- Current main HEAD: `67306e74dc78653cb6311ca2355122015fd39a8a`.
+- Latest application-code HEAD before this docs-only release-gate update: `67306e74dc78653cb6311ca2355122015fd39a8a`.
 - Latest READY Vercel production deployment still points to `5c2e662a3cfcd7a5ebca45b19de4a821ae3a654c`; it is not the current main HEAD. The current production alias has not been verified against the new AI/Drive work.
 - The latest Vercel build error in the deployment history was for an earlier test revision; the subsequent source changes addressed that reported test failure, but no newer production deployment has completed.
 - The main-branch GitHub Actions workflow is present, but no workflow run is visible for the latest commits.
