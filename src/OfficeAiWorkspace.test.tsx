@@ -160,4 +160,29 @@ describe('COCCE AI workspace context', () => {
     expect(screen.queryByText('PRIVATE RESPONSE FROM THE PREVIOUS WORKSPACE')).toBeNull();
   });
 
+
+  it('offers source-code text files while hiding likely secrets and credentials', async () => {
+    const workspaceId = '11111111-1111-4111-8111-111111111111';
+    mocks.listWorkspaces.mockResolvedValue([{ workspace_id: workspaceId, name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
+    const makeFile = (fileId: string, displayName: string) => ({
+      fileId, workspaceId, displayName, sizeBytes: 123,
+      createdAt: '2026-11-09T00:00:00Z', sha256Hex: '0'.repeat(64),
+    });
+    mocks.createOfficeCloudApi.mockReturnValue({ list: vi.fn().mockResolvedValue([
+      makeFile('33333333-3333-4333-8333-333333333333', 'src/main.ts'),
+      makeFile('44444444-4444-4444-8444-444444444444', 'README.mdx'),
+      makeFile('55555555-5555-4555-8555-555555555555', 'service-account.json'),
+      makeFile('66666666-6666-4666-8666-666666666666', '.env.example'),
+      makeFile('77777777-7777-4777-8777-777777777777', 'movie.mp4'),
+    ]) });
+    render(<OfficeAiWorkspace initialWorkspaceId={workspaceId} />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    fireEvent.click(screen.getByRole('button', { name: 'Browse Drive' }));
+    expect(await screen.findByText('src/main.ts')).toBeTruthy();
+    expect(screen.getByText('README.mdx')).toBeTruthy();
+    expect(screen.queryByText('service-account.json')).toBeNull();
+    expect(screen.queryByText('.env.example')).toBeNull();
+    expect(screen.queryByText('movie.mp4')).toBeNull();
+  });
+
 });
