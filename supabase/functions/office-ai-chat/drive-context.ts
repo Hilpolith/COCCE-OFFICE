@@ -10,7 +10,7 @@ const DRIVE_TEXT_EXTENSIONS = new Set([
   'toml','ini','conf','properties','dart','java','kt','kts','go','rs','php','rb','swift','c','h','cpp','hpp',
   'cs','r','lua','ps1','bat','graphql','gql','prisma','vue','svelte','astro',
 ]);
-const SENSITIVE_DRIVE_NAME = /^(?:\\.env(?:\\..*)?|secrets?(?:\\..*)?|credentials?(?:\\..*)?|service-account(?:\\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
+const SENSITIVE_DRIVE_NAME = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
 const OFFICE_CLOUD_FUNCTION = '/functions/v1/office-cloud-files';
 const BUNNY_DOWNLOAD_ORIGIN = 'https://de-s3.storage.bunnycdn.com';
 
