@@ -1,12 +1,14 @@
-import { FileSpreadsheet, FileText, LockKeyhole, Presentation } from 'lucide-react';
+import { FileSearch, FileSpreadsheet, FileText, LockKeyhole, Presentation } from 'lucide-react';
 import './officeWorkbench.css';
 
-type EditorModule = 'docs' | 'sheets' | 'slides';
+type EditorModule = 'docs' | 'sheets' | 'slides' | 'pdf' | 'vault';
 
 const modules = [
   { id: 'docs', label: 'Docs', icon: FileText },
   { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet },
   { id: 'slides', label: 'Slides', icon: Presentation },
+  { id: 'pdf', label: 'PDF', icon: FileSearch },
+  { id: 'vault', label: 'Vault', icon: LockKeyhole },
 ] as const;
 
 export default function OfficeEditorChrome({
