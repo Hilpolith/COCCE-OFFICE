@@ -6,13 +6,13 @@ import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './officeAiWorkspace.css';
 
-export default function OfficeAiWorkspace() {
+export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }: { initialWorkspaceId?: string; initialPrompt?: string } = {}) {
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
-  const [workspaceId, setWorkspaceId] = useState('');
+  const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(initialPrompt ?? '');
   const [answer, setAnswer] = useState('');
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
   const [busy, setBusy] = useState(false);
@@ -49,7 +49,7 @@ export default function OfficeAiWorkspace() {
         setStatus('ready');
         return;
       }
-      setWorkspaceId('*');
+      setWorkspaceId(initialWorkspaceId && spaces.some((space) => space.workspace_id === initialWorkspaceId) ? initialWorkspaceId : '*');
       setStatus('ready');
     })().catch((reason: unknown) => {
       if (active) {
