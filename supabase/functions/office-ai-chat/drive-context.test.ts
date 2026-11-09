@@ -9,6 +9,11 @@ const supabaseUrl = 'https://nresyncmhdybucenhxbw.supabase.co';
 const bunnyUrl = 'https://de-s3.storage.bunnycdn.com/cocce-kyc/office/v1/workspaces/' + workspaceId + '/files/' + fileId + '/revisions/' + revisionId + '/payload?signature=synthetic';
 const enabled = [{ workspace_id: workspaceId, name: 'Operations' }];
 
+async function sha256Hex(bytes: Uint8Array) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(digest, (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
 function cloudLink(overrides: Record<string, unknown> = {}) {
   return Response.json({
     fileId, workspaceId, displayName: 'policy.md', sizeBytes: 7, sha256Hex: '6cfab04bd04c3db726cef5cc651b047a9ac8d4bc97ef976a8e44b59ff23e0c92', url: bunnyUrl, ...overrides,
@@ -108,15 +113,17 @@ describe('COCCE AI selected Drive context', () => {
       '66666666-6666-4666-8666-666666666666',
     ];
     const workspaces = fileIds.map((_id, index) => ({ workspace_id: workspaceId, name: 'Workspace ' + (index + 1) }));
+    const fileBytes = new TextEncoder().encode('x'.repeat(9_000));
+    const fileSha256 = await sha256Hex(fileBytes);
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
       if (String(input).endsWith('/office-cloud-files')) {
         const id = body.fileId as string;
         const index = fileIds.indexOf(id);
         const url = bunnyUrl.replace(fileId, id);
-        return cloudLink({ fileId: id, displayName: 'file-' + index + '.txt', sizeBytes: 9_000, url });
+        return cloudLink({ fileId: id, displayName: 'file-' + index + '.txt', sizeBytes: fileBytes.byteLength, sha256Hex: fileSha256, url });
       }
-      return new Response('x'.repeat(9_000));
+      return new Response(fileBytes);
     });
     const result = await loadSelectedDriveFiles(fileIds, workspaces, supabaseUrl, 'key', 'jwt', fetchImpl);
     expect(result.map((file) => file.text.length)).toEqual([8_000, 8_000, 4_000]);
