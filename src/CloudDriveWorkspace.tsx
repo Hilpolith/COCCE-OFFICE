@@ -58,7 +58,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   const sequence = useRef(0);
 
   const api = useMemo(() => {
-    if (!client || config.status !== 'ready' || !userId) return null;
+    if (!client || config.status !== 'ready' || !config.schemaReady || !userId) return null;
     return createOfficeCloudApi(client, config.anonKey, userId);
   }, [client, config, userId]);
 
@@ -70,7 +70,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   }, [client]);
 
   useEffect(() => {
-    if (!client) { setLoading(false); return; }
+    if (!client || config.status !== 'ready' || !config.schemaReady) { setLoading(false); return; }
     let alive = true;
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       if (!alive) return;
@@ -92,7 +92,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
       if (alive) setError(cause instanceof Error ? cause.message : 'Could not load your COCCE workspaces.');
     }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; subscription.unsubscribe(); };
-  }, [client, loadWorkspaces]);
+  }, [client, config.status, config.schemaReady, loadWorkspaces]);
 
   const refresh = useCallback(async () => {
     if (!api || !workspaceId) { setFiles([]); setUsage(null); return; }
@@ -177,7 +177,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
     finally { setBusy(false); }
   };
 
-  if (config.status !== 'ready') return <section className="drive-cloud-panel glass-card"><p>Connect the existing COCCE Auth project to use cloud Drive. No other Supabase project or secret key is accepted.</p></section>;
+  if (config.status !== 'ready' || !config.schemaReady) return <section className="drive-cloud-panel glass-card"><p>Cloud Drive requires the existing COCCE Auth project and the Office cloud schema feature gate. No other Supabase project or secret key is accepted.</p></section>;
   if (!userId && !loading) return <section className="drive-cloud-panel glass-card"><Cloud size={24}/><h2>Sign in to COCCE Office</h2><p>Cloud Drive uses your existing COCCE account and workspace membership. Sign in from the account control in the top bar.</p></section>;
 
   return <section className="drive-cloud-panel">
