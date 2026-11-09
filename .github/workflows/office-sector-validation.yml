@@ -47,7 +47,7 @@ jobs:
       - name: Install PostgreSQL 16 for isolated schema suites
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-16
+          sudo apt-get install -y postgresql-16 poppler-utils
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
