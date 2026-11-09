@@ -18,6 +18,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const [driveFilesOpen, setDriveFilesOpen] = useState(false);
   const [driveFilesLoading, setDriveFilesLoading] = useState(false);
   const [driveFilesError, setDriveFilesError] = useState('');
+  const [driveFileOffsets, setDriveFileOffsets] = useState<Record<string, number>>({});
+  const [driveFileHasMore, setDriveFileHasMore] = useState(false);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
@@ -40,7 +42,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         if (sessionError || !sessionData.session) {
           setWorkspaces([]);
           setUserId('');
-          setDriveFiles([]); setSelectedFileIds([]);
+          setDriveFiles([]); setSelectedFileIds([]); setDriveFileOffsets({}); setDriveFileHasMore(false);
           setWorkspaceId('');
           setStatus('signed-out');
           return;
@@ -96,6 +98,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setError('');
     setDriveFiles([]);
     setSelectedFileIds([]);
+    setDriveFileOffsets({});
+    setDriveFileHasMore(false);
     setDriveFilesOpen(false);
     setDriveFilesError('');
   }, [initialPrompt, initialWorkspaceId]);
@@ -127,18 +131,56 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         try { return await officeTeamApi.getWorkspaceAiEnabled(client, space.workspace_id) ? space : null; }
         catch { return null; }
       }))).filter((space): space is OfficeWorkspace => Boolean(space));
+      const pageSize = workspaceId === '*' ? 5 : 50;
       const results = await Promise.all(enabledScope.map(async (space) => {
-        try { return (await api.list(space.workspace_id, false)).slice(0, workspaceId === '*' ? 5 : 50); }
-        catch { return []; }
+        try {
+          const page = await api.list(space.workspace_id, false, 0);
+          const rows = page.slice(0, pageSize);
+          return { workspaceId: space.workspace_id, files: rows, offset: rows.length, hasMore: page.length > rows.length };
+        } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset: 0, hasMore: false }; }
       }));
-      const files = results.flat().filter(supportedDriveFile).slice(0, 80);
+      const files = results.flatMap((result) => result.files).filter(supportedDriveFile).slice(0, 80);
       setDriveFiles(files);
+      setDriveFileOffsets(Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])));
+      setDriveFileHasMore(results.some((result) => result.hasMore));
       if (!files.length) setDriveFilesError('No supported text files were found in this workspace scope. Only .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files up to 512 KiB can be attached.');
     } catch (reason) {
       setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
     } finally {
       setDriveFilesLoading(false);
     }
+  };
+
+  const loadMoreDriveFiles = async () => {
+    if (!client || !userId || !config.anonKey || driveFilesLoading || !driveFileHasMore) return;
+    setDriveFilesLoading(true);
+    setDriveFilesError('');
+    try {
+      const api = createOfficeCloudApi(client, config.anonKey, userId);
+      const scope = workspaceId === '*' ? workspaces.slice(0, 20) : workspaces.filter((space) => space.workspace_id === workspaceId);
+      const enabledScope = (await Promise.all(scope.map(async (space) => {
+        try { return await officeTeamApi.getWorkspaceAiEnabled(client, space.workspace_id) ? space : null; }
+        catch { return null; }
+      }))).filter((space): space is OfficeWorkspace => Boolean(space));
+      const pageSize = workspaceId === '*' ? 5 : 50;
+      const results = await Promise.all(enabledScope.map(async (space) => {
+        const offset = driveFileOffsets[space.workspace_id] ?? 0;
+        try {
+          const page = await api.list(space.workspace_id, false, offset);
+          const rows = page.slice(0, pageSize);
+          return { workspaceId: space.workspace_id, files: rows, offset: offset + rows.length, hasMore: page.length > rows.length };
+        } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset, hasMore: false }; }
+      }));
+      const more = results.flatMap((result) => result.files).filter(supportedDriveFile);
+      setDriveFiles((current) => {
+        const seen = new Set(current.map((file) => file.fileId));
+        return [...current, ...more.filter((file) => !seen.has(file.fileId))].slice(0, 80);
+      });
+      setDriveFileOffsets((current) => ({ ...current, ...Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])) }));
+      setDriveFileHasMore(results.some((result) => result.hasMore));
+    } catch (reason) {
+      setDriveFilesError(reason instanceof Error ? reason.message : 'More private Drive files could not be loaded.');
+    } finally { setDriveFilesLoading(false); }
   };
 
   const toggleDriveFile = (fileId: string, checked: boolean) => {
@@ -190,6 +232,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
           {selectedFileIds.length > 0 && <div className="office-ai-drive-selected">{selectedFileIds.length} of 3 files selected for the next request</div>}
           {driveFilesOpen && <div className="office-ai-drive-list">
             {driveFilesLoading ? <div className="office-ai-state"><LoaderCircle className="spin" size={15}/> Loading private Drive files…</div> : driveFiles.map((file) => <label className="office-ai-drive-file" key={file.fileId}><input type="checkbox" checked={selectedFileIds.includes(file.fileId)} disabled={!selectedFileIds.includes(file.fileId) && selectedFileIds.length >= 3} onChange={(event) => toggleDriveFile(file.fileId, event.target.checked)} /><span><strong>{file.displayName}</strong><small>{workspaces.find((space) => space.workspace_id === file.workspaceId)?.name ?? 'Office workspace'} · {file.sizeBytes.toLocaleString()} bytes</small></span></label>)}
+            {driveFileHasMore && <button type="button" className="office-ai-inline-button" onClick={() => void loadMoreDriveFiles()} disabled={driveFilesLoading}>{driveFilesLoading ? 'Loading…' : 'Load more files'}</button>}
             {driveFilesError && <p className="office-ai-drive-error" role="status">{driveFilesError}</p>}
           </div>}
         </section>
