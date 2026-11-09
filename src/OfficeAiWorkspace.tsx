@@ -125,6 +125,41 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     // Workspace selection and every selected file are revalidated by the Edge Function.
   };
 
+  useEffect(() => {
+    const applyWorkspace = (nextId: string) => {
+      if (!nextId || !workspaces.some((space) => space.workspace_id === nextId)) return;
+      driveLoadGeneration.current += 1;
+      setDriveFilesLoading(false);
+      setWorkspaceId(nextId);
+      setAnswer('');
+      setError('');
+      setDriveFiles([]);
+      setSelectedFileIds([]);
+      setDriveFileOffsets({});
+      setDriveFileHasMore(false);
+      setDriveFilesError('');
+      setDriveFilesOpen(false);
+    };
+    const handleWorkspaceChange = (event: Event) => {
+      const nextId = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId ?? '';
+      applyWorkspace(nextId);
+    };
+    window.addEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
+    return () => window.removeEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
+  }, [workspaces]);
+
+  useEffect(() => {
+    if (!initialWorkspaceId || !workspaces.some((space) => space.workspace_id === initialWorkspaceId)) return;
+    driveLoadGeneration.current += 1;
+    setWorkspaceId(initialWorkspaceId);
+    setAnswer('');
+    setDriveFiles([]);
+    setSelectedFileIds([]);
+    setDriveFileOffsets({});
+    setDriveFileHasMore(false);
+    setDriveFilesOpen(false);
+  }, [initialWorkspaceId, workspaces]);
+
   const supportedDriveFile = (file: CloudFile) => file.sizeBytes <= 512 * 1024 && /\.(txt|md|csv|tsv|json|xml|yaml|yml|log)$/i.test(file.displayName);
 
   const openDriveFiles = async () => {
