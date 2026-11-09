@@ -21,6 +21,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const [driveFileOffsets, setDriveFileOffsets] = useState<Record<string, number>>({});
   const [driveFileHasMore, setDriveFileHasMore] = useState(false);
   const driveLoadGeneration = useRef(0);
+  const authGeneration = useRef(0);
+  const aiRequestGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
@@ -32,7 +34,30 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
 
   useEffect(() => {
     let active = true;
+    const clearAiContext = (nextStatus: 'loading' | 'signed-out') => {
+      authGeneration.current += 1;
+      aiRequestGeneration.current += 1;
+      driveLoadGeneration.current += 1;
+      setBusy(false);
+      setDriveFilesLoading(false);
+      setWorkspaces([]);
+      setUserId('');
+      setDriveFiles([]);
+      setSelectedFileIds([]);
+      setDriveFileOffsets({});
+      setDriveFileHasMore(false);
+      setDriveFilesOpen(false);
+      setWorkspaceId('');
+      setAnswer('');
+      setPrompt('');
+      setShowDriveConsent(false);
+      setDriveFilesError('');
+      setError('');
+      setStatus(nextStatus);
+    };
     const initialize = async () => {
+      const generation = ++authGeneration.current;
+      const isCurrent = () => active && generation === authGeneration.current;
       if (!client || config.status !== 'ready') {
         setStatus('misconfigured');
         return;
@@ -40,27 +65,21 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setStatus('loading');
       try {
         const { data: sessionData, error: sessionError } = await client.auth.getSession();
-        if (!active) return;
+        if (!isCurrent()) return;
         if (sessionError || !sessionData.session) {
-          driveLoadGeneration.current += 1;
-          setDriveFilesLoading(false);
-          setWorkspaces([]);
-          setUserId('');
-          setDriveFiles([]); setSelectedFileIds([]); setDriveFileOffsets({}); setDriveFileHasMore(false);
-          setWorkspaceId('');
-          setStatus('signed-out');
+          clearAiContext('signed-out');
           return;
         }
         setUserId(sessionData.session.user.id);
         const { data: availability, error: availabilityError } = await client.functions.invoke('office-ai-chat', { body: { action: 'status' } });
-        if (!active) return;
+        if (!isCurrent()) return;
         if (availabilityError || availability?.configured !== true) {
           setError(availabilityError ? 'The COCCE AI service could not be reached.' : 'The free COCCE AI model is not configured.');
           setStatus('not-configured');
           return;
         }
         const spaces = await officeTeamApi.listWorkspaces(client);
-        if (!active) return;
+        if (!isCurrent()) return;
         setWorkspaces(spaces);
         if (!spaces.length) {
           setWorkspaceId('');
@@ -70,7 +89,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         setWorkspaceId(initialWorkspaceId && spaces.some((space) => space.workspace_id === initialWorkspaceId) ? initialWorkspaceId : '*');
         setStatus('ready');
       } catch (reason) {
-        if (active) {
+        if (isCurrent()) {
           setError(reason instanceof Error ? reason.message : 'COCCE Office AI could not initialize.');
           setStatus('not-configured');
         }
@@ -82,15 +101,9 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     }
     const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
-        driveLoadGeneration.current += 1;
-        setDriveFilesLoading(false);
-        setWorkspaces([]);
-        setUserId('');
-        setDriveFiles([]); setSelectedFileIds([]); setDriveFileOffsets({}); setDriveFileHasMore(false); setDriveFilesOpen(false);
-        setWorkspaceId('');
-        setAnswer('');
-        setStatus('signed-out');
+        clearAiContext('signed-out');
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        clearAiContext('loading');
         window.setTimeout(() => { if (active) void initialize(); }, 0);
       }
     });
@@ -99,7 +112,9 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   }, [client, config.status, initialWorkspaceId]);
 
   useEffect(() => {
+    aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
+    setBusy(false);
     setDriveFilesLoading(false);
     setPrompt(initialPrompt ?? '');
     setError('');
@@ -112,7 +127,9 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   }, [initialPrompt, initialWorkspaceId]);
 
   const changeWorkspace = (nextId: string) => {
+    aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
+    setBusy(false);
     setDriveFilesLoading(false);
     setWorkspaceId(nextId);
     setAnswer('');
@@ -130,7 +147,9 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   useEffect(() => {
     const applyWorkspace = (nextId: string) => {
       if (!nextId || !workspaces.some((space) => space.workspace_id === nextId)) return;
+      aiRequestGeneration.current += 1;
       driveLoadGeneration.current += 1;
+      setBusy(false);
       setDriveFilesLoading(false);
       setWorkspaceId(nextId);
       setAnswer('');
@@ -146,13 +165,36 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       const nextId = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId ?? '';
       applyWorkspace(nextId);
     };
+    const handleWorkspaceClear = () => {
+      aiRequestGeneration.current += 1;
+      driveLoadGeneration.current += 1;
+      setBusy(false);
+      setDriveFilesLoading(false);
+      setWorkspaceId('');
+      setAnswer('');
+      setPrompt('');
+      setError('');
+      setDriveFiles([]);
+      setSelectedFileIds([]);
+      setDriveFileOffsets({});
+      setDriveFileHasMore(false);
+      setDriveFilesOpen(false);
+      setDriveFilesError('');
+      setShowDriveConsent(false);
+    };
     window.addEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
-    return () => window.removeEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
+    window.addEventListener('cocce-office:workspace-cleared', handleWorkspaceClear);
+    return () => {
+      window.removeEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
+      window.removeEventListener('cocce-office:workspace-cleared', handleWorkspaceClear);
+    };
   }, [workspaces]);
 
   useEffect(() => {
     if (!initialWorkspaceId || !workspaces.some((space) => space.workspace_id === initialWorkspaceId)) return;
+    aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
+    setBusy(false);
     setWorkspaceId(initialWorkspaceId);
     setAnswer('');
     setDriveFiles([]);
@@ -259,6 +301,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     if (!client || !workspaceId || !prompt.trim() || busy) return;
     if (selectedFileIds.length > 0 && !confirmedDriveSharing) { setShowDriveConsent(true); return; }
     setShowDriveConsent(false);
+    const requestGeneration = ++aiRequestGeneration.current;
     setBusy(true);
     setError('');
     setAnswer('');
@@ -266,14 +309,15 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       const { data, error: invokeError } = await client.functions.invoke('office-ai-chat', {
         body: { action: 'chat', workspaceId, prompt: prompt.trim(), includeConversations: includeWorkspaceContext, ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}) },
       });
+      if (requestGeneration !== aiRequestGeneration.current) return;
       if (invokeError) throw new Error(invokeError.message || 'COCCE AI request failed.');
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
       setAnswer(data.text);
       setPrompt('');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'COCCE AI could not complete the request.');
+      if (requestGeneration === aiRequestGeneration.current) setError(reason instanceof Error ? reason.message : 'COCCE AI could not complete the request.');
     } finally {
-      setBusy(false);
+      if (requestGeneration === aiRequestGeneration.current) setBusy(false);
     }
   };
 
