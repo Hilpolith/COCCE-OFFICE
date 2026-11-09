@@ -170,7 +170,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         try {
           const page = await api.list(space.workspace_id, false, offset);
           const rows = page.slice(0, pageSize);
-          return { workspaceId: space.workspace_id, files: rows, offset: offset + rows.length, hasMore: page.length > rows.length };
+          return { workspaceId: space.workspace_id, files: rows, offset: offset + rows.length, hasMore: page.length === 50 };
         } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset, hasMore: false }; }
       }));
       const more = results.flatMap((result) => result.files).filter(supportedDriveFile);
