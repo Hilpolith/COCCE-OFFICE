@@ -7,7 +7,7 @@ import { createOfficeCloudApi, OFFICE_CLOUD_MAX_FILE_BYTES } from './lib/officeC
 import type { CloudFile, CloudUsage } from './lib/officeCloudFiles';
 import { formatFileSize } from './lib/driveStore';
 import { importDocxFile, MAX_DOCX_FILE_BYTES, DOCX_MIME } from './lib/docxInterchange';
-import { AlertCircle, ArrowDownToLine, AudioLines, Check, Cloud, File as FileIcon, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
+import { AlertCircle, ArrowDownToLine, AudioLines, Building2, Check, Cloud, File as FileIcon, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
 import './drive.css';
 
 type Category = 'all' | 'documents' | 'images' | 'video' | 'audio' | 'other';
@@ -45,7 +45,7 @@ function saveBlob(blob: Blob, name: string) {
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-export default function CloudDriveWorkspace({ query, initialWorkspaceId }: { query: string; initialWorkspaceId?: string }) {
+export default function CloudDriveWorkspace({ query, initialWorkspaceId, managedByGlobalWorkspace = false }: { query: string; initialWorkspaceId?: string; managedByGlobalWorkspace?: boolean }) {
   const confirm = useFrostedConfirm();
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
@@ -268,7 +268,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId }: { que
   return <section className="drive-cloud-panel">
     <div className="drive-cloud-heading"><div><span className="eyebrow">COCCE DRIVE · PRIVATE WORKSPACE STORAGE</span><h2><Cloud size={19}/> Cloud files</h2><p>Private Bunny storage · membership checked · originals on your device stay unchanged.</p></div><button className="button-secondary" type="button" onClick={() => void refresh()} disabled={loading || busy}><RefreshCw size={15}/> Refresh</button></div>
     <div className="drive-cloud-controls">
-      <label>Office workspace<select value={workspaceId} onChange={(event) => { setWorkspaceId(event.target.value); setFiles([]); setUsage(null); }}><option value="">Choose workspace</option>{workspaces.map((space) => <option key={space.workspace_id} value={space.workspace_id}>{space.name} · {space.role}</option>)}</select></label>
+      {managedByGlobalWorkspace ? <div className="drive-cloud-active-workspace"><Building2 size={15}/><span><small>ACTIVE WORKSPACE</small><strong>{workspaces.find((space) => space.workspace_id === workspaceId)?.name ?? "Choose an Office workspace above"}</strong></span></div> : <label>Office workspace<select value={workspaceId} onChange={(event) => { setWorkspaceId(event.target.value); setFiles([]); setUsage(null); }}><option value="">Choose workspace</option>{workspaces.map((space) => <option key={space.workspace_id} value={space.workspace_id}>{space.name} · {space.role}</option>)}</select></label>}
       <div className="drive-cloud-quota"><strong>{usage ? formatFileSize(usage.activeStoredBytes) : '—'}</strong><span>of {usage ? formatFileSize(usage.quotaBytes) : '—'} used</span>{usage && <div><i style={{ width: `${Math.min(100, usage.usagePercent)}%` }}/></div>}</div>
       <div className="drive-cloud-actions">{!trash && <button className="button-primary" type="button" onClick={() => inputRef.current?.click()} disabled={!workspaceId || busy}><Upload size={15}/> {busy ? 'Working…' : 'Upload files'}</button>}<input ref={inputRef} className="visually-hidden" type="file" multiple onChange={(event) => { const chosen = event.target.files ? Array.from(event.target.files) : []; event.target.value = ''; if (chosen.length) void upload(chosen); }}/></div>
     </div>
