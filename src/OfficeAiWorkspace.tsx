@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowUp, Bot, CheckCircle2, LoaderCircle, MessageCircle, Sparkles } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
-import type { OfficeConversation, OfficeWorkspace } from './lib/officeTeamApi';
+import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './officeAiWorkspace.css';
 
@@ -10,9 +10,8 @@ export default function OfficeAiWorkspace() {
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
-  const [conversations, setConversations] = useState<OfficeConversation[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
-  const [conversationId, setConversationId] = useState('');
+  const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState('');
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
@@ -52,10 +51,6 @@ export default function OfficeAiWorkspace() {
       }
       const firstSpace = spaces[0]!;
       setWorkspaceId(firstSpace.workspace_id);
-      const chats = await officeTeamApi.listConversations(client, firstSpace.workspace_id);
-      if (!active) return;
-      setConversations(chats);
-      setConversationId(chats[0]?.conversation_id ?? '');
       setStatus('ready');
     })().catch((reason: unknown) => {
       if (active) {
@@ -68,28 +63,21 @@ export default function OfficeAiWorkspace() {
 
   const changeWorkspace = async (nextId: string) => {
     setWorkspaceId(nextId);
-    setConversationId('');
-    setConversations([]);
     setAnswer('');
     setError('');
     if (!client) return;
-    try {
-      const chats = await officeTeamApi.listConversations(client, nextId);
-      setConversations(chats);
-      setConversationId(chats[0]?.conversation_id ?? '');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not load conversations.');
-    }
+    // Workspace selection is validated again by the Edge Function on every request.
+    // No conversation ID is trusted or supplied by the browser. 
   };
 
   const ask = async () => {
-    if (!client || !workspaceId || !conversationId || !prompt.trim() || busy) return;
+    if (!client || !workspaceId || !prompt.trim() || busy) return;
     setBusy(true);
     setError('');
     setAnswer('');
     try {
       const { data, error: invokeError } = await client.functions.invoke('office-ai-chat', {
-        body: { action: 'chat', workspaceId, conversationId, prompt: prompt.trim() },
+        body: { action: 'chat', workspaceId, prompt: prompt.trim(), includeConversations: includeWorkspaceContext },
       });
       if (invokeError) throw new Error(invokeError.message || 'COCCE AI request failed.');
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
@@ -116,12 +104,11 @@ export default function OfficeAiWorkspace() {
       {status === 'misconfigured' && <div className="office-ai-state"><AlertCircle size={18} /> COCCE Auth is not configured for this Office deployment.</div>}
       {status === 'not-configured' && <div className="office-ai-state"><AlertCircle size={18} /> {error || 'The OpenRouter free-model secret is not available to the Office AI service. Check Supabase Edge Function secrets.'}</div>}
       {status === 'ready' && <>
-        <div className="office-ai-context"><label>Workspace<select value={workspaceId} onChange={event => void changeWorkspace(event.target.value)}><option value="">Select workspace</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label><label>Conversation<select value={conversationId} onChange={event => setConversationId(event.target.value)} disabled={!conversations.length}><option value="">Select conversation</option>{conversations.map(chat => <option key={chat.conversation_id} value={chat.conversation_id}>{chat.title || chat.kind}</option>)}</select></label></div>
-        {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before asking about its conversations.</div>}
-        {workspaces.length > 0 && !conversationId && <div className="office-ai-state">Select a workspace conversation first. COCCE AI can only read conversations returned by your existing membership permissions.</div>}
+        <div className="office-ai-context"><label>Workspace<select value={workspaceId} onChange={event => void changeWorkspace(event.target.value)}><option value="">Select workspace</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label><label className="office-ai-context-toggle"><span>Workspace context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · private prompt only'}</small></span></label></div>
+        {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before using workspace-aware AI.</div>}
         <div className="office-ai-answer" aria-live="polite">{answer ? <><div className="office-ai-answer-label"><Sparkles size={14} /> COCCE AI</div><p>{answer}</p></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose a conversation and ask for a summary, a plan, a draft, or help thinking through the discussion.</span></div>}</div>
-        <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder="Ask about this conversation…" disabled={!conversationId || busy} /><button type="submit" disabled={!conversationId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
-        <div className="office-ai-footnote">Context is limited to the selected conversation (up to 24 recent messages). AI responses are generated by a pinned OpenRouter free model; no paid-model fallback is enabled.</div>
+        <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder="Ask across your workspace…" disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
+        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI reads up to 6 recent workspace conversations, 4 messages each, through membership-checked RPCs. Drive file contents are not included in this release.' : 'Workspace context is off. Your prompt is sent without team conversation history.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
       </>}
       {error && status === 'ready' && <div className="office-ai-error" role="alert"><AlertCircle size={14} /> {error}</div>}
     </section>
