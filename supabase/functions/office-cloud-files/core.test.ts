@@ -760,4 +760,70 @@ describe('Office cloud Edge Function', () => {
       responseContentType: 'application/pdf', responseContentDisposition: 'inline',
     })).rejects.toThrow('Invalid signing request');
   });
+
+  it('lists server-priced storage plans only through the authenticated Office Cloud RPC', async () => {
+    const { fetchImpl, calls } = routedFetch((url, init) => {
+      expect(url.pathname).toBe('/rest/v1/rpc/office_cloud_list_storage_plans');
+      expect(new Headers(init.headers).get('Authorization')).toBe('Bearer synthetic-service-role-token');
+      return Response.json([
+        { plan_code: 'storage_5gb_monthly', display_name: '5 GB', quota_bytes: 5000000000, monthly_coins: 2000, sort_order: 1 },
+      ]);
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const response = await handler(request({ action: 'storage_plans', workspaceId }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ plans: [
+      { planCode: 'storage_5gb_monthly', displayName: '5 GB', quotaBytes: 5000000000, monthlyCoins: 2000, sortOrder: 1 },
+    ] });
+    const rpc = calls.find((call) => call.url.endsWith('/office_cloud_list_storage_plans'))!;
+    expect(rpcPayload(rpc)).toEqual({ p_actor_id: actorId, p_workspace_id: workspaceId });
+  });
+
+  it('purchases storage through the atomic server RPC and defaults recurring billing off', async () => {
+    const { fetchImpl, calls } = routedFetch((url, init) => {
+      expect(url.pathname).toBe('/rest/v1/rpc/office_cloud_purchase_storage_subscription');
+      expect(new Headers(init.headers).get('Authorization')).toBe('Bearer synthetic-service-role-token');
+      return Response.json({
+        subscription_id: '77777777-7777-4777-8777-777777777777',
+        plan_code: 'storage_5gb_monthly', display_name: '5 GB',
+        quota_bytes: 5000000000, monthly_coins: 2000, status: 'active',
+        auto_renew: false, current_period_end: '2026-12-04T11:00:00.000Z',
+        balance: 98000, replayed: false,
+      });
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const response = await handler(request({
+      action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
+      idempotencyKey: '88888888-8888-4888-8888-888888888888',
+    }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).purchase.autoRenew).toBe(false);
+    const rpc = calls.find((call) => call.url.endsWith('/office_cloud_purchase_storage_subscription'))!;
+    expect(rpcPayload(rpc)).toEqual({
+      p_actor_id: actorId, p_workspace_id: workspaceId, p_plan_code: 'storage_5gb_monthly',
+      p_idempotency_key: '88888888-8888-4888-8888-888888888888', p_auto_renew: false,
+    });
+  });
+
+  it('requires an explicit boolean before enabling auto-renew and maps low wallet balance to payment required', async () => {
+    const { fetchImpl } = routedFetch((url) => {
+      if (url.pathname.endsWith('/office_cloud_purchase_storage_subscription')) {
+        return new Response(JSON.stringify({ code: 'P0001', message: 'private wallet detail' }), { status: 400 });
+      }
+      throw new Error('Unexpected route');
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const invalid = await handler(request({
+      action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
+      idempotencyKey: '99999999-9999-4999-8999-999999999999', autoRenew: 'yes',
+    }));
+    expect(invalid.status).toBe(400);
+    const insufficient = await handler(request({
+      action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
+      idempotencyKey: '99999999-9999-4999-8999-999999999999', autoRenew: false,
+    }));
+    expect(insufficient.status).toBe(402);
+    expect(JSON.stringify(await insufficient.json())).not.toContain('private wallet detail');
+  });
+
 });
