@@ -5,7 +5,8 @@ import {
   ArrowRight, Building2, CheckCircle2, CircleAlert, Eye, EyeOff,
   LoaderCircle, LockKeyhole, LogIn, LogOut, Mail, ShieldCheck, UserRound, X,
 } from 'lucide-react';
-import { officeTeamApi, type OfficeWorkspace } from './lib/officeTeamApi';
+import { officeTeamApi, type OfficeWorkspace, type OfficeWorkspaceSuite, type OfficeSuiteId } from './lib/officeTeamApi';
+import { industryCatalog } from './lib/industryWorkspaces';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './officeAccount.css';
@@ -34,7 +35,9 @@ export default function OfficeAccountControl() {
   const [displayName, setDisplayName] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceDescription, setWorkspaceDescription] = useState('');
+  const [workspaceSuiteId, setWorkspaceSuiteId] = useState<OfficeSuiteId>('business');
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
+  const [workspaceSuites, setWorkspaceSuites] = useState<OfficeWorkspaceSuite[]>([]);
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -54,12 +57,14 @@ export default function OfficeAccountControl() {
   const loadWorkspaces = useCallback(async () => {
     if (!client) return;
     try {
-      const rows = await officeTeamApi.listWorkspaces(client);
+      const [rows, suites] = await Promise.all([officeTeamApi.listWorkspaces(client), officeTeamApi.listWorkspaceSuites(client)]);
       setWorkspaces(Array.isArray(rows) ? rows : []);
+      setWorkspaceSuites(Array.isArray(suites) ? suites : []);
       setNeedsWorkspace(Array.isArray(rows) && rows.length === 0);
     } catch {
       // Auth remains usable even when the optional Office collaboration schema is not enabled.
       setWorkspaces([]);
+      setWorkspaceSuites([]);
       setNeedsWorkspace(false);
     }
   }, [client]);
@@ -207,11 +212,11 @@ export default function OfficeAccountControl() {
     if (workspaceName.trim().length < 2) { setError('Enter an organisation or workspace name.'); return; }
     setBusy(true); setError(''); setNotice('');
     try {
-      const id = await officeTeamApi.createWorkspace(client, workspaceName.trim(), workspaceDescription.trim());
+      const id = await officeTeamApi.createWorkspaceWithSuite(client, workspaceName.trim(), workspaceDescription.trim(), workspaceSuiteId);
       await loadWorkspaces();
       setNeedsWorkspace(false);
       setNotice('Your organisation workspace is ready. You are its owner. Open Team & collaboration to manage members and invitations.');
-      window.dispatchEvent(new CustomEvent('cocce-office:workspace-created', { detail: { workspaceId: id, name: workspaceName.trim() } }));
+      window.dispatchEvent(new CustomEvent('cocce-office:workspace-created', { detail: { workspaceId: id, name: workspaceName.trim(), suiteId: workspaceSuiteId } }));
     } catch (cause) { setError(friendlyError(cause)); }
     finally { setBusy(false); }
   };
@@ -247,12 +252,13 @@ export default function OfficeAccountControl() {
             : !authReady ? <p className="office-account-copy"><LoaderCircle className="office-account-spinner" size={16}/> Checking your secure session…</p>
             : user && needsWorkspace ? <form className="office-auth-form" onSubmit={createFirstWorkspace}>
                 <label>Organisation or workspace name<input value={workspaceName} onChange={e=>setWorkspaceName(e.target.value)} placeholder="e.g. Acme Tanzania" minLength={2} maxLength={80} required disabled={busy}/></label>
+                <label>Choose your Office suite<select value={workspaceSuiteId} onChange={e=>setWorkspaceSuiteId(e.target.value as OfficeSuiteId)} required disabled={busy}>{industryCatalog.map(industry=><option key={industry.id} value={industry.id}>{industry.label}</option>)}</select><small className="office-auth-field-hint">This chooses the specialist dashboard and tools for this workspace. You can create other workspaces for different organisations or industries.</small></label>
                 <label>What does your team do? <span className="office-auth-optional">Optional</span><textarea value={workspaceDescription} onChange={e=>setWorkspaceDescription(e.target.value)} placeholder="A short description of your organisation" maxLength={240} disabled={busy}/></label>
                 <button className="office-auth-submit" type="submit" disabled={busy}>{busy ? <LoaderCircle className="office-account-spinner" size={17}/> : <Building2 size={17}/>}Create organisation <ArrowRight size={16}/></button>
               </form>
             : user ? <div className="office-auth-account">
                 <span className="office-auth-user-icon"><UserRound size={21}/></span><div><strong>{user.user_metadata?.display_name || user.email || 'COCCE account'}</strong><small>{user.email}</small></div>
-                <div className="office-auth-workspaces"><b>Your workspaces</b>{workspaces.length ? workspaces.map(space=><span key={space.workspace_id}><Building2 size={14}/>{space.name}<small>{space.role}</small></span>) : <small>No workspace membership found yet.</small>}</div>
+                <div className="office-auth-workspaces"><b>Your workspaces</b>{workspaces.length ? workspaces.map(space=><span key={space.workspace_id}><Building2 size={14}/>{space.name}<small>{space.role} · {industryCatalog.find(industry=>industry.id===workspaceSuites.find(item=>item.workspace_id===space.workspace_id)?.suite_id)?.shortLabel ?? 'General workspace'}</small></span>) : <small>No workspace membership found yet.</small>}</div>
                 <button className="office-auth-submit" type="button" onClick={()=>{closePanel();window.dispatchEvent(new CustomEvent('cocce-office:navigate',{detail:{page:'team'}}));}}>Open team workspace <ArrowRight size={16}/></button>
                 <button className="office-auth-signout" type="button" disabled={busy} onClick={()=>void signOut()}><LogOut size={15}/>{busy?'Signing out…':'Sign out'}</button>
               </div>
