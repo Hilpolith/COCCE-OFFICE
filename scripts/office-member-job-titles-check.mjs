@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [memberSql, invitationSql, memberAclSql, aiSql, aiNotificationSql, edge] = await Promise.all([
+const [memberSql, invitationSql, memberAclSql, aiSql, aiNotificationSql, edge, driveContext] = await Promise.all([
   readFile(new URL('../supabase/migrations/20261109153000_office_member_job_titles.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20261109154500_office_invitation_job_titles.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20261109164500_office_new_rpc_anon_acl.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20261109161500_office_workspace_ai_controls.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20261109163000_office_workspace_ai_setting_notifications.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/functions/office-ai-chat/index.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/functions/office-ai-chat/drive-context.ts', import.meta.url), 'utf8'),
 ]);
 
 test('member positions are bounded, free text and independent from permission roles', () => {
@@ -42,14 +43,15 @@ test('workspace owners and admins control AI availability with member checks', (
 });
 
 test('AI Drive context is explicit, bounded, server-fetched and workspace-authorised', () => {
-  assert.match(edge, /MAX_DRIVE_FILES = 3/);
-  assert.match(edge, /MAX_DRIVE_FILE_BYTES = 512 \* 1024/);
-  assert.match(edge, /OFFICE_CLOUD_FUNCTION = '\/functions\/v1\/office-cloud-files'/);
-  assert.match(edge, /enabledById\.has\(link\.workspaceId\)/);
-  assert.match(edge, /signed\.origin !== BUNNY_DOWNLOAD_ORIGIN/);
-  assert.match(edge, /new TextDecoder\('utf-8', \{ fatal: true \}\)/);
-  assert.match(edge, /DRIVE_FILE_NOT_TEXT/);
+  assert.match(edge, /loadSelectedDriveFiles/);
   assert.match(edge, /body\.fileIds/);
+  assert.match(driveContext, /MAX_DRIVE_FILES = 3/);
+  assert.match(driveContext, /MAX_DRIVE_FILE_BYTES = 512 \* 1024/);
+  assert.match(driveContext, /OFFICE_CLOUD_FUNCTION = '\/functions\/v1\/office-cloud-files'/);
+  assert.match(driveContext, /enabledById\.has\(link\.workspaceId\)/);
+  assert.match(driveContext, /signed\.origin !== BUNNY_DOWNLOAD_ORIGIN/);
+  assert.match(driveContext, /new TextDecoder\('utf-8', \{ fatal: true \}\)/);
+  assert.match(driveContext, /DRIVE_FILE_NOT_TEXT/);
 });
 
 test('AI checks every selected workspace setting and skips disabled workspaces', () => {
