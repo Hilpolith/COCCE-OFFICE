@@ -202,10 +202,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export const officeSchoolManagementApi = {
-  async read<T = unknown>(client: SchoolRpcClient | SupabaseClient, workspaceId: string, resource: string, filter: Record<string, unknown> = {}, limit = 100): Promise<T> {
+  async read<T = unknown>(client: SchoolRpcClient | SupabaseClient, workspaceId: string, resource: string, filter: Record<string, unknown> = {}, limit = 100, offset = 0): Promise<T> {
     const boundedLimit = Math.max(1, Math.min(200, Math.trunc(limit)));
+    const boundedOffset = Math.max(0, Math.min(100000, Math.trunc(offset)));
     return rpc<T>(client, 'office_school_read', {
-      p_workspace_id: workspaceId, p_resource: resource, p_filter: filter, p_limit: boundedLimit,
+      p_workspace_id: workspaceId, p_resource: resource,
+      p_filter: boundedOffset > 0 ? { ...filter, offset: boundedOffset } : filter,
+      p_limit: boundedLimit,
     });
   },
   async command<T extends Record<string, unknown> = Record<string, unknown>>(
