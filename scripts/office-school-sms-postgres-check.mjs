@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 // Disposable in-memory PostgreSQL only. No network, credentials, real identities or files.
 const migration = await readFile(new URL('../docs/proposals/office-school-management-20261106.sql', import.meta.url), 'utf8');
+const paginationMigration = await readFile(new URL('../supabase/migrations/20261109200000_office_school_read_offset_pagination.sql', import.meta.url), 'utf8');
 const owner = '11111111-1111-4111-8111-111111111111';
 const teacher = '22222222-2222-4222-8222-222222222222';
 const registrar = '33333333-3333-4333-8333-333333333333';
@@ -49,6 +50,7 @@ before(async () => {
     $$;
   `);
   await db.exec(migration);
+  await db.exec(paginationMigration);
   await db.query('INSERT INTO auth.users(id) VALUES ($1),($2),($3),($4),($5),($6)', [owner,teacher,registrar,bursar,suspended,outsider]);
   await db.query('INSERT INTO public.office_workspaces(id) VALUES ($1),($2),($3)', [school,otherSchool,business]);
   await db.query(`INSERT INTO public.office_memberships(workspace_id,user_id,role,status) VALUES
@@ -82,9 +84,10 @@ async function as(userId, operation) {
     throw error;
   }
 }
-async function read(resource, who = owner, filter = {}, limit = 100) {
+async function read(resource, who = owner, filter = {}, limit = 100, offset = 0) {
+  const pageFilter = offset > 0 ? { ...filter, offset } : filter;
   return as(who, async () => (await db.query('SELECT public.office_school_read($1,$2,$3,$4) AS result',
-    [school,resource,filter,limit])).rows[0].result);
+    [school,resource,pageFilter,limit])).rows[0].result);
 }
 async function command(action, payload, who = owner) {
   return as(who, async () => (await db.query('SELECT public.office_school_command($1,$2,$3) AS result',
@@ -114,6 +117,28 @@ test('integrated SMS proposal applies cleanly and exposes only the authenticated
   assert.ok(tables.rows.every((row) => row.relrowsecurity));
   assert.ok(migration.includes('CREATE TABLE public.office_school_timetable_entries'));
   assert.ok(migration.includes('school_timetable_validate_catalog'));
+});
+
+test('School operational reads support deterministic bounded offset pagination', async () => {
+  for (let index = 1; index <= 5; index += 1) {
+    await command('save_term', {
+      academic_year: '2026/2027',
+      term_label: `Pagination term ${index}`,
+      start_date: `2026-0${index}-01`,
+      end_date: `2026-0${index}-28`,
+    });
+  }
+  const first = await read('terms', owner, {}, 2, 0);
+  const second = await read('terms', owner, {}, 2, 2);
+  const third = await read('terms', owner, {}, 2, 4);
+  const ids = [...first, ...second, ...third].map((row) => row.term_id);
+  assert.equal(first.length, 2);
+  assert.equal(second.length, 2);
+  assert.equal(third.length, 1);
+  assert.equal(new Set(ids).size, 5);
+  assert.deepEqual(first.map((row) => row.term_id), [...first.map((row) => row.term_id)]);
+  await expectSqlState(() => read('terms', owner, { offset: -1 }, 2), '22023');
+  await expectSqlState(() => read('terms', owner, { offset: 100001 }, 2), '22023');
 });
 
 test('owner can bootstrap, create term/class/subject, and assign an active teacher', async () => {
