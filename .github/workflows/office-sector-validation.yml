@@ -1,0 +1,53 @@
+name: COCCE Office sector validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "supabase/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/office-sector-validation.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "supabase/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/office-sector-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: office-sector-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install PostgreSQL 16 for isolated schema suites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run unit, integration, and sector acceptance suites
+        run: npm test
+      - name: Verify production TypeScript and Vite build
+        run: npm run build
