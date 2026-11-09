@@ -80,7 +80,7 @@ describe('COCCE AI selected Drive context', () => {
 
     const wrongSha = vi.fn(async (input: RequestInfo | URL) => String(input).startsWith(supabaseUrl)
       ? cloudLink({ sha256Hex: '0'.repeat(64) })
-      : new Response('pol\\u0001icy'));
+      : new Response('pol\u0001icy'));
     await expect(loadSelectedDriveFiles([fileId], enabled, supabaseUrl, 'key', 'jwt', wrongSha))
       .rejects.toMatchObject({ status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH' });
 
