@@ -94,7 +94,11 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setPrompt(initialPrompt ?? '');
     setAnswer('');
     setError('');
-  }, [initialPrompt]);
+    setDriveFiles([]);
+    setSelectedFileIds([]);
+    setDriveFilesOpen(false);
+    setDriveFilesError('');
+  }, [initialPrompt, initialWorkspaceId]);
 
   const changeWorkspace = (nextId: string) => {
     setWorkspaceId(nextId);
