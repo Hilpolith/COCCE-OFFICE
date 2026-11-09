@@ -92,7 +92,7 @@ export default function IndustrySuitesWorkspace({
     id: activeWorkspace.workspaceId,
     industryId: activeWorkspace.suiteId,
     name: activeWorkspace.name,
-    country: 'Tanzania',
+    country: '',
     teamWorkspaceId: activeWorkspace.workspaceId,
     createdAt: '',
     updatedAt: '',
