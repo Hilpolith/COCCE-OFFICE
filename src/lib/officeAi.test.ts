@@ -43,7 +43,7 @@ describe('Office AI request boundaries', () => {
   });
 
   it('builds a selection request without document metadata or unrelated content', () => {
-    expect(buildOfficeAiRequest('summarize', 'Only this excerpt', '')).toEqual({
+    expect(buildOfficeAiRequest('summarize', 'Only this excerpt', '', '*')).toEqual({
       action: 'summarize',
       workspaceId: '*',
       selectedText: 'Only this excerpt',
@@ -51,32 +51,32 @@ describe('Office AI request boundaries', () => {
   });
 
   it('builds a prompt-only draft and never attaches selected document text', () => {
-    expect(buildOfficeAiRequest('draft', '', '  Write a meeting recap  ')).toEqual({
+    expect(buildOfficeAiRequest('draft', '', '  Write a meeting recap  ', '*')).toEqual({
       action: 'draft',
       workspaceId: '*',
       prompt: 'Write a meeting recap',
     });
-    expect(() => buildOfficeAiRequest('draft', 'existing document text', 'Write a recap')).toThrow('never includes selected document text');
+    expect(() => buildOfficeAiRequest('draft', 'existing document text', 'Write a recap', '*')).toThrow('never includes selected document text');
   });
 
   it('builds a distinct full-document request containing only the supplied plain text', () => {
-    const payload = buildOfficeAiDocumentSummaryRequest('Synthetic full document only.');
+    const payload = buildOfficeAiDocumentSummaryRequest('Synthetic full document only.', '*');
     expect(payload).toEqual({ action: 'document_summary', workspaceId: '*', documentText: 'Synthetic full document only.' });
     expect(Object.keys(payload).sort()).toEqual(['action', 'documentText', 'workspaceId']);
     expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBeLessThan(OFFICE_AI_MAX_REQUEST_BYTES);
   });
 
   it('rejects empty, over-character-limit, and over-byte-limit documents locally', () => {
-    expect(() => buildOfficeAiDocumentSummaryRequest('   ')).toThrow('no text to summarize');
-    expect(() => buildOfficeAiDocumentSummaryRequest('x'.repeat(OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS + 1))).toThrow('limited to');
-    expect(() => buildOfficeAiDocumentSummaryRequest('😀'.repeat(10_000))).toThrow('request limit');
+    expect(() => buildOfficeAiDocumentSummaryRequest('   ', '*')).toThrow('no text to summarize');
+    expect(() => buildOfficeAiDocumentSummaryRequest('x'.repeat(OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS + 1), '*')).toThrow('limited to');
+    expect(() => buildOfficeAiDocumentSummaryRequest('😀'.repeat(10_000), '*')).toThrow('request limit');
   });
 
   it('rejects missing selections, oversized excerpts, and oversized prompts before fetch', () => {
-    expect(() => buildOfficeAiRequest('proofread', '', '')).toThrow('Select some text');
-    expect(() => buildOfficeAiRequest('summarize', 'x'.repeat(OFFICE_AI_MAX_SELECTION_CHARS + 1), '')).toThrow('Select no more than');
-    expect(() => buildOfficeAiRequest('custom', 'Excerpt', 'x'.repeat(OFFICE_AI_MAX_PROMPT_CHARS + 1))).toThrow('Instructions must be');
-    expect(() => buildOfficeAiRequest('custom', 'Excerpt', '')).toThrow('Add instructions');
+    expect(() => buildOfficeAiRequest('proofread', '', '', '*')).toThrow('Select some text');
+    expect(() => buildOfficeAiRequest('summarize', 'x'.repeat(OFFICE_AI_MAX_SELECTION_CHARS + 1), '', '*')).toThrow('Select no more than');
+    expect(() => buildOfficeAiRequest('custom', 'Excerpt', 'x'.repeat(OFFICE_AI_MAX_PROMPT_CHARS + 1), '*')).toThrow('Instructions must be');
+    expect(() => buildOfficeAiRequest('custom', 'Excerpt', '', '*')).toThrow('Add instructions');
   });
 
   it('checks service availability using a same-origin GET and sends no content', async () => {
@@ -91,7 +91,7 @@ describe('Office AI request boundaries', () => {
 
   it('sends only the explicit action and selected excerpt in the authenticated POST body', async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ text: 'A shorter edit.' }));
-    const payload = buildOfficeAiRequest('concise', 'A selected paragraph.', '');
+    const payload = buildOfficeAiRequest('concise', 'A selected paragraph.', '', '*');
     await expect(requestOfficeAi('session-token', payload, fetcher)).resolves.toBe('A shorter edit.');
     expect(fetcher).toHaveBeenCalledWith('/api/office-ai', expect.objectContaining({
       method: 'POST',
@@ -106,7 +106,7 @@ describe('Office AI request boundaries', () => {
 
   it('sends only document_summary and the confirmed text in the authenticated POST body', async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ text: 'Synthetic summary.' }));
-    const payload = buildOfficeAiDocumentSummaryRequest('Synthetic full document body.');
+    const payload = buildOfficeAiDocumentSummaryRequest('Synthetic full document body.', '*');
     await expect(requestOfficeAi('session-token', payload, fetcher)).resolves.toBe('Synthetic summary.');
     expect(fetcher).toHaveBeenCalledWith('/api/office-ai', expect.objectContaining({
       method: 'POST',
