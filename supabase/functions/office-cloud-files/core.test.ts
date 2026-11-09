@@ -663,6 +663,16 @@ describe('Office cloud Edge Function', () => {
     expect(isOfficeObjectKey('kyc/private.pdf')).toBe(false);
   });
 
+  it('allows only the linked COCCE Office Vercel preview hostname for browser requests', async () => {
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl: routedFetch(() => Response.json({ files: [] })).fetchImpl, now: () => fixedNow });
+    const previewOrigin = 'https://cocce-office-preview123-hilpolithrothschild-7822s-projects.vercel.app';
+    const response = await handler(new Request('https://nresyncmhdybucenhxbw.supabase.co/functions/v1/office-cloud-files', {
+      method: 'OPTIONS', headers: { Origin: previewOrigin },
+    }));
+    expect(response.status).toBe(204);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(previewOrigin);
+  });
+
   it('issues a short-lived, file-specific preview fetch URL that is forced to generic attachment bytes', async () => {
     const { fetchImpl, calls } = routedFetch((url) => {
       if (url.pathname.endsWith('/office_cloud_get_file_link')) return Response.json(fileLinkRecord());
@@ -674,6 +684,7 @@ describe('Office cloud Edge Function', () => {
     expect(response.status).toBe(200);
     expect(result.expiresInSeconds).toBe(120);
     expect(result.contentType).toBe('application/octet-stream');
+    expect(result).toMatchObject({ workspaceId, displayName: 'synthetic.pdf', sizeBytes: 13 });
     const url = new URL(result.url);
     expect(url.pathname).toBe(`/cocce-kyc/${objectKey}`);
     expect(url.searchParams.get('X-Amz-Expires')).toBe('120');
