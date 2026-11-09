@@ -121,6 +121,7 @@ function App() {
       setServerWorkspace({ workspaceId: detail.workspaceId, name: detail.name, suiteId: detail.suiteId ?? null, role: detail.role });
       setIndustryFocus(detail.suiteId ?? null);
     };
+    const workspaceCleared = () => { setServerWorkspace(null); setIndustryFocus(null); };
     const workspaceCreated = (event: Event) => {
       const detail = (event as CustomEvent<OfficeWorkspaceEvent>).detail;
       if (detail?.workspaceId && detail.name) {
@@ -132,10 +133,12 @@ function App() {
     };
     window.addEventListener('cocce-office:navigate', navigateOffice);
     window.addEventListener('cocce-office:workspace-changed', workspaceChanged);
+    window.addEventListener('cocce-office:workspace-cleared', workspaceCleared);
     window.addEventListener('cocce-office:workspace-created', workspaceCreated);
     return () => {
       window.removeEventListener('cocce-office:navigate', navigateOffice);
       window.removeEventListener('cocce-office:workspace-changed', workspaceChanged);
+      window.removeEventListener('cocce-office:workspace-cleared', workspaceCleared);
       window.removeEventListener('cocce-office:workspace-created', workspaceCreated);
     };
   }, []);
