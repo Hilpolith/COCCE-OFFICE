@@ -910,7 +910,7 @@ export function createOfficeCloudHandler({
         });
         return jsonResponse(origin, 200, {
           purpose: body.purpose, fileId: file.fileId, workspaceId: file.workspaceId,
-          displayName: file.displayName, sizeBytes: file.sizeBytes, url,
+          displayName: file.displayName, sizeBytes: file.sizeBytes, sha256Hex: file.sha256Hex, url,
           expiresInSeconds: DOWNLOAD_URL_TTL_SECONDS,
           contentType: 'application/octet-stream',
           contentDisposition: disposition,
