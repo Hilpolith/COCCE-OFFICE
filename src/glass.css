@@ -440,3 +440,209 @@
     .main-column { background: Canvas; }
   }
 }
+
+
+/* COCCE OFFICE — unified Pearl Glass design system refresh.
+   Visual layer only: all workspace logic, document geometry and data flows remain owned by their modules. */
+@media screen {
+  :root {
+    --office-ink: #24323a;
+    --office-muted: #63727a;
+    --office-line: rgba(78, 99, 108, .14);
+    --office-glass: rgba(255,255,255,.70);
+    --office-glass-strong: rgba(255,255,255,.88);
+    --office-shadow: 0 14px 42px rgba(48,67,77,.075), inset 0 1px 0 rgba(255,255,255,.82);
+    --office-radius: 22px;
+    --office-pill: 999px;
+  }
+  :root[data-theme=light] {
+    --bg: #edf2f3;
+    --bg-top: #fbfdfd;
+    --text: #24323a;
+    --muted: #63727a;
+    --surface: rgba(255,255,255,.68);
+    --surface-strong: rgba(255,255,255,.92);
+    --border: rgba(78,99,108,.14);
+    --glass-solid: #fbfdfd;
+    --glass-reading: #fff;
+    --glass-surface: rgba(255,255,255,.70);
+    --glass-nav: rgba(250,253,253,.84);
+    --glass-edge: rgba(78,99,108,.16);
+    --glass-reflection: rgba(255,255,255,.92);
+    --glass-shadow: 0 16px 44px rgba(48,67,77,.08), inset 0 1px 0 rgba(255,255,255,.9);
+    --glass-filter: blur(26px) saturate(155%);
+  }
+  body {
+    color: var(--text);
+    letter-spacing: -.012em;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, textarea, select { font: inherit; }
+  button { transition: transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease, color .18s ease; }
+  button:active:not(:disabled) { transform: translateY(1px) scale(.985); }
+  :is(input,textarea,select) {
+    border-radius: 14px;
+    border-color: var(--glass-edge);
+    background: var(--input);
+    color: var(--text);
+    box-shadow: inset 0 1px 2px rgba(35,55,64,.035);
+  }
+  :is(input,textarea,select):focus {
+    border-color: color-mix(in srgb, var(--accent) 55%, white);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+    outline: 0;
+  }
+  :is(.sidebar,.main-column,.topbar,.glass-card,.glass-popover,.toast,.module-card,
+      .office-editor-chrome,.office-workbench-rail,.office-ai-panel,.office-ai-prompt-panel,
+      .docs-format-toolbar,.team-panel,.office-collab-panel,.drive-modal,.frosted-confirm-dialog,
+      .office-ai-confirm-dialog,.slides-present-overlay,.pdf-toolbar,.vault-panel,
+      .settings-panel,.industry-office-hero,.industry-empty-office) {
+    border-color: var(--glass-edge);
+  }
+  .sidebar { border-radius: 30px; padding: 22px 13px; }
+  .brand-lockup { margin-bottom: 12px; }
+  .brand-mark,.workspace-emblem,.profile-orb,.metric-icon,.drive-summary-icon,.drive-empty-icon,
+  .office-ai-icon,.office-workbench-rail-icon,.industry-empty-icon {
+    border-radius: 17px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.62), 0 7px 18px rgba(40,65,75,.09);
+  }
+  .workspace-switcher { border-radius: 18px; padding: 10px 11px; }
+  .workspace-menu,.glass-popover { border-radius: 20px; overflow: hidden; }
+  .nav-button { border-radius: 14px; min-height: 43px; }
+  .nav-button:hover,.workspace-option:hover { transform: translateX(2px); }
+  .nav-button.active { box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 6px 18px rgba(38,60,68,.06); }
+  .nav-group-trigger { border-radius: 14px; }
+  .nav-subgroup { padding-left: 8px; }
+  .nav-button.nav-subbutton { border-radius: 12px; }
+  .main-column { border-radius: 31px; overflow: clip; }
+  .topbar { border-radius: var(--office-pill); min-height: 56px; }
+  .search-box { border-radius: var(--office-pill); }
+  .icon-button { border-radius: var(--office-pill); }
+  .content-scroll { scrollbar-gutter: stable; }
+  .page { animation: officePageIn .28s ease both; }
+  @keyframes officePageIn { from { opacity: .45; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  .welcome-row h1 { letter-spacing: -.055em; line-height: 1.04; }
+  .welcome-subtitle { line-height: 1.75; }
+  .hero-brand-card { overflow: hidden; box-shadow: 0 22px 54px rgba(37,59,68,.12), inset 0 1px 0 rgba(255,255,255,.5); }
+  .metric-card,.panel,.settings-panel { box-shadow: var(--office-shadow); }
+  .metric-card { border-radius: 21px; }
+  .panel { border-radius: 23px; }
+  .panel-heading { align-items: center; }
+  .button-primary,.button-secondary,.button-tertiary,.text-button { border-radius: var(--office-pill); }
+  .button-primary { box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 16%, transparent), inset 0 1px 0 rgba(255,255,255,.8); }
+  .button-secondary,.button-tertiary { border-color: var(--glass-edge); }
+  .module-card,.quick-action,.document-row,.workspace-option,.surface-option { transition: transform .18s ease, background .18s ease, box-shadow .18s ease; }
+  .module-card:hover,.quick-action:hover,.drive-file-card:hover,.drive-draft-card:hover,.surface-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(42,63,73,.09), inset 0 1px 0 rgba(255,255,255,.8);
+  }
+  .app-footer { color: var(--muted); }
+  .settings-panel,.theme-option,.surface-option { border-radius: 20px; }
+  .theme-option[aria-pressed=true],.surface-option[aria-pressed=true] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--office-shadow); }
+
+  /* Shared editor and workbench shell */
+  .office-editor-chrome { border-radius: 22px; padding: 9px 12px; }
+  .office-module-pills { gap: 6px; }
+  .office-module-pill { border-radius: var(--office-pill); min-height: 36px; padding-inline: 14px; }
+  .office-storage-pill { border-radius: var(--office-pill); }
+  .office-workbench-layout { gap: 14px; }
+  .office-workbench-rail { border-radius: 22px; padding: 15px; }
+  .office-workbench-rail-heading { margin-bottom: 12px; }
+  .office-workbench-collapse { border-radius: 12px; }
+  .office-editor-page { min-width: 0; }
+  .editor-toolbar,.sheet-editor-topline,.slides-editor-toolbar,.docs-format-toolbar {
+    border-radius: 17px;
+    border: 1px solid var(--glass-edge);
+    box-shadow: 0 8px 24px rgba(40,62,72,.045), inset 0 1px 0 rgba(255,255,255,.72);
+  }
+  .docs-format-button,.editor-toolbar button,.slides-editor-toolbar button { border-radius: 11px; }
+  .document-canvas,.rich-text-editor { border-radius: 20px; }
+  .document-canvas { box-shadow: 0 14px 38px rgba(35,50,58,.055); }
+  .rich-text-editor { line-height: 1.78; }
+  .office-ai-panel,.office-ai-prompt-panel { border-radius: 21px; }
+  .office-ai-disclosure,.office-ai-action-button,.office-ai-primary-button,.office-ai-prompt-run,.office-ai-prompt-secondary {
+    border-radius: var(--office-pill);
+  }
+  .office-ai-textarea,.office-ai-field input,.office-ai-field select,.office-ai-prompt-input { border-radius: 14px; }
+
+  /* Files, PDF, Vault, collaboration and presentation surfaces */
+  .drive-summary,.drive-dropzone,.drive-file-card,.drive-draft-card,.drive-modal,
+  .team-panel,.office-collab-panel,.vault-panel,.pdf-panel,.pdf-toolbar,
+  .slides-panel,.slides-editor-toolbar,.office-ai-confirm-dialog,.frosted-confirm-dialog {
+    border-radius: 21px;
+  }
+  .drive-tabs button,.government-module-tabs button,.drive-title-actions button { border-radius: var(--office-pill); }
+  .drive-file-thumb { border-radius: 15px; overflow: hidden; }
+  .drive-dropzone { border-style: dashed; }
+  .drive-modal-scrim,.modal-backdrop,.office-ai-confirm-backdrop,.frosted-confirm-backdrop { padding: 18px; }
+  .drive-modal,.office-ai-confirm-dialog,.frosted-confirm-dialog { box-shadow: 0 26px 90px rgba(22,38,45,.2), inset 0 1px 0 rgba(255,255,255,.8); }
+  .frosted-confirm-actions button,.office-ai-confirm-actions button { border-radius: var(--office-pill); }
+  .team-panel,.office-collab-panel { box-shadow: var(--office-shadow); }
+  .slides-present-overlay { border-radius: 22px; }
+
+  /* All industry suites: a consistent executive workspace language */
+  :is(.industry-office-hero,.institutions-hero,.university-hero,.business-hero,.accounting-hero,
+      .manufacturing-hero,.health-admin-hero,.hospitality-hero,.ngo-hero) {
+    border-radius: 25px;
+    box-shadow: var(--office-shadow);
+  }
+  :is(.institutions-card,.university-panel,.university-metric,.university-key-panel,
+      .business-panel,.business-metric,.business-key-panel,.accounting-card,.accounting-stat,
+      .accounting-metric-dock,.manufacturing-card,.manufacturing-panel,.manufacturing-stat,
+      .manufacturing-summary,.manufacturing-action-panel,.manufacturing-metric,
+      .health-admin-panel,.health-admin-metric,.health-admin-key-panel,
+      .hospitality-panel,.hospitality-card,.ngo-panel,.industry-panel,.industry-card) {
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(38,59,69,.055), inset 0 1px 0 rgba(255,255,255,.62);
+  }
+  :is(.government-module-tabs,.university-tabs,.business-tabs,.accounting-tabs,
+      .manufacturing-tabs,.health-admin-tabs,.hospitality-tabs,.institutions-tabs) {
+    border-radius: var(--office-pill);
+    padding: 5px;
+    background: var(--glass-surface);
+    border: 1px solid var(--glass-edge);
+  }
+  :is(.government-module-tabs button,.university-tabs button,.business-tabs button,
+      .accounting-tabs button,.manufacturing-tabs button,.health-admin-tabs button,
+      .hospitality-tabs button,.institutions-tabs button) { border-radius: var(--office-pill); }
+  :is(.institutions-table,.university-table,.business-table,.accounting-table,
+      .manufacturing-table,.health-admin-table,.hospitality-table,.ngo-table) {
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  :is(.institutions-card,.university-panel,.business-panel,.accounting-card,
+      .manufacturing-card,.health-admin-panel) :is(input,select,textarea) { min-height: 40px; }
+
+  /* Mobile: compact floating navigation, resilient grids and no horizontal bleed */
+  @media (max-width: 700px) {
+    .app-frame { padding: 6px; }
+    .main-column { border-radius: 24px; }
+    .topbar { border-radius: var(--office-pill); }
+    .content-scroll { overflow-x: clip; }
+    .page,.panel,.glass-card { min-width: 0; }
+    .office-editor-chrome { border-radius: 17px; }
+    .office-module-pills { overflow-x: auto; scrollbar-width: none; }
+    .office-workbench-layout { grid-template-columns: minmax(0,1fr); }
+    .office-workbench-rail { border-radius: 18px; }
+    .drive-file-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .drive-file-card { min-width: 0; }
+    :is(.institutions-hero,.university-hero,.business-hero,.accounting-hero,
+        .manufacturing-hero,.health-admin-hero,.hospitality-hero,.ngo-hero) { padding: 17px; }
+    :is(.government-module-tabs,.university-tabs,.business-tabs,.accounting-tabs,
+        .manufacturing-tabs,.health-admin-tabs,.hospitality-tabs,.institutions-tabs) {
+      max-width: 100%; overflow-x: auto; justify-content: flex-start; scrollbar-width: none;
+    }
+    :is(.institutions-card,.university-panel,.business-panel,.accounting-card,
+        .manufacturing-card,.health-admin-panel,.hospitality-panel,.ngo-panel) { overflow-x: auto; }
+  }
+  @media (max-width: 420px) {
+    .drive-file-grid { grid-template-columns: minmax(0,1fr); }
+    .office-module-pill { padding-inline: 11px; }
+    .office-workbench-rail { padding: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .page { animation: none; }
+    button,.module-card,.quick-action,.document-row,.workspace-option,.surface-option { transition: none; }
+  }
+}
