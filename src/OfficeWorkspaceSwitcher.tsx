@@ -77,19 +77,22 @@ export default function OfficeWorkspaceSwitcher() {
       if (userIdRef.current !== session.user.id) {
         userIdRef.current = session.user.id;
         clearWorkspaceContext();
+        setLoading(true);
       }
       setUserId(session.user.id);
       window.setTimeout(() => { if (alive) void load(); }, 0);
     });
 
     const restore = async () => {
+      const startingAuthVersion = authVersion;
       try {
         const { data, error: sessionError } = await client.auth.getSession();
-        if (!alive) return;
+        if (!alive || startingAuthVersion !== authVersion) return;
         if (sessionError || !data.session) { clear(); return; }
         if (userIdRef.current !== data.session.user.id) {
           userIdRef.current = data.session.user.id;
           clearWorkspaceContext();
+          setLoading(true);
         }
         setUserId(data.session.user.id);
         await load();
