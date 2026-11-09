@@ -62,6 +62,8 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   const [autoRenewChoice, setAutoRenewChoice] = useState(false);
   const [storageBusy, setStorageBusy] = useState(false);
   const [storageError, setStorageError] = useState('');
+  const [walletPin, setWalletPin] = useState('');
+  const [storagePinAction, setStoragePinAction] = useState<{ kind: 'renew' | 'auto_renew'; subscription: CloudStorageSubscription } | null>(null);
   const [trash, setTrash] = useState(false);
   const [category, setCategory] = useState<Category>('all');
   const [loading, setLoading] = useState(true);
@@ -167,9 +169,9 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       setFiles(nextFiles); setUsage(nextUsage); setHasMore(nextFiles.length === 50);
       // Billing is optional; a billing RPC failure must never block existing Drive access.
       const [plansResult, subscriptionsResult, historyResult] = await Promise.allSettled([
-        api.storagePlans(workspaceId),
-        canManageStorage ? api.storageSubscriptions(workspaceId) : Promise.resolve([]),
-        canManageStorage ? api.storageHistory(workspaceId) : Promise.resolve([]),
+        storageSubscriptionsReady ? api.storagePlans(workspaceId) : Promise.resolve([]),
+        storageSubscriptionsReady && canManageStorage ? api.storageSubscriptions(workspaceId) : Promise.resolve([]),
+        storageSubscriptionsReady && canManageStorage ? api.storageHistory(workspaceId) : Promise.resolve([]),
       ]);
       if (current === sequence.current) {
         setStoragePlans(plansResult.status === 'fulfilled' ? plansResult.value : []);
@@ -183,7 +185,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
     } catch (cause) {
       if (current === sequence.current) setError(cause instanceof Error ? cause.message : 'Cloud Drive could not be loaded.');
     } finally { if (current === sequence.current) setLoading(false); }
-  }, [api, workspaceId, trash, canManageStorage]);
+  }, [api, workspaceId, trash, canManageStorage, storageSubscriptionsReady]);
   const matching = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return needle ? files.filter((file) => `${file.displayName} ${mimeOf(file)}`.toLocaleLowerCase().includes(needle)) : files;
@@ -273,45 +275,58 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
 
   const purchaseStorage = async () => {
     if (!storageSubscriptionsReady || !api || !workspaceId || !selectedStoragePlan || !canManageStorage || storageBusy) return;
+    if (!/^\\d{4}$/.test(walletPin)) { setError('Enter your four-digit COCCE Wallet PIN to confirm this purchase.'); return; }
     setStorageBusy(true); setError(''); setNotice('');
     try {
-      const result = await api.purchaseStorage(workspaceId, selectedStoragePlan.planCode, crypto.randomUUID(), autoRenewChoice);
-      setSelectedStoragePlan(null); setAutoRenewChoice(false); setShowStoragePlans(false);
+      await api.purchaseStorage(workspaceId, selectedStoragePlan.planCode, crypto.randomUUID(), walletPin, autoRenewChoice);
+      setSelectedStoragePlan(null); setAutoRenewChoice(false); setShowStoragePlans(false); setWalletPin('');
       setNotice('Added ' + selectedStoragePlan.displayName + ' to this workspace Drive for ' + selectedStoragePlan.monthlyCoins.toLocaleString() + ' Coins.');
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The storage subscription could not be purchased.');
-    } finally { setStorageBusy(false); }
+    } finally { setStorageBusy(false); setWalletPin(''); }
   };
-
   const renewStorage = async (subscription: CloudStorageSubscription) => {
     if (!storageSubscriptionsReady || !api || !canManageStorage || storageBusy) return;
-    if (!await confirm('Renew ' + subscription.displayName + ' storage for ' + subscription.monthlyCoins.toLocaleString() + ' COCCE Coins? This adds one month to the current subscription period.')) return;
-    setStorageBusy(true); setError(''); setNotice('');
-    try {
-      await api.renewStorage(subscription.subscriptionId, crypto.randomUUID());
-      setNotice(subscription.displayName + ' storage subscription renewed.');
-      await refresh();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'The storage subscription could not be renewed.'); }
-    finally { setStorageBusy(false); }
+    setWalletPin('');
+    setStoragePinAction({ kind: 'renew', subscription });
   };
-
   const toggleStorageAutoRenew = async (subscription: CloudStorageSubscription) => {
     if (!storageSubscriptionsReady || !api || !canManageStorage || storageBusy) return;
     const next = !subscription.autoRenew;
-    const message = next
-      ? 'Enable automatic monthly renewal for ' + subscription.displayName + ' at ' + subscription.monthlyCoins.toLocaleString() + ' COCCE Coins per month? The account of the administrator enabling it will be charged. A failed payment has a three-day grace period.'
-      : 'Turn off automatic renewal for ' + subscription.displayName + '? The paid storage remains available until ' + new Date(subscription.currentPeriodEnd).toLocaleDateString() + '.';
-    if (!await confirm(message)) return;
+    if (next) {
+      setWalletPin('');
+      setStoragePinAction({ kind: 'auto_renew', subscription });
+      return;
+    }
+    if (!await confirm('Turn off automatic renewal for ' + subscription.displayName + '? The paid storage remains available until ' + new Date(subscription.currentPeriodEnd).toLocaleDateString() + '.')) return;
     setStorageBusy(true); setError(''); setNotice('');
     try {
-      await api.setStorageAutoRenew(subscription.subscriptionId, next);
-      setNotice(next ? 'Automatic storage renewal enabled.' : 'Automatic storage renewal turned off. Current paid access remains until the period ends.');
+      await api.setStorageAutoRenew(subscription.subscriptionId, false);
+      setNotice('Automatic storage renewal turned off. Current paid access remains until the period ends.');
       await refresh();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'The storage renewal setting could not be changed.'); }
     finally { setStorageBusy(false); }
   };
 
+  const submitStoragePinAction = async () => {
+    if (!storagePinAction || !api || !/^\\d{4}$/.test(walletPin) || storageBusy) return;
+    const { kind, subscription } = storagePinAction;
+    setStorageBusy(true); setError(''); setNotice('');
+    try {
+      if (kind === 'renew') {
+        await api.renewStorage(subscription.subscriptionId, crypto.randomUUID(), walletPin);
+        setNotice(subscription.displayName + ' storage subscription renewed.');
+      } else {
+        await api.setStorageAutoRenew(subscription.subscriptionId, true, walletPin);
+        setNotice('Automatic storage renewal enabled. This administrator account will be charged monthly.');
+      }
+      setStoragePinAction(null); setWalletPin('');
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Wallet PIN verification could not be completed.');
+    } finally { setStorageBusy(false); setWalletPin(''); }
+  };
   const moveFile = async (file: CloudFile, restore: boolean) => {
     if (!api) return;
     if (!await confirm(restore ? `Restore “${file.displayName}” from workspace trash?` : `Move “${file.displayName}” to this workspace’s trash? Active members may no longer see it in My files.`)) return;
@@ -335,6 +350,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       <div className="drive-cloud-actions">{!trash && <button className="button-primary" type="button" onClick={() => inputRef.current?.click()} disabled={!workspaceId || busy}><Upload size={15}/> {busy ? 'Working…' : 'Upload files'}</button>}<input ref={inputRef} className="visually-hidden" type="file" multiple onChange={(event) => { const chosen = event.target.files ? Array.from(event.target.files) : []; event.target.value = ''; if (chosen.length) void upload(chosen); }}/></div>
     </div>
     <section className="drive-storage-billing glass-card" aria-label="Monthly workspace storage">
+      {!storageSubscriptionsReady && <p className="drive-storage-admin-note">Monthly storage add-ons will appear after owner approval and the wallet security review. Your current Drive quota and files remain available.</p>}
       <div className="drive-storage-billing-head">
         <div><span className="eyebrow">WORKSPACE STORAGE ADD-ONS</span><h3>More room for your team</h3><p>Monthly add-ons increase the current workspace quota. Your existing files and base allowance stay unchanged.</p></div>
         {storageSubscriptionsReady && <button className="button-secondary" type="button" onClick={() => setShowStoragePlans((value) => !value)} disabled={!workspaceId || loading || storageBusy}>{showStoragePlans ? 'Hide plans' : 'View plans'}</button>}
@@ -373,6 +389,20 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
         <p className="drive-storage-policy">Auto-renew is optional and off by default. If enabled, the administrator who enables it is charged monthly. Failed payments have a three-day grace period; after expiry, only the add-on quota is removed. Existing files are never deleted, but uploads can pause if usage exceeds the remaining quota.</p>
       </div>}
       {storageSubscriptionsReady && storageHistory.length > 0 && <details className="drive-storage-history"><summary>Subscription history</summary><ul>{storageHistory.slice(0,12).map((event) => <li key={event.eventId}><span>{event.displayName} · {event.eventType.replaceAll('_',' ')}</span><small>{event.coins ? event.coins.toLocaleString() + ' Coins' : '—'} · {new Date(event.createdAt).toLocaleString()}</small></li>)}</ul></details>}
+      {storageSubscriptionsReady && storagePinAction && <div className="drive-storage-dialog-backdrop">
+        <section className="drive-storage-dialog" role="dialog" aria-modal="true" aria-labelledby="drive-storage-pin-title">
+          <span className="eyebrow">COCCE WALLET SECURITY</span>
+          <h3 id="drive-storage-pin-title">{storagePinAction.kind === 'renew' ? 'Confirm subscription renewal' : 'Authorize automatic renewal'}</h3>
+          <p>{storagePinAction.kind === 'renew'
+            ? 'Renew ' + storagePinAction.subscription.displayName + ' for ' + storagePinAction.subscription.monthlyCoins.toLocaleString() + ' Coins. This adds one month to the current subscription period.'
+            : 'Enable monthly automatic renewal for ' + storagePinAction.subscription.displayName + ' at ' + storagePinAction.subscription.monthlyCoins.toLocaleString() + ' Coins per month. This administrator account will be charged. A failed payment has a three-day grace period.'}</p>
+          <label className="drive-storage-pin-field"><span>Enter your four-digit Wallet PIN</span><input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={walletPin} onChange={(event) => setWalletPin(event.target.value.replace(/\\D/g, '').slice(0, 4))} placeholder="4-digit PIN" aria-label="COCCE Wallet PIN"/></label>
+          <div className="drive-storage-dialog-actions">
+            <button type="button" className="button-secondary" onClick={() => { setStoragePinAction(null); setWalletPin(''); }} disabled={storageBusy}>Cancel</button>
+            <button type="button" className="button-primary" onClick={() => void submitStoragePinAction()} disabled={storageBusy || !/^\\d{4}$/.test(walletPin)}>{storageBusy ? 'Verifying…' : 'Confirm with Wallet PIN'}</button>
+          </div>
+        </section>
+      </div>}
       {storageSubscriptionsReady && selectedStoragePlan && <div className="drive-storage-dialog-backdrop">
         <section className="drive-storage-dialog" role="dialog" aria-modal="true" aria-labelledby="drive-storage-dialog-title">
           <span className="eyebrow">CONFIRM STORAGE PURCHASE</span>
@@ -380,6 +410,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
           <p>This adds {formatFileSize(selectedStoragePlan.quotaBytes)} to the current workspace quota for one month.</p>
           <div className="drive-storage-purchase-price"><strong>{selectedStoragePlan.monthlyCoins.toLocaleString()} Coins</strong><span>TSh {selectedStoragePlan.monthlyCoins.toLocaleString()} / month</span></div>
           <label className="drive-storage-auto-renew-choice"><input type="checkbox" checked={autoRenewChoice} onChange={(event) => setAutoRenewChoice(event.target.checked)}/><span><strong>Automatically renew monthly</strong><small>Off by default. If selected, the administrator purchasing this plan will be charged each month. A failed payment has a three-day grace period.</small></span></label>
+          <label className="drive-storage-pin-field"><span>COCCE Wallet PIN</span><input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={walletPin} onChange={(event) => setWalletPin(event.target.value.replace(/\\D/g, '').slice(0, 4))} placeholder="4-digit PIN" aria-label="COCCE Wallet PIN"/></label>
           <p className="drive-storage-dialog-note">After the subscription expires, its add-on quota is removed. Existing files are not deleted; new uploads may pause until usage is below the remaining quota.</p>
           <div className="drive-storage-dialog-actions">
             <button type="button" className="button-secondary" onClick={() => setSelectedStoragePlan(null)} disabled={storageBusy}>Cancel</button>
