@@ -42,3 +42,57 @@
 
 
 .drive-cloud-active-workspace{display:flex;align-items:center;gap:10px;min-width:170px;min-height:42px;padding:7px 12px;border:1px solid var(--border);border-radius:13px;background:linear-gradient(135deg,rgba(255,255,255,.085),rgba(255,255,255,.035));color:var(--muted)}.drive-cloud-active-workspace>svg{flex:none;color:var(--accent)}.drive-cloud-active-workspace>span{display:grid;gap:3px;min-width:0}.drive-cloud-active-workspace small{font-size:8px;letter-spacing:.11em;color:var(--faint)}.drive-cloud-active-workspace strong{overflow:hidden;color:var(--text);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+
+.drive-storage-billing{display:grid;gap:14px;padding:17px;border:1px solid var(--border);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.035));box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+.drive-storage-billing-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.drive-storage-billing-head h3{margin:4px 0 5px;color:var(--text);font-size:16px;letter-spacing:-.025em}
+.drive-storage-billing-head p{max-width:580px;margin:0;color:var(--muted);font-size:10px;line-height:1.6}
+.drive-storage-billing-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.drive-storage-billing-summary span{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--border);border-radius:13px;background:rgba(255,255,255,.035);color:var(--muted);font-size:9px}
+.drive-storage-billing-summary strong{color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}
+.drive-storage-subscriptions{display:grid;gap:9px}
+.drive-storage-subscriptions h4{margin:0;color:var(--text);font-size:12px}
+.drive-storage-subscription{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.035)}
+.drive-storage-subscription-main{display:grid;gap:4px;min-width:0}
+.drive-storage-subscription-main strong{color:var(--text);font-size:11px}
+.drive-storage-subscription-main span,.drive-storage-subscription-main small{color:var(--muted);font-size:9px;line-height:1.45}
+.drive-storage-subscription-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.drive-storage-subscription-actions button{min-height:31px;padding:0 10px;font-size:9px}
+.drive-storage-subscription-actions>span{font-size:8px;font-weight:800;letter-spacing:.04em}
+.drive-storage-subscription-actions .is-renewing{color:#72d6b7}
+.drive-storage-subscription-actions .is-manual{color:var(--muted)}
+.drive-storage-plans{display:grid;gap:12px;padding-top:12px;border-top:1px solid var(--border)}
+.drive-storage-plans-intro{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.drive-storage-plans-intro strong{color:var(--text);font-size:11px}
+.drive-storage-plans-intro span{color:var(--muted);font-size:9px}
+.drive-storage-plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.drive-storage-plan{display:grid;gap:5px;align-content:start;padding:13px;border:1px solid var(--border);border-radius:15px;background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.02))}
+.drive-storage-plan>strong{color:var(--text);font-size:16px;letter-spacing:-.03em}
+.drive-storage-plan>span{color:var(--muted);font-size:9px}
+.drive-storage-plan>b{margin-top:4px;color:var(--text);font-size:13px;font-variant-numeric:tabular-nums}
+.drive-storage-plan>small{color:var(--muted);font-size:8px}
+.drive-storage-plan button{min-height:32px;margin-top:7px;padding:0 9px;font-size:9px}
+.drive-storage-admin-note,.drive-storage-policy{margin:0;color:var(--muted);font-size:9px;line-height:1.65}
+.drive-storage-policy{padding:9px 11px;border-radius:12px;background:rgba(255,255,255,.035)}
+.drive-storage-history{border-top:1px solid var(--border);padding-top:10px}
+.drive-storage-history summary{color:var(--text);font-size:10px;font-weight:750;cursor:pointer}
+.drive-storage-history ul{display:grid;gap:7px;margin:10px 0 0;padding:0;list-style:none}
+.drive-storage-history li{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:9px}
+.drive-storage-history li small{color:var(--faint);font-size:8px;text-align:right}
+.drive-storage-dialog-backdrop{position:fixed;inset:0;z-index:1250;display:grid;place-items:center;padding:18px;background:rgba(8,14,26,.58);backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px)}
+.drive-storage-dialog{width:min(100%,470px);display:grid;gap:12px;padding:22px;border:1px solid rgba(255,255,255,.22);border-radius:24px;background:linear-gradient(145deg,rgba(35,48,70,.98),rgba(19,29,47,.98));box-shadow:0 28px 90px rgba(0,0,0,.42);color:#f4f7fc}
+.drive-storage-dialog h3{margin:0;font-size:19px;letter-spacing:-.035em}
+.drive-storage-dialog p{margin:0;color:rgba(237,244,255,.72);font-size:10px;line-height:1.65}
+.drive-storage-purchase-price{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:12px;border:1px solid rgba(255,255,255,.15);border-radius:14px;background:rgba(255,255,255,.055)}
+.drive-storage-purchase-price strong{font-size:18px;font-variant-numeric:tabular-nums}
+.drive-storage-purchase-price span{color:rgba(237,244,255,.65);font-size:9px}
+.drive-storage-auto-renew-choice{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid rgba(255,255,255,.17);border-radius:14px;background:rgba(255,255,255,.045);cursor:pointer}
+.drive-storage-auto-renew-choice input{width:16px;height:16px;margin:2px 0 0;accent-color:#8cb6ed}
+.drive-storage-auto-renew-choice span{display:grid;gap:4px}
+.drive-storage-auto-renew-choice strong{font-size:10px}
+.drive-storage-auto-renew-choice small{color:rgba(237,244,255,.65);font-size:9px;line-height:1.55}
+.drive-storage-dialog-note{padding:9px 11px;border-radius:11px;background:rgba(255,255,255,.045)}
+.drive-storage-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:3px}
+.drive-storage-dialog-actions button{min-height:38px;padding:0 14px;font-size:10px}
+@media(max-width:760px){.drive-storage-plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.drive-storage-subscription{align-items:flex-start;flex-direction:column}.drive-storage-subscription-actions{justify-content:flex-start}}
+@media(max-width:520px){.drive-storage-billing-summary{grid-template-columns:1fr}.drive-storage-plan-grid{grid-template-columns:1fr 1fr}.drive-storage-billing-head{align-items:flex-start}.drive-storage-dialog{padding:17px}.drive-storage-dialog-actions{display:grid;grid-template-columns:1fr 1fr}.drive-storage-dialog-actions button{padding:0 8px}}
