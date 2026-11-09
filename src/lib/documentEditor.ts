@@ -2,14 +2,14 @@ import { DOCS_TABLE_LIMITS, docsTableGridViolation } from './docsTableLimits';
 
 const ALLOWED_TAGS = new Set([
   'P', 'H1', 'H2', 'H3', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'DEL',
-  'BR', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'CODE',
+  'BR', 'HR', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'CODE', 'SPAN', 'MARK', 'A', 'SUB', 'SUP',
 ]);
 const DROP_CONTENT_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'SVG', 'MATH', 'TEMPLATE', 'IMG']);
-const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'LI', 'BLOCKQUOTE', 'PRE', 'TABLE']);
+const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'LI', 'BLOCKQUOTE', 'PRE', 'TABLE', 'HR']);
 const FALLBACK_BLOCK_TAGS = new Set(['DIV', 'H4', 'H5', 'H6', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'ADDRESS', 'MAIN', 'FIGURE', 'FIGCAPTION', 'TBODY', 'THEAD', 'TR', 'TD', 'TH']);
 const TAG_ALIASES: Record<string, string> = { B: 'STRONG', I: 'EM', S: 'DEL' };
 const TABLE_FLATTEN_WARNING = 'An unsupported or over-limit table was flattened to readable text. Merged, nested, uneven, or complex tables are not preserved.';
-const SUPPORTED_TABLE_CELL_TAGS = new Set(['P', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'DEL', 'BR', 'SPAN']);
+const SUPPORTED_TABLE_CELL_TAGS = new Set(['P', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'DEL', 'BR', 'SPAN', 'MARK', 'A', 'SUB', 'SUP']);
 
 interface SanitizationState {
   tablesSeen: number;
@@ -21,6 +21,46 @@ interface SanitizationState {
 export interface SanitizedRichText {
   html: string;
   warnings: string[];
+}
+
+function safeCssColor(value: string): string | null {
+  const color = value.trim();
+  if (/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(color)) return color;
+  if (/^rgba?\\(\\s*\\d{1,3}\\s*,\\s*\\d{1,3}\\s*,\\s*\\d{1,3}(?:\\s*,\\s*(?:0|1|0?\\.\\d+))?\\s*\\)$/i.test(color)) return color;
+  return null;
+}
+
+function safeDocsHref(value: string): string | null {
+  const href = value.trim();
+  if (!href || href.length > 2048) return null;
+  if (/^mailto:[^\\s@]+@[^\\s@]+$/i.test(href)) return href;
+  try {
+    const parsed = new URL(href);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeStyleForElement(element: HTMLElement, tag: string): string {
+  const styles: string[] = [];
+  const color = safeCssColor(element.style.color);
+  const background = safeCssColor(element.style.backgroundColor);
+  if (color) styles.push(`color:${color}`);
+  if ((tag === 'SPAN' || tag === 'MARK') && background) styles.push(`background-color:${background}`);
+  if (tag === 'SPAN') {
+    const family = element.style.fontFamily.split(',')[0]?.trim().replace(/^['"]|['"]$/g, '') ?? '';
+    const allowedFonts = new Set(['arial', 'aptos', 'calibri', 'cambria', 'georgia', 'times new roman', 'verdana', 'tahoma', 'trebuchet ms', 'courier new', 'consolas', 'inter']);
+    if (allowedFonts.has(family.toLowerCase())) styles.push(`font-family:"${family.replaceAll('"', '')}"`);
+    const size = element.style.fontSize.trim();
+    const match = size.match(/^(\\d{1,2})(pt|px)$/i);
+    if (match && Number(match[1]) >= 8 && Number(match[1]) <= 72) styles.push(`font-size:${size}`);
+  }
+  if (tag === 'P' || tag === 'H1' || tag === 'H2' || tag === 'H3') {
+    const alignment = element.style.textAlign;
+    if (['left', 'center', 'right', 'justify'].includes(alignment)) styles.push(`text-align:${alignment}`);
+  }
+  return styles.join(';');
 }
 
 function escapeHtml(value: string): string {
@@ -96,6 +136,20 @@ function serializeSafeNode(node: Node, state: SanitizationState): string {
   if (DROP_CONTENT_TAGS.has(sourceTag)) return '';
   if (sourceTag === 'TABLE') return serializeSafeTable(element, state);
   const children = Array.from(element.childNodes, (child) => serializeSafeNode(child, state)).join('');
+  if (sourceTag === 'HR') return '<hr>';
+  if (sourceTag === 'A') {
+    const href = safeDocsHref(element.getAttribute('href') ?? '');
+    return href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${children}</a>` : children;
+  }
+  if (sourceTag === 'SPAN' || sourceTag === 'MARK') {
+    const style = safeStyleForElement(element, sourceTag);
+    if (sourceTag === 'SPAN' && !style) return children;
+    return `<${sourceTag.toLowerCase()}${style ? ` style="${escapeHtml(style)}"` : ''}>${children}</${sourceTag.toLowerCase()}>`;
+  }
+  if (sourceTag === 'P' || sourceTag === 'H1' || sourceTag === 'H2' || sourceTag === 'H3') {
+    const style = safeStyleForElement(element, sourceTag);
+    return `<${sourceTag.toLowerCase()}${style ? ` style="${escapeHtml(style)}"` : ''}>${children}</${sourceTag.toLowerCase()}>`;
+  }
   if (FALLBACK_BLOCK_TAGS.has(sourceTag)) {
     const hasBlockChild = Array.from(element.children).some((child) => BLOCK_TAGS.has(child.tagName) || FALLBACK_BLOCK_TAGS.has(child.tagName) || child.tagName === 'UL' || child.tagName === 'OL');
     return hasBlockChild ? children : `<p>${children}</p>`;
