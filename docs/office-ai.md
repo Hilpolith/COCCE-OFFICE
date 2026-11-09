@@ -52,3 +52,6 @@ For bounded requests, the all-workspaces mode considers up to 20 workspaces and 
 This release does **not** read Drive file contents, private sector records, Vault items, or local browser files. It also does not run unattended automations. Drive file retrieval would require an explicit user-selected file flow and a separate permission-aware file-context contract; it must not be inferred from workspace membership alone. If workspace conversation history is switched off, only the typed prompt is sent.
 
 The Edge Function is deployed as `office-ai-chat` with JWT verification enabled. The November 2026 deployment uses the membership-aware workspace RPCs and has no service-role credential in the browser.
+
+
+Workspace owners and administrators can disable or re-enable COCCE AI per workspace in Team & Collaboration. The setting is stored on the workspace, not in browser state. The AI Edge Function checks it for every workspace in the selected scope; disabled workspaces are excluded, and a request is rejected if no enabled workspace remains. Members can see the setting but cannot change it. Context-off requests still respect the workspace AI setting.
