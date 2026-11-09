@@ -165,6 +165,7 @@ test('POST sends only an explicitly selected excerpt to the fixed free OpenRoute
   const userContent = JSON.parse(request.messages[1].content);
   assert.equal(userContent.action, 'summarize');
   assert.equal(userContent.selectedText, 'Only the passage the user selected.');
+  assert.equal(Object.hasOwn(userContent, 'workspaceId'), false);
   assert.equal(Object.hasOwn(userContent, 'documentTitle'), false);
   assert.equal(Object.hasOwn(userContent, 'documentId'), false);
   assert.equal(Object.hasOwn(userContent, 'documentContent'), false);
