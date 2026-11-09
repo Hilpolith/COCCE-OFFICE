@@ -17,6 +17,7 @@ import { deleteDocsReviewCommentsForDocument } from './lib/docsReviewComments';
 import { createDocxBlob, DOCX_IMPORT_CONFIRMATION, importDocxFile, safeDocxFilename } from './lib/docxInterchange';
 import SheetsWorkspace from './SheetsWorkspace';
 import DriveWorkspace from './DriveWorkspace';
+import ChatsWorkspace from './ChatsWorkspace';
 import SlidesWorkspace from './SlidesWorkspace';
 import { slidesCloudFilesEnabled } from './lib/slidesCloudFeature';
 import { escapeMarkdownText, richTextToMarkdown, richTextToPlainText } from './lib/documentEditor';
@@ -50,7 +51,7 @@ const toolkitNav = [
   { id: 'team', label: 'Team & collaboration', icon: MessageCircle, detail: 'Local planner and separate Office Team' },
 ] as const;
 
-type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'pdf' | 'drive' | 'team' | 'vault' | 'industry' | 'settings';
+type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'pdf' | 'drive' | 'team' | 'chats' | 'vault' | 'industry' | 'settings';
 const documentPageIds: readonly PageId[] = ['docs', 'sheets', 'slides', 'pdf', 'drive', 'vault'];
 type DialogMode = 'workspace' | 'delete' | null;
 
@@ -360,7 +361,10 @@ function App() {
           <button type="button" className={`visionos-dock-button ${page === 'drive' ? 'is-active' : ''}`} aria-label="Drive" title="Drive · cloud files, documents and media" onClick={() => goTo('drive')}>
             <FolderOpen size={21} strokeWidth={1.8} />
           </button>
-          <button type="button" className="visionos-dock-button is-unavailable" aria-label="AI Chat (not connected yet)" title="AI Chat · workspace-wide assistant is not connected yet" disabled>
+          <button type="button" className={`visionos-dock-button ${page === 'chats' ? 'is-active' : ''}`} aria-label="Chats" title="Chats · direct messages, groups and workspace channels" onClick={() => goTo('chats')}>
+            <MessageCircle size={21} strokeWidth={1.8} />
+          </button>
+          <button type="button" className="visionos-dock-button is-unavailable" aria-label="COCCE AI (not connected yet)" title="COCCE AI · workspace-aware assistant is not connected yet" disabled>
             <Sparkles size={21} strokeWidth={1.8} />
           </button>
           <span className="visionos-dock-divider" aria-hidden="true" />
@@ -400,6 +404,7 @@ function App() {
           {page === 'vault' && <VaultWorkspace />}
           {page === 'industry' && <IndustrySuitesWorkspace key={industryFocus ?? 'all'} preferredIndustryId={industryFocus} onCreateTeam={openIndustryTeam} />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
+          {page === 'chats' && <ChatsWorkspace />}
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
@@ -419,6 +424,7 @@ function pageTitle(page: PageId, editing: boolean, industryFocus: IndustryId | n
   if (page === 'home') return 'Overview';
   if (page === 'settings') return 'Preferences';
   if (page === 'industry') return industryFocus ? getIndustryDefinition(industryFocus).shortLabel : 'Office suites';
+  if (page === 'chats') return 'Chats';
   return documentNav.find((item) => item.id === page)?.label ?? toolkitNav.find((item) => item.id === page)?.label ?? 'Overview';
 }
 
