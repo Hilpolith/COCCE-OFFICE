@@ -33,16 +33,16 @@ BEGIN
         'role', v_role,
         'terms', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.start_date DESC), '[]'::jsonb)
           FROM (SELECT term_id, academic_year, term_label, start_date, end_date, status, version
-            FROM public.office_school_terms WHERE workspace_id = p_workspace_id ORDER BY start_date DESC LIMIT v_limit OFFSET v_offset) AS x),
+            FROM public.office_school_terms WHERE workspace_id = p_workspace_id ORDER BY start_date DESC, term_id DESC LIMIT v_limit OFFSET v_offset) AS x),
         'classes', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.class_label), '[]'::jsonb)
           FROM (SELECT c.class_id, c.class_label, c.level_label, c.stream_label, c.capacity, c.status, c.version
             FROM public.office_school_classes AS c WHERE c.workspace_id = p_workspace_id AND c.status = 'active'
               AND (v_role <> 'teacher' OR EXISTS (SELECT 1 FROM public.office_school_class_staff AS a
                 WHERE a.workspace_id = c.workspace_id AND a.class_id = c.class_id AND a.user_id = auth.uid() AND a.active))
-            ORDER BY c.class_label LIMIT v_limit OFFSET v_offset) AS x),
+            ORDER BY c.class_label, c.class_id LIMIT v_limit OFFSET v_offset) AS x),
         'subjects', (SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.subject_label), '[]'::jsonb)
           FROM (SELECT subject_id, subject_code, subject_label, status FROM public.office_school_subjects
-            WHERE workspace_id = p_workspace_id AND status = 'active' ORDER BY subject_label LIMIT v_limit OFFSET v_offset) AS x),
+            WHERE workspace_id = p_workspace_id AND status = 'active' ORDER BY subject_label, subject_id LIMIT v_limit OFFSET v_offset) AS x),
         'key_configured', EXISTS (SELECT 1 FROM public.office_school_key_configs WHERE workspace_id = p_workspace_id)
       );
 
@@ -50,7 +50,7 @@ BEGIN
       PERFORM office_private.school_require_role(p_workspace_id, ARRAY['registrar','teacher','bursar','viewer']);
       SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.start_date DESC), '[]'::jsonb) INTO v_result
       FROM (SELECT term_id, academic_year, term_label, start_date, end_date, status, version
-        FROM public.office_school_terms WHERE workspace_id = p_workspace_id ORDER BY start_date DESC LIMIT v_limit OFFSET v_offset) AS x;
+        FROM public.office_school_terms WHERE workspace_id = p_workspace_id ORDER BY start_date DESC, term_id DESC LIMIT v_limit OFFSET v_offset) AS x;
 
     WHEN 'classes' THEN
       PERFORM office_private.school_require_role(p_workspace_id, ARRAY['registrar','teacher','bursar','viewer']);
@@ -59,13 +59,13 @@ BEGIN
         FROM public.office_school_classes AS c WHERE c.workspace_id = p_workspace_id
           AND (v_role <> 'teacher' OR EXISTS (SELECT 1 FROM public.office_school_class_staff AS a
             WHERE a.workspace_id = c.workspace_id AND a.class_id = c.class_id AND a.user_id = auth.uid() AND a.active))
-        ORDER BY c.class_label LIMIT v_limit OFFSET v_offset) AS x;
+        ORDER BY c.class_label, c.class_id LIMIT v_limit OFFSET v_offset) AS x;
 
     WHEN 'subjects' THEN
       PERFORM office_private.school_require_role(p_workspace_id, ARRAY['registrar','teacher','bursar','viewer']);
       SELECT coalesce(jsonb_agg(to_jsonb(x) ORDER BY x.subject_label), '[]'::jsonb) INTO v_result
       FROM (SELECT subject_id, subject_code, subject_label, status FROM public.office_school_subjects
-        WHERE workspace_id = p_workspace_id ORDER BY subject_label LIMIT v_limit OFFSET v_offset) AS x;
+        WHERE workspace_id = p_workspace_id ORDER BY subject_label, subject_id LIMIT v_limit OFFSET v_offset) AS x;
 
     WHEN 'key_config' THEN
       PERFORM office_private.school_require_role(p_workspace_id, ARRAY['registrar']);
@@ -99,7 +99,7 @@ BEGIN
         FROM public.office_school_admissions AS a
         JOIN public.office_school_terms AS t ON t.workspace_id = a.workspace_id AND t.term_id = a.term_id
         JOIN public.office_school_classes AS c ON c.workspace_id = a.workspace_id AND c.class_id = a.requested_class_id
-        WHERE a.workspace_id = p_workspace_id ORDER BY a.created_at DESC LIMIT v_limit OFFSET v_offset) AS x;
+        WHERE a.workspace_id = p_workspace_id ORDER BY a.created_at DESC, a.application_id DESC LIMIT v_limit OFFSET v_offset) AS x;
 
     WHEN 'students' THEN
       PERFORM office_private.school_require_role(p_workspace_id, ARRAY['registrar','teacher','bursar']);
@@ -114,7 +114,7 @@ BEGIN
             WHERE a.workspace_id = s.workspace_id AND a.class_id = e.class_id AND a.user_id = auth.uid() AND a.active))
           AND (v_class_id IS NULL OR e.class_id = v_class_id)
           AND (v_term_id IS NULL OR e.term_id = v_term_id)
-        ORDER BY s.student_code LIMIT v_limit OFFSET v_offset) AS x;
+        ORDER BY s.student_code, s.student_id LIMIT v_limit OFFSET v_offset) AS x;
 
     WHEN 'private_person' THEN
       PERFORM office_private.school_require_role(p_workspace_id, ARRAY['registrar']);
@@ -148,7 +148,7 @@ BEGIN
           AND (v_term_id IS NULL OR s.term_id = v_term_id)
           AND (v_role <> 'teacher' OR EXISTS (SELECT 1 FROM public.office_school_class_staff AS a
             WHERE a.workspace_id = s.workspace_id AND a.class_id = s.class_id AND a.user_id = auth.uid() AND a.active))
-        ORDER BY s.session_date DESC, s.created_at DESC LIMIT v_limit OFFSET v_offset) AS x;
+        ORDER BY s.session_date DESC, s.created_at DESC, s.session_id DESC LIMIT v_limit OFFSET v_offset) AS x;
       INSERT INTO public.office_school_audit_events(workspace_id, actor_id, module, event_kind, changed_fields)
         VALUES (p_workspace_id, auth.uid(), 'attendance', 'sensitive_read', ARRAY[]::text[]);
 
@@ -171,7 +171,7 @@ BEGIN
           AND (v_term_id IS NULL OR a.term_id = v_term_id)
           AND (v_role <> 'teacher' OR EXISTS (SELECT 1 FROM public.office_school_class_staff AS a2
             WHERE a2.workspace_id = a.workspace_id AND a2.class_id = a.class_id AND a2.user_id = auth.uid() AND a2.active))
-        ORDER BY a.created_at DESC LIMIT v_limit OFFSET v_offset) AS x;
+        ORDER BY a.created_at DESC, a.assessment_id DESC LIMIT v_limit OFFSET v_offset) AS x;
       INSERT INTO public.office_school_audit_events(workspace_id, actor_id, module, event_kind, changed_fields)
         VALUES (p_workspace_id, auth.uid(), 'grades', 'sensitive_read', ARRAY[]::text[]);
 
@@ -191,7 +191,7 @@ BEGIN
         JOIN public.office_school_terms AS t ON t.workspace_id = ch.workspace_id AND t.term_id = ch.term_id
         WHERE ch.workspace_id = p_workspace_id AND (v_term_id IS NULL OR ch.term_id = v_term_id)
           AND (v_id IS NULL OR ch.student_id = v_id)
-        ORDER BY ch.due_date, ch.created_at DESC LIMIT v_limit OFFSET v_offset) AS x;
+        ORDER BY ch.due_date, ch.created_at DESC, ch.charge_id DESC LIMIT v_limit OFFSET v_offset) AS x;
       INSERT INTO public.office_school_audit_events(workspace_id, actor_id, module, event_kind, changed_fields)
         VALUES (p_workspace_id, auth.uid(), 'fees', 'sensitive_read', ARRAY[]::text[]);
 
@@ -202,7 +202,7 @@ BEGIN
           encode(body_ciphertext, 'base64') AS body_ciphertext, status, created_by, approved_by, created_at
         FROM public.office_school_notices WHERE workspace_id = p_workspace_id
           AND (v_class_id IS NULL OR class_id = v_class_id OR class_id IS NULL)
-        ORDER BY created_at DESC LIMIT v_limit OFFSET v_offset) AS x;
+        ORDER BY created_at DESC, notice_id DESC LIMIT v_limit OFFSET v_offset) AS x;
 
     WHEN 'audit' THEN
       PERFORM office_private.school_require_role(p_workspace_id, ARRAY[]::text[]);
