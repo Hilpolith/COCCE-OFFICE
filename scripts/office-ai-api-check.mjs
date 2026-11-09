@@ -29,6 +29,7 @@ function makeHarness({
   output = 'A polished, shorter passage.',
   returnedModel = FREE_MODEL_ID,
   reportedCost = 0,
+  omitCost = false,
   workspaceAiEnabled = true,
   workspaceAiStatus = 200,
   workspaceRows = [{ workspace_id: TEST_WORKSPACE_ID, name: 'Synthetic workspace' }],
@@ -62,7 +63,7 @@ function makeHarness({
         status: providerStatus,
         json: async () => providerError ?? {
           model: returnedModel,
-          usage: { cost: reportedCost },
+          usage: omitCost ? {} : { cost: reportedCost },
           choices: [{ message: { content: output } }],
         },
       };
