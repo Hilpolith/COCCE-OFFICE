@@ -197,4 +197,29 @@ describe('industry office workbench', () => {
     expect(screen.getByLabelText('Office or organization name')).toHaveProperty('disabled', true);
     expect(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)).toBe(corrupt);
   });
+
+  it('keeps the permission-aware COCCE AI action available across shared suite tabs', async () => {
+    const office = createIndustryOffice(emptyIndustryState(), {
+      industryId: 'school', name: 'Kijiji School', country: 'Tanzania',
+    }).office!;
+    const workspaceId = '11111111-1111-4111-8111-111111111111';
+    writeIndustryState(window.localStorage, linkIndustryTeam({ version: 1, offices: [office] }, office.id, workspaceId));
+    const listener = vi.fn();
+    window.addEventListener('cocce-office:navigate', listener);
+    render(<IndustrySuitesWorkspace preferredIndustryId="school" onCreateTeam={vi.fn()} />);
+
+    expect(await screen.findByTestId('school-management-preview')).toBeTruthy();
+    const askAi = await screen.findByRole('button', { name: 'Ask COCCE AI' });
+    fireEvent.click(askAi);
+    expect(listener).toHaveBeenCalledTimes(1);
+    const event = listener.mock.calls[0][0] as CustomEvent<{ page: string; workspaceId: string; prompt: string }>;
+    expect(event.detail).toMatchObject({ page: 'ai', workspaceId });
+    expect(event.detail.prompt).toContain('Kijiji School');
+    expect(event.detail.prompt).toContain('do not assume access to sector database records');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Shared work items' }));
+    expect(await screen.findByText('Shared workbench is unavailable')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ask COCCE AI' })).toBeTruthy();
+    window.removeEventListener('cocce-office:navigate', listener);
+  });
 });
