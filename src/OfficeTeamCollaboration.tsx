@@ -246,7 +246,16 @@ export default function OfficeTeamCollaboration({
       setGroupTitle('');
       setGroupMemberIds([]);
     };
-    const handleWorkspaceClear = () => { globalWorkspaceIdRef.current = ''; };
+    const handleWorkspaceClear = () => {
+      globalWorkspaceIdRef.current = '';
+      setWorkspaceScope('');
+      setConversationScope('');
+      setMembers([]);
+      setLoadedWorkspaceId('');
+      setWorkspaceInvitations([]);
+      setPresence([]);
+      setConversations([]);
+    };
     window.addEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
     window.addEventListener('cocce-office:workspace-cleared', handleWorkspaceClear);
     return () => {
