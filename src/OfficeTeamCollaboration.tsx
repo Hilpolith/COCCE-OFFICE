@@ -5,7 +5,8 @@ import { Bell, Check, CircleAlert, LogIn, LogOut, MessageCircle, Plus, RefreshCw
 import { officeTeamApi } from './lib/officeTeamApi';
 import OfficePersonIdentity from './OfficePersonIdentity';
 import OfficeChatPanel from './OfficeChatPanel';
-import type { OfficeConversation, OfficeInvitation, OfficeMember, OfficeNotification, OfficePresence, OfficeSearchResult, OfficeWorkspace, OfficeWorkspaceInvitation } from './lib/officeTeamApi';
+import type { OfficeConversation, OfficeInvitation, OfficeMember, OfficeNotification, OfficePresence, OfficeSearchResult, OfficeWorkspace, OfficeWorkspaceInvitation, OfficeSuiteId } from './lib/officeTeamApi';
+import { industryCatalog } from './lib/industryWorkspaces';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeTeamConfigState, OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 
@@ -39,10 +40,12 @@ function OfficeConnectionGate({ status }: { status: OfficeConfigFailure }) {
 export default function OfficeTeamCollaboration({
   initialWorkspaceName,
   initialWorkspaceId,
+  initialSuiteId,
   onWorkspaceCreated,
 }: {
   initialWorkspaceName?: string;
   initialWorkspaceId?: string;
+  initialSuiteId?: OfficeSuiteId;
   onWorkspaceCreated?: (workspaceId: string, workspaceName: string) => void;
 } = {}) {
   const config = resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment);
@@ -76,6 +79,7 @@ export default function OfficeTeamCollaboration({
     setWorkspaceId(nextId);
   }, []);
   const [workspaceName, setWorkspaceName] = useState(initialWorkspaceName ?? '');
+  const [workspaceSuiteId, setWorkspaceSuiteId] = useState<OfficeSuiteId>(initialSuiteId ?? 'business');
   const [invitations, setInvitations] = useState<OfficeInvitation[]>([]);
   const [notifications, setNotifications] = useState<OfficeNotification[]>([]);
   const [members, setMembers] = useState<OfficeMember[]>([]);
@@ -360,7 +364,7 @@ export default function OfficeTeamCollaboration({
     const startingWorkspaceGeneration = workspaceGenerationRef.current;
     const startingConversationGeneration = conversationGenerationRef.current;
     void run(async (isCurrent) => {
-      const createdWorkspaceId = await officeTeamApi.createWorkspace(client, requestedName);
+      const createdWorkspaceId = await officeTeamApi.createWorkspaceWithSuite(client, requestedName, '', workspaceSuiteId);
       if (!isCurrent()) return;
       setWorkspaceName('');
       const next = await officeTeamApi.listWorkspaces(client);
@@ -571,7 +575,7 @@ export default function OfficeTeamCollaboration({
     {!user ? signInForm : <>
       <div className="office-collab-account"><span>Signed in to existing COCCE Auth · <strong>{user.email ?? user.id}</strong></span><small>Office’s session is local to this browser. Signing out here does not sign out other COCCE apps.</small><button className="button-tertiary office-signout" disabled={busy} onClick={() => { void signOutOfficeSession(); }}><LogOut size={14} /> Sign out of Office</button></div>
       {invitations.length > 0 && <div className="office-inbox"><h3><Bell size={15} /> Invitations for you</h3>{invitations.map((invitation) => { const inviterPresence = invitation.workspace_id === workspaceId ? visiblePresence.find((person) => person.user_id === invitation.inviter_id) : undefined; return <article className="office-invite-row" key={invitation.invitation_id}><div><strong>{invitation.workspace_name}</strong><OfficePersonIdentity name={invitation.inviter_name} avatarUrl={invitation.inviter_avatar_url} isVip={invitation.inviter_is_vip} vipExpiresAt={invitation.inviter_vip_expires_at} presenceStatus={inviterPresence?.status ?? invitation.inviter_presence_status} lastSeenAt={inviterPresence?.last_seen_at ?? invitation.inviter_last_seen_at} now={presenceNow} compact /><small>{invitation.role}</small></div><button className="button-primary" disabled={busy} onClick={() => respond(invitation, true)}>Accept</button><button className="button-secondary" disabled={busy} onClick={() => respond(invitation, false)}>Decline</button></article>; })}</div>}
-      {!initialWorkspaceId && <div className="office-create-space"><h3>{initialWorkspaceName ? 'Create an Office team for this industry office' : workspaces.length ? 'Create another Office space' : 'Create an Office space'}</h3><p>{initialWorkspaceName ? `This creates a server-backed team named for ${initialWorkspaceName}. Industry register items remain local and are not uploaded.` : workspaces.length ? 'Create a separate organisation or team workspace. You can switch between every workspace you own or have joined.' : 'This creates your first server-backed Office workspace in the selected COCCE project. It does not convert or upload the local planner above.'}</p><form onSubmit={createWorkspace}><input aria-label="Office space name" value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={80} placeholder="Office space name" required /><button className="button-primary" disabled={busy}><Plus size={15} /> {initialWorkspaceName ? 'Create team' : 'Create Office'}</button></form></div>}
+      {!initialWorkspaceId && <div className="office-create-space"><h3>{initialWorkspaceName ? 'Create an Office team for this industry office' : workspaces.length ? 'Create another Office space' : 'Create an Office space'}</h3><p>{initialWorkspaceName ? `This creates a server-backed team named for ${initialWorkspaceName}. Industry register items remain local and are not uploaded.` : workspaces.length ? 'Create a separate organisation or team workspace. You can switch between every workspace you own or have joined.' : 'This creates your first server-backed Office workspace in the selected COCCE project. It does not convert or upload the local planner above.'}</p><form onSubmit={createWorkspace}><input aria-label="Office space name" value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={80} placeholder="Office space name" required /><label className="office-create-suite-field">Office suite<select aria-label="Office suite" value={workspaceSuiteId} onChange={(event) => setWorkspaceSuiteId(event.target.value as OfficeSuiteId)} disabled={busy}>{industryCatalog.map((industry) => <option key={industry.id} value={industry.id}>{industry.label}</option>)}</select></label><button className="button-primary" disabled={busy}><Plus size={15} /> {initialWorkspaceName ? 'Create team' : 'Create Office'}</button></form></div>}
       {workspaces.length === 0 ? null : <>
         <div className="office-workspace-controls"><label className="office-workspace-select">Office space<select aria-label="Office space" value={workspaceId} onChange={(event) => { setWorkspaceScope(event.target.value); setConversationScope(''); setNotice(''); setMembers([]); setLoadedWorkspaceId(''); setWorkspaceInvitations([]); setWorkspaceAiEnabled(true); setPresence([]); setSearch(''); setSearchResults([]); setConversations([]); setGroupTitle(''); setGroupMemberIds([]); }}>{!workspaceId && <option value="" disabled>Select an available team</option>}{workspaces.map((item) => <option key={item.workspace_id} value={item.workspace_id}>{item.name} · {item.role}</option>)}</select></label><div className="office-workspace-ai-control"><span><strong>COCCE AI</strong><small>{!workspaceDataReady ? 'Checking workspace setting' : workspaceAiEnabled ? 'Enabled in this workspace' : 'Disabled in this workspace'}</small></span>{isAdmin && <label><input type="checkbox" checked={workspaceAiEnabled} disabled={busy || !workspaceDataReady} onChange={(event) => updateWorkspaceAi(event.target.checked)} /><span className="sr-only">Enable COCCE AI in this workspace</span></label>}</div></div>
         {activeWorkspace && <div className="office-collab-grid">
