@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import {
   ArrowLeft, ArrowRight, Building2, CalendarDays, Check,
@@ -79,14 +79,6 @@ export default function IndustrySuitesWorkspace({
   const [manufacturingPanel, setManufacturingPanel] = useState<'management' | 'tasks'>('management');
   const [healthAdminPanel, setHealthAdminPanel] = useState<'management' | 'tasks'>('management');
   const [hospitalityPanel, setHospitalityPanel] = useState<'management' | 'tasks'>('management');
-
-  useEffect(() => {
-    if (!activeWorkspace) return;
-    setSelectedOfficeId(activeWorkspace.workspaceId);
-    if (activeWorkspace.suiteId) setIndustryId(activeWorkspace.suiteId);
-    setCreateOpen(false);
-    setDataMode('shared');
-  }, [activeWorkspace?.workspaceId, activeWorkspace?.suiteId]);
 
   const serverOffice: IndustryOffice | null = activeWorkspace?.suiteId ? {
     id: activeWorkspace.workspaceId,
