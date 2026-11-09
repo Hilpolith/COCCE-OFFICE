@@ -23,6 +23,7 @@ import {
 } from './lib/officeAi';
 import type { OfficeAiAction, OfficeAiDocumentSummaryRequest, OfficeAiWorkflow } from './lib/officeAi';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
+import { officeTeamApi, type OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 
 type Selection = { from: number; to: number; text: string; isCellSelection: boolean };
@@ -66,6 +67,9 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [authStatus, setAuthStatus] = useState<AuthStatus>(() => client ? 'loading' : 'misconfigured');
   const [availability, setAvailability] = useState<Availability>('unknown');
+  const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
+  const [workspaceId, setWorkspaceId] = useState('*');
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [selection, setSelection] = useState<Selection>({ from: 0, to: 0, text: '', isCellSelection: false });
   const [customInstruction, setCustomInstruction] = useState('');
   const [draftPrompt, setDraftPrompt] = useState('');
@@ -103,15 +107,27 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       if (!accessToken) {
         setAuthStatus('signed-out');
         setAvailability('unknown');
+        setWorkspaces([]); setWorkspaceId(''); setWorkspaceLoading(false);
         return;
       }
       setAuthStatus('signed-in');
       setAvailability('checking');
       try {
-        const configured = await checkOfficeAiStatus(accessToken);
-        if (active) setAvailability(configured ? 'available' : 'not-configured');
+        const [configured, spaces] = await Promise.all([
+          checkOfficeAiStatus(accessToken),
+          officeTeamApi.listWorkspaces(client),
+        ]);
+        if (active) {
+          setAvailability(configured ? 'available' : 'not-configured');
+          setWorkspaces(spaces);
+          setWorkspaceId((current) => spaces.length === 0 ? '' : current === '*' || spaces.some((space) => space.workspace_id === current) ? current : '*');
+          setWorkspaceLoading(false);
+        }
       } catch {
-        if (active) setAvailability('unavailable');
+        if (active) {
+          setAvailability('unavailable');
+          setWorkspaceLoading(false);
+        }
       }
     };
 
@@ -133,6 +149,8 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       setAuthStatus(session ? 'signed-in' : 'signed-out');
       setAvailability(session ? 'checking' : 'unknown');
+      setWorkspaceLoading(Boolean(session));
+      if (!session) { setWorkspaces([]); setWorkspaceId(''); setWorkspaceLoading(false); }
       setResult('');
       setPreviewTarget(null);
       setDocumentSummaryConfirmation(null);
@@ -168,7 +186,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     const prompt = action === 'draft' ? draftPrompt : instruction || customInstruction;
     let payload;
     try {
-      payload = buildOfficeAiRequest(action, isDraft ? '' : current.text, prompt);
+      payload = buildOfficeAiRequest(action, isDraft ? '' : current.text, prompt, workspaceId);
     } catch (requestError) {
       setError(readableError(requestError));
       return;
@@ -402,7 +420,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       : availability === 'not-configured' ? 'AI not configured'
         : availability === 'checking' ? 'Checking service' : availability === 'unavailable' ? 'AI temporarily unavailable' : 'Service status unknown';
   const selectionAvailable = !selection.isCellSelection && selection.text.trim().length > 0;
-  const canRunAiActions = authStatus === 'signed-in' && (availability === 'available' || availability === 'unavailable');
+  const canRunAiActions = authStatus === 'signed-in' && Boolean(workspaceId) && !workspaceLoading && (availability === 'available' || availability === 'unavailable');
 
   return <section className="office-ai-panel" aria-label="AI writing studio">
     <button className="office-ai-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
@@ -413,6 +431,8 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     {expanded && <div className="office-ai-body">
       <p className="office-ai-privacy"><ShieldCheck size={16} /><span>Nothing is uploaded automatically. Selection edits send only the text you select (up to {OFFICE_AI_MAX_SELECTION_CHARS.toLocaleString()} characters), and new drafts send only your typed prompt. A full-document summary sends the document's plain text only after the separate confirmation below. No file, title, or document metadata is sent.</span></p>
       <p className="office-ai-help">User-triggered text is sent through OpenRouter to its fixed free Google AI Studio model. The current provider policy lists 55-day prompt retention and no training. No paid model or alternate provider fallback is used; send only text you are permitted to share.</p>
+      <label className="office-ai-field office-ai-workspace-scope"><span className="office-ai-label">AI workspace scope</span><select value={workspaceId} disabled={workspaceLoading || workspaces.length === 0} onChange={(event) => { setWorkspaceId(event.target.value); setResult(''); setPreviewTarget(null); setError(''); }}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map((space) => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select><span className="office-ai-help">The server checks membership and the owner/admin AI switch for every request. Disabled workspaces are excluded.</span></label>
+      {authStatus === 'signed-in' && !workspaceLoading && workspaces.length === 0 && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Create or join an Office Team workspace before using the writing assistant. No document text has been sent.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Open Team</button></div>}
       {selection.isCellSelection && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Table cell ranges are for local formatting, not excerpt selection. Select ordinary text for excerpt AI actions; prompt-only drafts remain separate, and full-document summaries still require their separate confirmation.</span></div>}
 
       {authStatus === 'misconfigured' && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Cloud AI uses the existing COCCE Auth connection. This deployment is not configured for that connection.</span></div>}
