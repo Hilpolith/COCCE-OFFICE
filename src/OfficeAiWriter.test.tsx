@@ -162,7 +162,7 @@ describe('Docs Writing assistant', () => {
     fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
 
-    fireEvent.change(screen.getByPlaceholderText(/Describe what you want drafted/), {
+    fireEvent.change(screen.getByPlaceholderText(/Describe the document and provide the facts to use/), {
       target: { value: 'Draft a memo from only the facts in this brief.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Draft preview' }));
@@ -184,7 +184,7 @@ describe('Docs Writing assistant', () => {
       render(<OfficeAiWriter editor={editor as unknown as Editor} documentTitle="Synthetic table report" onGoToTeam={vi.fn()} />);
       fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
       await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
-      expect(screen.getByText(/Table cell ranges are for local formatting/)).toBeTruthy();
+      expect(screen.getByText(/Select ordinary text to use excerpt actions/)).toBeTruthy();
       expect((screen.getByLabelText('Selected excerpt') as HTMLTextAreaElement).value).toBe('');
       const summarizeSelection = screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement;
       expect(summarizeSelection.disabled).toBe(true);
@@ -204,7 +204,8 @@ describe('Docs Writing assistant', () => {
       expect(editor.getHTML()).toBe(originalHtml);
 
       fireEvent.click(screen.getByRole('button', { name: 'Discard AI preview' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+      fireEvent.click(screen.getByText('Summarize full document'));
+      fireEvent.click(screen.getByRole('button', { name: 'Review and summarize' }));
       expect(screen.getByRole('alertdialog', { name: 'Confirm full-document summary' })).toBeTruthy();
       expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
       fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
@@ -274,7 +275,8 @@ describe('Docs Writing assistant', () => {
     fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    fireEvent.click(screen.getByText('Summarize full document'));
+      fireEvent.click(screen.getByRole('button', { name: 'Review and summarize' }));
     const confirmation = screen.getByRole('alertdialog', { name: 'Confirm full-document summary' });
     expect(confirmation.textContent).toContain('Synthetic local report');
     expect(confirmation.textContent).toContain('complete plain-text content');
@@ -290,7 +292,8 @@ describe('Docs Writing assistant', () => {
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
     expect(chain.insertContentAt).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    fireEvent.click(screen.getByText('Summarize full document'));
+      fireEvent.click(screen.getByRole('button', { name: 'Review and summarize' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
     expect(await screen.findByText('A preview edit.')).toBeTruthy();
     const postCall = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
@@ -308,7 +311,8 @@ describe('Docs Writing assistant', () => {
     render(<OfficeAiWriter editor={editor} documentTitle="Synthetic local report" onGoToTeam={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    fireEvent.click(screen.getByText('Summarize full document'));
+      fireEvent.click(screen.getByRole('button', { name: 'Review and summarize' }));
     expect(screen.getByRole('alertdialog')).toBeTruthy();
 
     doc.eq.mockReturnValue(false);
@@ -333,7 +337,8 @@ describe('Docs Writing assistant', () => {
     render(<OfficeAiWriter editor={editor} documentTitle="Synthetic local report" onGoToTeam={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    fireEvent.click(screen.getByText('Summarize full document'));
+      fireEvent.click(screen.getByRole('button', { name: 'Review and summarize' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
     await waitFor(() => expect(statusChecks).toBe(2));
 
@@ -349,7 +354,8 @@ describe('Docs Writing assistant', () => {
     const view = render(<OfficeAiWriter editor={editor} documentTitle="Original title" onGoToTeam={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    fireEvent.click(screen.getByText('Summarize full document'));
+      fireEvent.click(screen.getByRole('button', { name: 'Review and summarize' }));
     view.rerender(<OfficeAiWriter editor={editor} documentTitle="Renamed document" onGoToTeam={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
     expect((await screen.findByRole('alert')).textContent).toContain('Nothing was sent');
@@ -362,7 +368,8 @@ describe('Docs Writing assistant', () => {
     render(<OfficeAiWriter editor={editor} documentTitle="Synthetic oversized report" onGoToTeam={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Summarize full document' }));
+    fireEvent.click(screen.getByText('Summarize full document'));
+      fireEvent.click(screen.getByRole('button', { name: 'Review and summarize' }));
 
     expect((await screen.findByRole('alert')).textContent).toContain('no text has been sent');
     expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -391,7 +398,7 @@ describe('Docs Writing assistant', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
     expect(await screen.findByText(/fixed OpenRouter free model is temporarily unavailable/i)).toBeTruthy();
-    expect(screen.getByText(/No paid model or alternate provider will be used/i)).toBeTruthy();
+    expect(screen.getByText(/No paid model or alternate-provider fallback will be used/i)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement).disabled).toBe(false);
     expect(chain.insertContentAt).not.toHaveBeenCalled();
   });
