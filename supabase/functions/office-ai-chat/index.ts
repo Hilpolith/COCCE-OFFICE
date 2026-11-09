@@ -145,41 +145,85 @@ Deno.serve(async (req) => {
   }
   const history: Array<{ role: "user"; content: string }> = [];
   for (const file of driveFiles) {
-    history.push({ role: "user", content: "[Untrusted Drive file context — workspace: " + file.workspaceName + "; file: " + file.displayName + "]\n" + file.text });
+    history.push({
+      role: "user",
+      content: "[Untrusted Drive file context — workspace: " + file.workspaceName + "; file: " + file.displayName + "]\n" + file.text,
+    });
   }
   let contextConversationCount = 0;
   let contextWorkspaceCount = 0;
-  if (body.includeConversations !== false) {
-    for (const workspace of enabledWorkspaces.slice(0, 20)) {
-      const { data: conversations, error: conversationError } = await client.rpc("office_list_conversations", { p_workspace_id: workspace.workspace_id });
-      if (conversationError || !Array.isArray(conversations)) continue;
-      let workspaceAdded = false;
-      // Every workspace and conversation list is re-authorised by membership-aware RPCs.
-      // Two conversations per workspace and two messages per conversation bound the prompt.
-      for (const conversation of conversations.slice(0, 2)) {
-        const conversationId = String(conversation?.conversation_id ?? "");
-        if (!conversationId) continue;
-        const { data: messages, error: messageError } = await client.rpc("office_list_messages", {
-          p_conversation_id: conversationId,
-          p_limit: 2,
+  let contextMessages = 0;
+  if (body.includeConversations !== false && history.length < MAX_HISTORY) {
+    const searchResults = await Promise.all(enabledWorkspaces.slice(0, 20).map(async (workspace) => {
+      const { data, error } = await client.rpc("office_search_ai_messages", {
+        p_workspace_id: workspace.workspace_id,
+        p_query: body.prompt.trim(),
+        p_limit: 8,
+      });
+      return {
+        workspace,
+        messages: !error && Array.isArray(data) ? data as Array<Record<string, unknown>> : [],
+      };
+    }));
+    let contextRows = searchResults;
+    if (!searchResults.some((entry) => entry.messages.length > 0)) {
+      // Search can legitimately return no matches for broad prompts. Fall back to
+      // recent, membership-checked rich messages, excluding deleted messages.
+      contextRows = await Promise.all(enabledWorkspaces.slice(0, 20).map(async (workspace) => {
+        const { data: conversations, error: conversationError } = await client.rpc("office_list_conversations", {
+          p_workspace_id: workspace.workspace_id,
         });
-        if (messageError || !Array.isArray(messages)) continue;
-        const excerpt = messages.slice().reverse().map((message: Record<string, unknown>) => {
-          const author = String(message.author_name ?? "Team member").slice(0, 80);
-          const bodyText = String(message.body ?? "").slice(0, 600);
-          return bodyText.trim() ? `${author}: ${bodyText}` : "";
-        }).filter(Boolean);
-        if (excerpt.length) {
-          workspaceAdded = true;
-          contextConversationCount += 1;
-          history.push({
-            role: "user",
-            content: `[Untrusted conversation context — workspace: ${String(workspace.name ?? "Office workspace").slice(0, 80)}; conversation: ${String(conversation.title ?? conversation.kind ?? "Team conversation").slice(0, 80)}]\n${excerpt.join("\n")}`,
-          });
+        const messages: Array<Record<string, unknown>> = [];
+        if (!conversationError && Array.isArray(conversations)) {
+          for (const conversation of conversations.slice(0, 2)) {
+            const conversationId = String(conversation?.conversation_id ?? "");
+            if (!conversationId) continue;
+            const { data: recent, error: messageError } = await client.rpc("office_list_rich_messages", {
+              p_conversation_id: conversationId,
+              p_limit: 3,
+            });
+            if (messageError || !Array.isArray(recent)) continue;
+            for (const message of recent.slice().reverse()) {
+              if (message.deleted_at !== null && message.deleted_at !== undefined) continue;
+              messages.push({
+                ...message,
+                conversation_id: conversationId,
+                conversation_title: conversation.title ?? conversation.kind ?? "Team conversation",
+                conversation_kind: conversation.kind ?? "conversation",
+              });
+            }
+          }
         }
-      }
-      if (workspaceAdded) contextWorkspaceCount += 1;
+        return { workspace, messages };
+      }));
     }
+    const seenWorkspaces = new Set<string>();
+    const seenConversations = new Set<string>();
+    for (let depth = 0; depth < 8 && history.length < MAX_HISTORY; depth += 1) {
+      let addedAtDepth = false;
+      for (const entry of contextRows) {
+        if (history.length >= MAX_HISTORY) break;
+        const message = entry.messages[depth];
+        if (!message) continue;
+        const workspaceId = String(entry.workspace.workspace_id ?? "");
+        const conversationId = String(message.conversation_id ?? "");
+        const bodyText = String(message.body ?? "").slice(0, 1200);
+        if (!workspaceId || !conversationId || !bodyText.trim()) continue;
+        const title = String(message.conversation_title ?? message.conversation_kind ?? "Team conversation").slice(0, 100);
+        const author = String(message.author_name ?? "Team member").slice(0, 80);
+        history.push({
+          role: "user",
+          content: "[Untrusted Teams context — workspace: " + String(entry.workspace.name ?? "Office workspace").slice(0, 80) + "; conversation: " + title + "]\n" + author + ": " + bodyText,
+        });
+        seenWorkspaces.add(workspaceId);
+        seenConversations.add(workspaceId + ":" + conversationId);
+        contextMessages += 1;
+        addedAtDepth = true;
+      }
+      if (!addedAtDepth) break;
+    }
+    contextWorkspaceCount = seenWorkspaces.size;
+    contextConversationCount = seenConversations.size;
   }
   const system = [
     "You are COCCE Office AI, a concise and capable work assistant.",
@@ -221,7 +265,7 @@ Deno.serve(async (req) => {
     if (result?.model !== FREE_MODEL || positiveCost || typeof answer !== "string" || !answer.trim()) {
       return json(origin, 503, { error: "FREE_MODEL_NOT_VERIFIED", message: "A zero-cost response from the pinned free model could not be verified." });
     }
-    return json(origin, 200, { text: answer.trim(), model: FREE_MODEL, contextMessages: history.length, contextConversations: contextConversationCount, contextWorkspaces: contextWorkspaceCount, contextFiles: driveFiles.length });
+    return json(origin, 200, { text: answer.trim(), model: FREE_MODEL, contextMessages, contextConversations: contextConversationCount, contextWorkspaces: contextWorkspaceCount, contextFiles: driveFiles.length });
   } catch {
     return json(origin, 503, { error: "FREE_MODEL_UNAVAILABLE", message: "The free model could not be reached. No paid fallback is enabled." });
   }
