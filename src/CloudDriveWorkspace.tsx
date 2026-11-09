@@ -45,13 +45,13 @@ function saveBlob(blob: Blob, name: string) {
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-export default function CloudDriveWorkspace({ query }: { query: string }) {
+export default function CloudDriveWorkspace({ query, initialWorkspaceId }: { query: string; initialWorkspaceId?: string }) {
   const confirm = useFrostedConfirm();
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const [userId, setUserId] = useState('');
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
-  const [workspaceId, setWorkspaceId] = useState('');
+  const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [files, setFiles] = useState<CloudFile[]>([]);
   const [usage, setUsage] = useState<CloudUsage | null>(null);
   const [trash, setTrash] = useState(false);
@@ -77,7 +77,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
     if (!client) return;
     const rows = await officeTeamApi.listWorkspaces(client);
     setWorkspaces(rows);
-    setWorkspaceId((current) => rows.some((row) => row.workspace_id === current) ? current : rows[0]?.workspace_id ?? '');
+    setWorkspaceId((current) => initialWorkspaceId && rows.some((row) => row.workspace_id === initialWorkspaceId) ? initialWorkspaceId : rows.some((row) => row.workspace_id === current) ? current : rows[0]?.workspace_id ?? '');
   }, [client]);
 
   useEffect(() => {
@@ -104,6 +104,42 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
     }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; subscription.unsubscribe(); };
   }, [client, schemaReady, loadWorkspaces]);
+
+  useEffect(() => {
+    if (!initialWorkspaceId || !workspaces.some((row) => row.workspace_id === initialWorkspaceId) || workspaceId === initialWorkspaceId) return;
+    sequence.current += 1;
+    setWorkspaceId(initialWorkspaceId);
+    setFiles([]);
+    setUsage(null);
+    setPreview(null);
+  }, [initialWorkspaceId, workspaces, workspaceId]);
+
+  useEffect(() => {
+    const handleWorkspaceChange = (event: Event) => {
+      const nextId = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId ?? '';
+      if (!nextId || !workspaces.some((row) => row.workspace_id === nextId) || nextId === workspaceId) return;
+      sequence.current += 1;
+      setWorkspaceId(nextId);
+      setFiles([]);
+      setUsage(null);
+      setPreview(null);
+      setNotice('');
+      setError('');
+    };
+    const handleWorkspaceClear = () => {
+      sequence.current += 1;
+      setWorkspaceId('');
+      setFiles([]);
+      setUsage(null);
+      setPreview(null);
+    };
+    window.addEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
+    window.addEventListener('cocce-office:workspace-cleared', handleWorkspaceClear);
+    return () => {
+      window.removeEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
+      window.removeEventListener('cocce-office:workspace-cleared', handleWorkspaceClear);
+    };
+  }, [workspaces, workspaceId]);
 
   const refresh = useCallback(async () => {
     if (!api || !workspaceId) { setFiles([]); setUsage(null); setHasMore(false); return; }
