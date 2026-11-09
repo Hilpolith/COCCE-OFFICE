@@ -116,7 +116,7 @@ describe('local Docs recovery integration', () => {
     vi.stubEnv('VITE_COCCE_SUPABASE_ANON_KEY', '');
     vi.stubEnv('VITE_OFFICE_TEAM_SCHEMA_READY', 'false');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Team & collaboration' }));
+    window.dispatchEvent(new CustomEvent('cocce-office:navigate', { detail: { page: 'team' } }));
     expect(await screen.findByRole('heading', { name: 'Organize the work' })).toBeTruthy();
     expect(screen.getByText(/COCCE Auth is not configured/i)).toBeTruthy();
     expect(screen.getByText(/local planning only/i)).toBeTruthy();
