@@ -142,7 +142,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setBusy(false);
     setDriveFilesLoading(false);
     setWorkspaceId(nextId);
-    setAnswer('');
+    setTurns([]);
     setError('');
     setDriveFiles([]);
     setSelectedFileIds([]);
@@ -162,7 +162,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setBusy(false);
       setDriveFilesLoading(false);
       setWorkspaceId(nextId);
-      setAnswer('');
+      setTurns([]);
       setError('');
       setDriveFiles([]);
       setSelectedFileIds([]);
@@ -182,7 +182,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setBusy(false);
       setDriveFilesLoading(false);
       setWorkspaceId('');
-      setAnswer('');
+      setTurns([]);
       setPrompt('');
       setError('');
       setDriveFiles([]);
@@ -207,13 +207,13 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     driveLoadGeneration.current += 1;
     setBusy(false);
     setWorkspaceId(initialWorkspaceId);
-    setAnswer('');
+    setTurns([]);
     setDriveFiles([]);
     setSelectedFileIds([]);
     setDriveFileOffsets({});
     setDriveFileHasMore(false);
     setDriveFilesOpen(false);
-    setAnswer('');
+    setTurns([]);
     setShowDriveConsent(false);
   }, [initialWorkspaceId, workspaces]);
 
@@ -330,7 +330,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       if (requestGeneration !== aiRequestGeneration.current) return;
       if (invokeError) throw new Error(invokeError.message || 'COCCE AI request failed.');
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
-      setTurns((current) => [...current, { role: 'user', content: question }, { role: 'assistant', content: data.text }].slice(-20));
+      setTurns((current) => [...current, { role: 'user' as const, content: question }, { role: 'assistant' as const, content: data.text }].slice(-20));
       setPrompt('');
     } catch (reason) {
       if (requestGeneration === aiRequestGeneration.current) setError(reason instanceof Error ? reason.message : 'COCCE AI could not complete the request.');
