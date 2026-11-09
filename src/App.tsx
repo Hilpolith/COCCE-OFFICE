@@ -90,6 +90,7 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [industryFocus, setIndustryFocus] = useState<IndustryId | null>(null);
   const [industryTeamSetup, setIndustryTeamSetup] = useState<IndustryTeamSetup | null>(null);
+  const [aiContext, setAiContext] = useState<{ workspaceId: string; prompt: string } | null>(null);
   const [query, setQuery] = useState('');
   const [feedback, setFeedback] = useState(browserStorage === unavailableBrowserStorage ? 'Could not save or read browser storage. Existing local data has not been changed; allow browser storage before editing.' : '');
   const [clockLabel] = useState(() => {
@@ -99,8 +100,12 @@ function App() {
 
   useEffect(() => {
     const navigateOffice = (event: Event) => {
-      const detail = (event as CustomEvent<{ page?: PageId }>).detail;
+      const detail = (event as CustomEvent<{ page?: PageId; workspaceId?: string; prompt?: string }>).detail;
       if (detail?.page === 'team') { setPage('team'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery(''); }
+      if (detail?.page === 'ai') {
+        setAiContext(detail.workspaceId ? { workspaceId: detail.workspaceId, prompt: detail.prompt ?? '' } : null);
+        setPage('ai'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery('');
+      }
     };
     const workspaceCreated = () => { setPage('team'); setMobileMenuOpen(false); setSelectedDocumentId(null); setQuery(''); };
     window.addEventListener('cocce-office:navigate', navigateOffice);
@@ -406,7 +411,7 @@ function App() {
           {page === 'industry' && <IndustrySuitesWorkspace key={industryFocus ?? 'all'} preferredIndustryId={industryFocus} onCreateTeam={openIndustryTeam} />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
           {page === 'chats' && <ChatsWorkspace />}
-          {page === 'ai' && <OfficeAiWorkspace />}
+          {page === 'ai' && <OfficeAiWorkspace initialWorkspaceId={aiContext?.workspaceId} initialPrompt={aiContext?.prompt} />}
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
