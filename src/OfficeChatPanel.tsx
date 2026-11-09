@@ -15,6 +15,7 @@ type Props = {
   workspaceId: string;
   conversationId: string;
   disabled?: boolean;
+  canModerate?: boolean;
 };
 
 const MAX_CHAT_FILE_BYTES = 25 * 1024 * 1024;
@@ -30,7 +31,7 @@ function attachmentMessageType(items: OfficeChatAttachment[]): 'text' | 'image' 
   return 'document';
 }
 
-export default function OfficeChatPanel({ client, user, publicKey, workspaceId, conversationId, disabled = false }: Props) {
+export default function OfficeChatPanel({ client, user, publicKey, workspaceId, conversationId, disabled = false, canModerate = false }: Props) {
   const cloud = useMemo(() => createOfficeCloudApi(client, publicKey, user.id), [client, publicKey, user.id]);
   const [messages, setMessages] = useState<OfficeRichMessage[]>([]);
   const [reads, setReads] = useState<OfficeConversationRead[]>([]);
@@ -273,7 +274,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
             {editing?.message_id === message.message_id ? <div className="office-chat-edit"><textarea value={editBody} onChange={(event) => setEditBody(event.target.value)} maxLength={4000} /><button type="button" onClick={() => void saveEdit()}>Save</button><button type="button" onClick={() => setEditing(null)}>Cancel</button></div> : <div className="office-chat-message-actions">
               <button type="button" onClick={() => setReply(message)}><Reply size={13} /> Reply</button>
               {own && <button type="button" onClick={() => { setEditing(message); setEditBody(message.body); }} disabled={message.attachments.length > 0}><Pencil size={13} /> Edit</button>}
-              {(own) && <button type="button" onClick={() => void removeMessage(message)}><Trash2 size={13} /> Delete</button>}
+              {(own || canModerate) && <button type="button" onClick={() => void removeMessage(message)}><Trash2 size={13} /> Delete</button>}
             </div>}
           </>}
           {own && !message.deleted_at && <span className="office-chat-seen"><CheckCheck size={12} /> {seenCount ? 'Seen by ' + seenCount : 'Sent'}</span>}
