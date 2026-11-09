@@ -80,8 +80,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe('Cloud Drive workspace', () => {
+  const chooseWorkspace = async () => {
+    const selector = await screen.findByRole('combobox', { name: 'Office workspace' });
+    fireEvent.change(selector, { target: { value: 'workspace-1' } });
+    await waitFor(() => expect((selector as HTMLSelectElement).value).toBe('workspace-1'));
+  };
   it('lists membership-scoped cloud files and previews downloaded text', async () => {
     render(<CloudDriveWorkspace query="" />);
+    await chooseWorkspace();
     expect(await screen.findByText('brief.txt')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^TXT brief/ }));
     expect(await screen.findByText('hello')).toBeTruthy();
@@ -92,6 +98,7 @@ describe('Cloud Drive workspace', () => {
     const docxFile = { ...cloudFile, displayName: 'brief.docx' };
     mocks.cloudApi.list.mockResolvedValue([docxFile]);
     render(<CloudDriveWorkspace query="" />);
+    await chooseWorkspace();
     fireEvent.click(await screen.findByRole('button', { name: /^DOCX brief\.docx/ }));
     await screen.findByTitle('brief.docx');
     expect(mocks.importDocxFile).toHaveBeenCalledWith(expect.any(File));
@@ -112,6 +119,7 @@ describe('Cloud Drive workspace', () => {
     const secondPage = [{ ...cloudFile, fileId: 'file-51', displayName: 'page-51.txt' }];
     mocks.cloudApi.list.mockResolvedValueOnce(firstPage).mockResolvedValueOnce(secondPage);
     render(<CloudDriveWorkspace query="" />);
+    await chooseWorkspace();
     expect(await screen.findByText('page-1.txt')).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Load more files' }));
     expect(await screen.findByText('page-51.txt')).toBeTruthy();
@@ -121,6 +129,7 @@ describe('Cloud Drive workspace', () => {
 
   it('requires explicit confirmation, then uploads, finalizes and refreshes a cloud copy', async () => {
     render(<CloudDriveWorkspace query="" />);
+    await chooseWorkspace();
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();
     await waitFor(() => expect(mocks.cloudApi.list).toHaveBeenCalledWith('workspace-1', false));
