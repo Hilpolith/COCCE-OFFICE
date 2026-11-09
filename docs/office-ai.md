@@ -102,3 +102,7 @@ The dedicated office-ai-chat Edge Function was redeployed as ACTIVE version 17 w
 Office Chats already supports Bunny-backed attachment upload/download, voice recording, message editing, replies, deletion, read markers, Supabase Realtime change subscriptions and a 15-second polling fallback. The follow-up adds safe inline image/video/audio previews; audio previews attempt to decode a local waveform, and temporary object URLs are revoked when previews close, conversations change, or the panel unmounts. These previews are client-side and do not move file storage into Supabase.
 
 The new regression checks are included in the repository's pnpm test command. The full CI run for the current main head is still pending; do not treat these changes as fully validated until the run completes successfully. The Vercel production alias remains unreleased until a READY production deployment built from the exact latest main commit is confirmed.
+
+## Live backend verification — 2026-11-09
+
+The existing `office-ai-chat` Edge Function was redeployed after the workspace-aware Teams search change. Current live status: ACTIVE version 18 with JWT verification enabled. The deployed source includes permission-checked `office_search_ai_messages` retrieval and the explicit-consent selected-Drive context flow. The supporting `20261109104406_office_ai_message_search` migration is already applied; it was not re-applied during this deployment. The function remains pinned to `google/gemma-4-31b-it:free` with no paid or alternate-provider fallback.
