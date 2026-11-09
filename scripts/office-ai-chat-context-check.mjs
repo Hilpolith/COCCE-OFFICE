@@ -19,6 +19,17 @@ test('COCCE AI uses authenticated relevance search and excludes deleted fallback
   assert.match(edge, /office_get_workspace_ai_enabled/);
 });
 
+test('COCCE AI supports bounded multi-turn chat without persisting private chat text', () => {
+  assert.match(edge, /MAX_CHAT_HISTORY = 12/);
+  assert.match(edge, /MAX_CHAT_TURN_CHARS = 3_000/);
+  assert.match(edge, /function isValidChatHistory/);
+  assert.match(edge, /body\.history !== undefined && !isValidChatHistory\(body\.history\)/);
+  assert.match(edge, /\.\.\.chatHistory/);
+  assert.match(aiUi, /turns\.slice\(-12\)/);
+  assert.match(aiUi, /New chat/);
+  assert.match(aiTest, /multi-turn chat thread/);
+});
+
 test('selected Drive file context remains bounded and pinned to Bunny', () => {
   assert.match(edge, /loadSelectedDriveFiles/);
   assert.match(drive, /MAX_DRIVE_FILES = 3/);
