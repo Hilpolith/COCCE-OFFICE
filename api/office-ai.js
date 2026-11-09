@@ -168,7 +168,7 @@ function validateBody(body) {
     if (!GOVERNMENT_REVIEW_ACTIONS.has(body.reviewAction)) return { error: 'GOVERNMENT_ACTION_INVALID' };
     if (body.nonSensitiveConfirmed !== true) return { error: 'GOVERNMENT_CONFIRMATION_REQUIRED' };
     if (OBVIOUS_PII_PATTERN.test(body.selectedText)) return { error: 'GOVERNMENT_PII_DETECTED' };
-    return { action: body.reviewAction, prompt: ACTION_INSTRUCTIONS[body.reviewAction], selectedText: body.selectedText, government: { workspaceId: body.workspaceId, correspondenceId: body.correspondenceId } };
+    return { action: body.reviewAction, workspaceId: body.workspaceId, prompt: ACTION_INSTRUCTIONS[body.reviewAction], selectedText: body.selectedText, government: { workspaceId: body.workspaceId, correspondenceId: body.correspondenceId } };
   }
   const knownAction = action === 'draft' || action === 'custom' || Object.hasOwn(ACTION_INSTRUCTIONS, action);
   if (!knownAction) return { error: 'UNSUPPORTED_ACTION' };
