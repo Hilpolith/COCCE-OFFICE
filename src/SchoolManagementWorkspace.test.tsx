@@ -67,6 +67,35 @@ describe('School Management workspace', () => {
     expect(screen.queryByText('2020-01-01')).toBeNull();
   });
 
+  it('loads subsequent student register pages from the server without replacing the first page', async () => {
+    const firstPage = Array.from({ length: 200 }, (_, index) => ({
+      student_id: `student-${index + 1}`, person_id: `person-${index + 1}`,
+      student_code: `ST-${String(index + 1).padStart(3, '0')}`, status: 'active',
+      class_id: null, class_label: null, term_id: null, academic_year: null, term_label: null,
+    }));
+    const nextPage = [{
+      student_id: 'student-201', person_id: 'person-201', student_code: 'ST-201', status: 'active',
+      class_id: null, class_label: null, term_id: null, academic_year: null, term_label: null,
+    }];
+    mocks.read.mockImplementation(async (_client, _workspaceId, resource, _filter, _limit, offset) => {
+      if (resource === 'bootstrap') return { role: 'school_admin', terms: [], classes: [], subjects: [] };
+      if (resource === 'key_config') return { configured: false };
+      if (resource === 'students') return offset === 200 ? nextPage : firstPage;
+      return [];
+    });
+
+    renderSchool();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Students' }));
+    expect(await screen.findByText('ST-001')).toBeTruthy();
+    const loadMore = await screen.findByRole('button', { name: 'Load next 200 learners' });
+    fireEvent.click(loadMore);
+
+    expect(await screen.findByText('ST-201')).toBeTruthy();
+    expect(screen.getByText('ST-001')).toBeTruthy();
+    expect(mocks.read).toHaveBeenCalledWith(expect.anything(), workspaceId, 'students', {}, 200, 200);
+    expect(screen.queryByRole('button', { name: 'Load next 200 learners' })).toBeNull();
+  });
+
   it('labels official services as manual and unconnected, and quick actions use real tabs', async () => {
     mocks.read.mockImplementation(async (_client, _workspaceId, resource) => {
       if (resource === 'bootstrap') return { role: 'school_admin', terms: [], classes: [], subjects: [] };
