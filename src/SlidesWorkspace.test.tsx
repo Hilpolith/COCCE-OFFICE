@@ -466,11 +466,13 @@ describe('Slides workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'All presentations' }));
     const create = URL.createObjectURL as unknown as ReturnType<typeof vi.fn>;
     const revoke = URL.revokeObjectURL as unknown as ReturnType<typeof vi.fn>;
-    const createCount = create.mock.calls.length;
-    const revokeCount = revoke.mock.calls.length;
+    const createCount = create.mock.results.length;
     releaseRead();
-    await waitFor(() => expect(create.mock.calls.length).toBeGreaterThan(createCount));
-    await waitFor(() => expect(revoke.mock.calls.length - revokeCount).toBe(create.mock.calls.length - createCount));
+    await waitFor(() => {
+      const delayedUrls = create.mock.results.slice(createCount).map((result) => result.value as string);
+      expect(delayedUrls.length).toBeGreaterThan(0);
+      expect(delayedUrls.every((url) => revoke.mock.calls.filter(([revokedUrl]) => revokedUrl === url).length === 1)).toBe(true);
+    });
     expect(document.querySelector('.slides-workbench .slide-local-image')).toBeNull();
   });
 
