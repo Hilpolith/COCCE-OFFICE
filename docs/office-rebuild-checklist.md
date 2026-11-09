@@ -113,6 +113,7 @@ Distinct specialist components and tab structures are present for government, sc
 - [x] Keep all application code changes on `main` in `Hilpolith/COCCE-OFFICE`.
 - [x] Verify `office-ai-chat` is ACTIVE version 18 with JWT verification enabled.
 - [x] Verify `office-cloud-files` is ACTIVE version 8 with JWT verification enabled.
+- [x] Audit all 257 public `office_*` tables: RLS is enabled on all 257. The 193 RLS tables without policies have no direct anon or authenticated SELECT/INSERT/UPDATE/DELETE grants (RPC-only access); continue reviewing SECURITY DEFINER membership checks as modules evolve.
 - [x] Verify the workspace suite table has RLS enabled and no direct anon/authenticated SELECT grant.
 - [x] Verify suite and AI search RPCs are SECURITY DEFINER with an empty search_path, executable by authenticated users and not anon.
 - [ ] Wait for a successful full GitHub Actions run covering unit, integration, sector acceptance and production build for the current main code.
