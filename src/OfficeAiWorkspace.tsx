@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowUp, Bot, CheckCircle2, LoaderCircle, MessageCircle, Sparkles } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
+import { createOfficeCloudApi } from './lib/officeCloudFiles';
+import type { CloudFile } from './lib/officeCloudFiles';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
@@ -10,6 +12,12 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
+  const [userId, setUserId] = useState('');
+  const [driveFiles, setDriveFiles] = useState<CloudFile[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [driveFilesOpen, setDriveFilesOpen] = useState(false);
+  const [driveFilesLoading, setDriveFilesLoading] = useState(false);
+  const [driveFilesError, setDriveFilesError] = useState('');
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
@@ -31,10 +39,13 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         if (!active) return;
         if (sessionError || !sessionData.session) {
           setWorkspaces([]);
+          setUserId('');
+          setDriveFiles([]); setSelectedFileIds([]);
           setWorkspaceId('');
           setStatus('signed-out');
           return;
         }
+        setUserId(sessionData.session.user.id);
         const { data: availability, error: availabilityError } = await client.functions.invoke('office-ai-chat', { body: { action: 'status' } });
         if (!active) return;
         if (availabilityError || availability?.configured !== true) {
@@ -66,6 +77,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         setWorkspaces([]);
+        setUserId('');
+        setDriveFiles([]); setSelectedFileIds([]); setDriveFilesOpen(false);
         setWorkspaceId('');
         setAnswer('');
         setStatus('signed-out');
@@ -83,13 +96,48 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setError('');
   }, [initialPrompt]);
 
-  const changeWorkspace = async (nextId: string) => {
+  const changeWorkspace = (nextId: string) => {
     setWorkspaceId(nextId);
     setAnswer('');
     setError('');
-    if (!client) return;
-    // Workspace selection is validated again by the Edge Function on every request.
-    // No conversation ID is trusted or supplied by the browser. 
+    setDriveFiles([]);
+    setSelectedFileIds([]);
+    setDriveFilesError('');
+    setDriveFilesOpen(false);
+    // Workspace selection and every selected file are revalidated by the Edge Function.
+  };
+
+  const supportedDriveFile = (file: CloudFile) => /\\.(txt|md|csv|tsv|json|xml|yaml|yml|log)$/i.test(file.displayName);
+
+  const openDriveFiles = async () => {
+    if (driveFilesOpen) { setDriveFilesOpen(false); return; }
+    setDriveFilesOpen(true);
+    if (!client || !userId || !config.anonKey || driveFilesLoading) return;
+    setDriveFilesLoading(true);
+    setDriveFilesError('');
+    try {
+      const api = createOfficeCloudApi(client, config.anonKey, userId);
+      const scope = workspaceId === '*' ? workspaces.slice(0, 20) : workspaces.filter((space) => space.workspace_id === workspaceId);
+      const results = await Promise.all(scope.map(async (space) => {
+        try { return (await api.list(space.workspace_id, false)).slice(0, workspaceId === '*' ? 5 : 50); }
+        catch { return []; }
+      }));
+      const files = results.flat().filter(supportedDriveFile).slice(0, 80);
+      setDriveFiles(files);
+      if (!files.length) setDriveFilesError('No supported text files were found in this workspace scope. Only .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files can be attached.');
+    } catch (reason) {
+      setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
+    } finally {
+      setDriveFilesLoading(false);
+    }
+  };
+
+  const toggleDriveFile = (fileId: string, checked: boolean) => {
+    setSelectedFileIds((current) => {
+      if (!checked) return current.filter((id) => id !== fileId);
+      if (current.includes(fileId) || current.length >= 3) return current;
+      return [...current, fileId];
+    });
   };
 
   const ask = async () => {
@@ -99,7 +147,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setAnswer('');
     try {
       const { data, error: invokeError } = await client.functions.invoke('office-ai-chat', {
-        body: { action: 'chat', workspaceId, prompt: prompt.trim(), includeConversations: includeWorkspaceContext },
+        body: { action: 'chat', workspaceId, prompt: prompt.trim(), includeConversations: includeWorkspaceContext, ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}) },
       });
       if (invokeError) throw new Error(invokeError.message || 'COCCE AI request failed.');
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
@@ -126,11 +174,19 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       {status === 'misconfigured' && <div className="office-ai-state"><AlertCircle size={18} /> COCCE Auth is not configured for this Office deployment.</div>}
       {status === 'not-configured' && <div className="office-ai-state"><AlertCircle size={18} /> {error || 'The OpenRouter free-model secret is not available to the Office AI service. Check Supabase Edge Function secrets.'}</div>}
       {status === 'ready' && <>
-        <div className="office-ai-context"><label>Workspace<select value={workspaceId} onChange={event => void changeWorkspace(event.target.value)}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label><label className="office-ai-context-toggle"><span>Workspace context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · private prompt only'}</small></span></label></div>
+        <div className="office-ai-context"><label>Workspace<select value={workspaceId} onChange={event => void changeWorkspace(event.target.value)}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label><label className="office-ai-context-toggle"><span>Team conversation context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · no team history'}</small></span></label></div>
         {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before using workspace-aware AI.</div>}
+        <section className="office-ai-drive-context" aria-label="Selected Drive file context">
+          <div className="office-ai-drive-heading"><div><strong>Drive file context</strong><small>Attach up to 3 private text files. Their contents are fetched server-side only after you ask.</small></div><button type="button" className="button-secondary" onClick={() => void openDriveFiles()} disabled={!workspaceId || !userId || busy}>{driveFilesOpen ? 'Hide files' : 'Browse Drive'}</button></div>
+          {selectedFileIds.length > 0 && <div className="office-ai-drive-selected">{selectedFileIds.length} of 3 files selected for the next request</div>}
+          {driveFilesOpen && <div className="office-ai-drive-list">
+            {driveFilesLoading ? <div className="office-ai-state"><LoaderCircle className="spin" size={15}/> Loading private Drive files…</div> : driveFiles.map((file) => <label className="office-ai-drive-file" key={file.fileId}><input type="checkbox" checked={selectedFileIds.includes(file.fileId)} disabled={!selectedFileIds.includes(file.fileId) && selectedFileIds.length >= 3} onChange={(event) => toggleDriveFile(file.fileId, event.target.checked)} /><span><strong>{file.displayName}</strong><small>{workspaces.find((space) => space.workspace_id === file.workspaceId)?.name ?? 'Office workspace'} · {file.sizeBytes.toLocaleString()} bytes</small></span></label>)}
+            {driveFilesError && <p className="office-ai-drive-error" role="status">{driveFilesError}</p>}
+          </div>}
+        </section>
         <div className="office-ai-answer" aria-live="polite">{answer ? <><div className="office-ai-answer-label"><Sparkles size={14} /> COCCE AI</div><p>{answer}</p></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose one workspace or all AI-enabled workspaces. Ask for summaries, plans, drafts, and practical next steps.</span></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder="Ask across your workspace…" disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
-        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI can read up to 20 AI-enabled authorised workspaces, sampling up to 2 conversations and 2 recent messages per conversation through membership-checked RPCs. Drive file contents are not included in this release.' : 'Workspace context is off. Your prompt is sent without team conversation history.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
+        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {selectedFileIds.length ? 'Selected text files are read server-side from their enabled workspace and limited to 3 files, 512 KiB each.' : 'Drive files are never read unless you explicitly select them.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
       </>}
       {error && status === 'ready' && <div className="office-ai-error" role="alert"><AlertCircle size={14} /> {error}</div>}
     </section>
