@@ -7,7 +7,7 @@ import { createOfficeCloudApi, OFFICE_CLOUD_MAX_FILE_BYTES } from './lib/officeC
 import type { CloudFile, CloudUsage } from './lib/officeCloudFiles';
 import { formatFileSize } from './lib/driveStore';
 import { importDocxFile, MAX_DOCX_FILE_BYTES, DOCX_MIME } from './lib/docxInterchange';
-import { AlertCircle, ArrowDownToLine, AudioLines, Check, Cloud, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
+import { AlertCircle, ArrowDownToLine, AudioLines, Check, Cloud, File, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
 import './drive.css';
 
 type Category = 'all' | 'documents' | 'images' | 'video' | 'audio' | 'other';
@@ -244,7 +244,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
       : loading ? <div className="drive-empty glass-card" role="status"><LoaderCircle size={18}/> Loading private workspace files…</div>
       : visible.length ? <div className="drive-file-grid">{visible.map((file) => {
         const mime = mimeOf(file);
-        const Glyph = mime.startsWith('image/') ? FileImage : mime.startsWith('video/') ? FileVideo : mime.startsWith('audio/') ? AudioLines : mime.startsWith('text/') || mime==='application/pdf' ? FileText  : FileIcon;
+        const Glyph = mime.startsWith('image/') ? FileImage : mime.startsWith('video/') ? FileVideo : mime.startsWith('audio/') ? AudioLines : mime.startsWith('text/') || mime==='application/pdf' ? FileText  : File;
         return <article className="drive-file-card glass-card" key={file.fileId}>
           <button className="drive-file-open" type="button" onClick={() => void download(file,true)} disabled={busy}><span className="drive-file-thumb"><Glyph size={23}/><small>{extension(file.displayName)}</small></span><strong title={file.displayName}>{file.displayName}</strong><small className="drive-file-metadata">{formatFileSize(file.sizeBytes)} · {new Date(file.createdAt).toLocaleDateString()}</small></button>
           <div className="drive-file-actions">{trash ? <button className="icon-button" type="button" onClick={() => void moveFile(file,true)} disabled={busy} aria-label={`Restore ${file.displayName}`}><RotateCcw size={15}/></button> : <><button className="icon-button" type="button" onClick={() => void download(file)} disabled={busy} aria-label={`Download ${file.displayName}`}><ArrowDownToLine size={15}/></button><button className="icon-button danger-button" type="button" onClick={() => void moveFile(file,false)} disabled={busy} aria-label={`Move ${file.displayName} to trash`}><Trash2 size={15}/></button></>}</div>
