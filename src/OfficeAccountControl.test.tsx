@@ -91,7 +91,7 @@ describe('Office account control', () => {
     fireEvent.click(screen.getByRole('button', { name: /Continue with Google/ }));
     await waitFor(() => expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: `${window.location.origin}/?cocce_office_oauth=1`, queryParams: { prompt: 'select_account' } },
     }));
   });
 
