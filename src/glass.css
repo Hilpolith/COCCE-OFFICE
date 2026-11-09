@@ -802,3 +802,11 @@
     .office-account-popover { max-width: calc(100vw - 20px); }
   }
 }
+
+
+@media screen {
+  :root :is(.office-auth-scrim, .metric-card, .panel, .settings-panel, .workspace-menu, .office-auth-overlay, .modal-scrim, .dialog-backdrop, .frosted-confirm-scrim, .office-account-popover, .office-auth-panel, .office-auth-dialog, .frosted-confirm-dialog, .modal-card, .dialog-panel, .glass-dialog, .office-ai-panel, .office-ai-prompt-panel, .pdf-toolbar, .vault-panel, .industry-office-hero, .industry-empty-office, .slides-rail, .slides-canvas-wrap, .slides-library, .pdf-library, .pdf-viewer-panel, .drive-summary, .drive-dropzone, .drive-file-card, .drive-draft-card, .vault-lock-panel, .vault-folder-panel, .vault-files-panel, .team-task-row, .team-structure-item, .industry-work-panel, .industry-shared-setup, .industry-shared-state, .industry-shared-metrics, .industry-shared-feedback, .industry-shared-profile-note, .visionos-dock) {
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+}
