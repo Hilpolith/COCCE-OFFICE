@@ -73,6 +73,7 @@ function fileLinkRecord(overrides: Record<string, unknown> = {}): Record<string,
     display_name: 'synthetic.pdf',
     verified_content_type: 'application/octet-stream',
     verified_size_bytes: 13,
+    verified_sha256_hex: 'a'.repeat(64),
     ...overrides,
   };
 }
@@ -684,7 +685,7 @@ describe('Office cloud Edge Function', () => {
     expect(response.status).toBe(200);
     expect(result.expiresInSeconds).toBe(120);
     expect(result.contentType).toBe('application/octet-stream');
-    expect(result).toMatchObject({ workspaceId, displayName: 'synthetic.pdf', sizeBytes: 13 });
+    expect(result).toMatchObject({ workspaceId, displayName: 'synthetic.pdf', sizeBytes: 13, sha256Hex: 'a'.repeat(64) });
     const url = new URL(result.url);
     expect(url.pathname).toBe(`/cocce-kyc/${objectKey}`);
     expect(url.searchParams.get('X-Amz-Expires')).toBe('120');
