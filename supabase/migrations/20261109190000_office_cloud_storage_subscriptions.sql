@@ -42,6 +42,31 @@ values
   ('storage_2tb_monthly', '2 TB', 2000000000000, 100000, 6)
 on conflict (plan_code) do nothing;
 
+create table if not exists public.office_cloud_storage_billing_config (
+  singleton boolean primary key default true check (singleton),
+  enabled boolean not null default false,
+  price_approved_at timestamptz,
+  wallet_security_approved_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+insert into public.office_cloud_storage_billing_config (singleton, enabled)
+values (true, false)
+on conflict (singleton) do nothing;
+
+create table if not exists public.office_cloud_wallet_pin_attempts (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  failed_attempts smallint not null default 0 check (failed_attempts between 0 and 5),
+  window_started_at timestamptz not null default now(),
+  locked_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.office_cloud_storage_billing_config enable row level security;
+alter table public.office_cloud_wallet_pin_attempts enable row level security;
+revoke all on public.office_cloud_storage_billing_config from public, anon, authenticated, service_role;
+revoke all on public.office_cloud_wallet_pin_attempts from public, anon, authenticated, service_role;
+
 create table if not exists public.office_cloud_storage_subscriptions (
   subscription_id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.office_workspaces(id) on delete restrict,
@@ -111,6 +136,75 @@ revoke all on public.office_cloud_storage_plans from public, anon, authenticated
 revoke all on public.office_cloud_storage_subscriptions from public, anon, authenticated, service_role;
 revoke all on public.office_cloud_storage_subscription_events from public, anon, authenticated, service_role;
 
+create or replace function public.office_cloud_wallet_pin_guard(
+  p_actor_id uuid,
+  p_success boolean default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare
+  v_attempt public.office_cloud_wallet_pin_attempts%rowtype;
+  v_count integer;
+begin
+  if p_actor_id is null then
+    raise exception 'Wallet verification unavailable' using errcode = '22023';
+  end if;
+  insert into public.office_cloud_wallet_pin_attempts (user_id)
+  values (p_actor_id)
+  on conflict (user_id) do nothing;
+  select * into v_attempt
+  from public.office_cloud_wallet_pin_attempts a
+  where a.user_id = p_actor_id
+  for update;
+
+  if v_attempt.locked_until is not null and v_attempt.locked_until > now() then
+    return jsonb_build_object(
+      'allowed', false,
+      'lockedUntil', v_attempt.locked_until,
+      'attemptsRemaining', 0
+    );
+  end if;
+
+  if p_success is null then
+    return jsonb_build_object(
+      'allowed', true,
+      'lockedUntil', null,
+      'attemptsRemaining', greatest(0, 5 - v_attempt.failed_attempts)
+    );
+  end if;
+
+  if p_success then
+    delete from public.office_cloud_wallet_pin_attempts where user_id = p_actor_id;
+    return jsonb_build_object('allowed', true, 'lockedUntil', null, 'attemptsRemaining', 5);
+  end if;
+
+  if v_attempt.window_started_at < now() - interval '15 minutes' then
+    v_count := 1;
+    update public.office_cloud_wallet_pin_attempts
+    set failed_attempts = v_count, window_started_at = now(),
+        locked_until = null, updated_at = now()
+    where user_id = p_actor_id;
+  else
+    v_count := least(5, v_attempt.failed_attempts + 1);
+    update public.office_cloud_wallet_pin_attempts
+    set failed_attempts = v_count,
+        locked_until = case when v_count >= 5 then now() + interval '15 minutes' else null end,
+        updated_at = now()
+    where user_id = p_actor_id;
+  end if;
+
+  select * into v_attempt from public.office_cloud_wallet_pin_attempts where user_id = p_actor_id;
+  return jsonb_build_object(
+    'allowed', v_attempt.locked_until is null or v_attempt.locked_until <= now(),
+    'lockedUntil', v_attempt.locked_until,
+    'attemptsRemaining', greatest(0, 5 - v_attempt.failed_attempts)
+  );
+end;
+$function$;
+
 create or replace function public.office_cloud_list_storage_plans(
   p_actor_id uuid,
   p_workspace_id uuid
@@ -132,6 +226,14 @@ begin
       and m.status = 'active'
   ) then
     raise exception 'Workspace access denied' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.office_cloud_storage_billing_config c
+    where c.singleton and c.enabled
+      and c.price_approved_at is not null
+      and c.wallet_security_approved_at is not null
+  ) then
+    return '[]'::jsonb;
   end if;
   return coalesce((
     select jsonb_agg(jsonb_build_object(
@@ -325,6 +427,15 @@ begin
     );
   end if;
 
+  if not exists (
+    select 1 from public.office_cloud_storage_billing_config c
+    where c.singleton and c.enabled
+      and c.price_approved_at is not null
+      and c.wallet_security_approved_at is not null
+  ) then
+    raise exception 'Office storage billing is not enabled' using errcode = '55000';
+  end if;
+
   perform 1 from public.profiles p where p.id = p_actor_id for update;
   if not found then
     raise exception 'COCCE wallet unavailable' using errcode = 'P0002';
@@ -486,6 +597,14 @@ begin
     );
   end if;
 
+  if not exists (
+    select 1 from public.office_cloud_storage_billing_config c
+    where c.singleton and c.enabled
+      and c.price_approved_at is not null
+      and c.wallet_security_approved_at is not null
+  ) then
+    raise exception 'Office storage billing is not enabled' using errcode = '55000';
+  end if;
   if v_sub.status = 'past_due' and v_sub.grace_until <= now() then
     raise exception 'Storage subscription grace period has ended' using errcode = '55000';
   end if;
@@ -585,6 +704,14 @@ begin
     raise exception 'The storage subscription must be renewed before auto-renew can be enabled' using errcode = '55000';
   end if;
 
+  if p_auto_renew and not exists (
+    select 1 from public.office_cloud_storage_billing_config c
+    where c.singleton and c.enabled
+      and c.price_approved_at is not null
+      and c.wallet_security_approved_at is not null
+  ) then
+    raise exception 'Office storage billing is not enabled' using errcode = '55000';
+  end if;
   v_event := case when p_auto_renew then 'auto_renew_enabled' else 'auto_renew_disabled' end;
   update public.office_cloud_storage_subscriptions
   set billing_user_id = case when p_auto_renew then p_actor_id else billing_user_id end,
@@ -636,7 +763,14 @@ declare
   v_period_end timestamptz;
   v_grace_until timestamptz;
   v_actor_is_admin boolean;
+  v_billing_enabled boolean := false;
 begin
+  select exists (
+    select 1 from public.office_cloud_storage_billing_config c
+    where c.singleton and c.enabled
+      and c.price_approved_at is not null
+      and c.wallet_security_approved_at is not null
+  ) into v_billing_enabled;
   if p_limit is null or p_limit not between 1 and 1000 then
     raise exception 'Invalid storage renewal batch size' using errcode = '22023';
   end if;
@@ -689,6 +823,32 @@ begin
         0, v_sub.quota_bytes, v_sub.current_period_start, v_sub.current_period_end
       );
       v_expired := v_expired + 1;
+      v_processed := v_processed + 1;
+      continue;
+    end if;
+
+    if not v_billing_enabled then
+      update public.office_cloud_storage_subscriptions
+      set auto_renew = false, cancel_at_period_end = true, next_billing_at = null, updated_at = now()
+      where subscription_id = v_sub.subscription_id;
+      if v_sub.status = 'active' and v_sub.current_period_end <= now() then
+        update public.office_cloud_storage_subscriptions
+        set status = 'expired', ended_at = now(), updated_at = now()
+        where subscription_id = v_sub.subscription_id;
+        update public.office_cloud_workspace_quotas
+        set purchased_quota_bytes = greatest(0, purchased_quota_bytes - v_sub.quota_bytes),
+            subscription_quota_bytes = greatest(0, subscription_quota_bytes - v_sub.quota_bytes),
+            updated_at = now()
+        where workspace_id = v_sub.workspace_id;
+        insert into public.office_cloud_storage_subscription_events (
+          subscription_id, workspace_id, actor_id, event_type, plan_code,
+          coins, quota_bytes, period_start, period_end
+        ) values (
+          v_sub.subscription_id, v_sub.workspace_id, null, 'expired', v_sub.plan_code,
+          0, v_sub.quota_bytes, v_sub.current_period_start, v_sub.current_period_end
+        );
+        v_expired := v_expired + 1;
+      end if;
       v_processed := v_processed + 1;
       continue;
     end if;
@@ -823,6 +983,8 @@ revoke all on function public.office_cloud_renew_storage_subscription(uuid, uuid
 revoke all on function public.office_cloud_set_storage_subscription_auto_renew(uuid, uuid, boolean) from public, anon, authenticated;
 revoke all on function public.office_cloud_process_storage_renewals(integer) from public, anon, authenticated, service_role;
 
+revoke all on function public.office_cloud_wallet_pin_guard(uuid, boolean) from public, anon, authenticated;
+grant execute on function public.office_cloud_wallet_pin_guard(uuid, boolean) to service_role;
 grant execute on function public.office_cloud_list_storage_plans(uuid, uuid) to service_role;
 grant execute on function public.office_cloud_list_storage_subscriptions(uuid, uuid) to service_role;
 grant execute on function public.office_cloud_list_storage_history(uuid, uuid) to service_role;
