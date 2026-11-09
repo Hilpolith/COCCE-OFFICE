@@ -195,7 +195,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         try {
           const page = await api.list(space.workspace_id, false, offset);
           const rows = page.slice(0, pageSize);
-          return { workspaceId: space.workspace_id, files: rows, offset: offset + rows.length, hasMore: page.length === 50 };
+          return { workspaceId: space.workspace_id, files: rows, offset: offset + rows.length, hasMore: page.length > rows.length || page.length === 50 };
         } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset, hasMore: false }; }
       }));
       if (generation !== driveLoadGeneration.current) return;
