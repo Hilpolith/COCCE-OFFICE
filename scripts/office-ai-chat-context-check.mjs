@@ -41,7 +41,8 @@ test('AI provider is pinned to the free Google AI Studio route without fallback'
   assert.match(edge, /google\/gemma-4-31b-it:free/);
   assert.match(edge, /only: \["google-ai-studio"\], allow_fallbacks: false/);
   assert.match(edge, /result\?\.model !== FREE_MODEL/);
-  assert.match(edge, /positiveCost/);
+  assert.match(edge, /zeroCost/);
+  assert.match(edge, /!zeroCost/);
   assert.match(edge, /OPENROUTER_API_KEY/);
 });
 
