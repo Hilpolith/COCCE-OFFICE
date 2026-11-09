@@ -1,3 +1,4 @@
+import OfficeSuiteAiAction from './OfficeSuiteAiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, FormEvent, ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -773,7 +774,8 @@ function Workspace({
       )}
       {status === "ready" && boot && (
         <>
-          <nav
+          <div className="office-suite-ai-toolbar"><OfficeSuiteAiAction workspaceId={workspaceId} suiteLabel="Manufacturing" tabLabel={activeTab.replaceAll("_", " ")} /></div>
+      <nav
             className="manufacturing-tabs"
             aria-label="Manufacturing sections"
             role="tablist"
