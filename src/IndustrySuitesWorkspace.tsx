@@ -292,7 +292,7 @@ export default function IndustrySuitesWorkspace({
         <div className="industry-office-actions"><span className="industry-team-status is-linked"><Users size={14} />Team linked</span><button className="button-secondary industry-team-button" onClick={openTeam}><Users size={15} />Open team</button></div>
       </section>
       <div className="industry-ai-action-row">
-        <div><Sparkles size={16}/><span><strong>COCCE AI for {definition.shortLabel}</strong><small>Ask about authorised team conversations. Sector records and Drive files are not included.</small></span></div>
+        <div><Sparkles size={16}/><span><strong>COCCE AI for {definition.shortLabel}</strong><small>Ask about authorised team conversations. Attach selected Drive text files in COCCE AI; protected sector records stay in their secure suite.</small></span></div>
         <button type="button" className="button-secondary" onClick={() => window.dispatchEvent(new CustomEvent('cocce-office:navigate', { detail: {
           page: 'ai',
           workspaceId: activeOffice.teamWorkspaceId,
