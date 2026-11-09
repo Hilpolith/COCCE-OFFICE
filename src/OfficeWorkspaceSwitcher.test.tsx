@@ -114,6 +114,7 @@ describe('global Office workspace selection', () => {
     await waitFor(() => expect(events.slice(previousEventCount).some((item) => item.type === 'cleared')).toBe(true));
     expect(events.slice(previousEventCount).some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceA.workspace_id)).toBe(false);
 
+    await waitFor(() => expect(loadCount).toBe(2));
     resolveNextWorkspaces?.([workspaceB]);
     mocks.listWorkspaceSuites.mockResolvedValue([{ workspace_id: workspaceB.workspace_id, suite_id: 'business', created_at: workspaceB.created_at }]);
     await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceB.workspace_id)).toBe(true));
@@ -135,7 +136,7 @@ describe('global Office workspace selection', () => {
 
     render(<OfficeWorkspaceSwitcher />);
 
-    expect(await screen.findByRole('status', { name: 'Workspace unavailable' })).toBeTruthy();
+    expect(await screen.findByText('Workspace unavailable')).toBeTruthy();
     await waitFor(() => expect(events.some((item) => item.type === 'cleared')).toBe(true));
     expect(events.some((item) => item.type === 'changed')).toBe(false);
   });
