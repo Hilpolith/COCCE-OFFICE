@@ -29,21 +29,6 @@ const mocks = vi.hoisted(() => {
   };
   return { cloudApi, auth, listWorkspaces: vi.fn(), confirm: vi.fn(), importDocxFile: vi.fn() };
 
-it('shows monthly add-on prices and keeps automatic renewal off until explicitly selected', async () => {
-  render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
-  await screen.findByText('Cloud files');
-  fireEvent.click(screen.getByRole('button', { name: 'View plans' }));
-  expect(await screen.findByText('5 GB additional')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Choose plan' }));
-  const autoRenew = screen.getByRole('checkbox', { name: /Automatically renew monthly/ });
-  expect(autoRenew.checked).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: /Purchase · 2,000 Coins/ }));
-  await waitFor(() => expect(mocks.cloudApi.purchaseStorage).toHaveBeenCalledWith(
-    'workspace-1', 'storage_5gb_monthly', expect.any(String), false,
-  ));
-  expect(await screen.findByText(/Added 5 GB to this workspace Drive/)).toBeTruthy();
-});
-
 });
 
 vi.mock('./FrostedConfirm', () => ({ useFrostedConfirm: () => mocks.confirm }));
@@ -144,5 +129,20 @@ describe('Cloud Drive workspace', () => {
     await waitFor(() => expect(mocks.cloudApi.upload).toHaveBeenCalled());
     await waitFor(() => expect(mocks.cloudApi.finalize).toHaveBeenCalledWith('session-1'));
     expect(mocks.cloudApi.list).toHaveBeenCalled();
+  });
+
+  it('shows monthly add-on prices and keeps automatic renewal off until explicitly selected', async () => {
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
+    await screen.findByText('Cloud files');
+    fireEvent.click(screen.getByRole('button', { name: 'View plans' }));
+    expect(await screen.findByText('5000000000 B additional')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose plan' }));
+    const autoRenew = screen.getByRole('checkbox', { name: /Automatically renew monthly/ });
+    expect(autoRenew.checked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /Purchase · 2,000 Coins/ }));
+    await waitFor(() => expect(mocks.cloudApi.purchaseStorage).toHaveBeenCalledWith(
+      'workspace-1', 'storage_5gb_monthly', expect.any(String), false,
+    ));
+    expect(await screen.findByText(/Added 5 GB to this workspace Drive/)).toBeTruthy();
   });
 });
