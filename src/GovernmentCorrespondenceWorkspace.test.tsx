@@ -114,6 +114,7 @@ describe('Government correspondence workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Kijiji District Office workspace' })).toBeTruthy();
     expect(screen.getByRole('note').textContent).toMatch(/do not store citizen names or IDs/i);
 
+    fireEvent.click(screen.getByRole('button', { name: 'New correspondence' }));
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Synthetic short label' } });
     fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'No\ncontrol chars' } });
     fireEvent.change(screen.getByLabelText('From unit'), { target: { value: 'External Office' } });
