@@ -35,8 +35,8 @@ export function OfficeWorkbenchLayout({
   return <div className={`office-workbench-layout ${collapsed ? 'is-collapsed' : ''} ${className}`.trim()}>
     <aside className="office-workbench-rail" aria-label="AI workbench">
       <div className="office-workbench-rail-heading">
-        <span className="office-workbench-rail-title"><span className="office-workbench-rail-icon"><Sparkles size={16} /></span><span>AI workbench</span></span>
-        <button type="button" className="office-workbench-collapse" aria-label={collapsed ? 'Expand AI workbench' : 'Collapse AI workbench'} aria-controls={railId} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>
+        <span className="office-workbench-rail-title"><span className="office-workbench-rail-icon"><Sparkles size={16} /></span><span>COCCE AI</span></span>
+        <button type="button" className="office-workbench-collapse" aria-label={collapsed ? 'Expand COCCE AI' : 'Collapse COCCE AI'} aria-controls={railId} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
