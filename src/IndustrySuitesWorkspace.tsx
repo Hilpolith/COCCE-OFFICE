@@ -9,7 +9,7 @@ import {
   emptyIndustryState, getIndustryDefinition, industryCatalog, readIndustryState,
   returnIndustryWorkItem, writeIndustryState,
 } from './lib/industryWorkspaces';
-import type { IndustryId, IndustryState, IndustryTeamSetup } from './lib/industryWorkspaces';
+import type { IndustryId, IndustryOffice, IndustryState, IndustryTeamSetup } from './lib/industryWorkspaces';
 import './industrySuites.css';
 
 const IndustrySharedWorkspace = lazy(() => import('./IndustrySharedWorkspace'));
@@ -42,9 +42,11 @@ function friendlyDate(value: string | null) {
 
 export default function IndustrySuitesWorkspace({
   preferredIndustryId,
+  activeWorkspace = null,
   onCreateTeam,
 }: {
   preferredIndustryId: IndustryId | null;
+  activeWorkspace?: { workspaceId: string; name: string; suiteId: IndustryId | null } | null;
   onCreateTeam: (setup: IndustryTeamSetup) => void;
 }) {
   const [initial] = useState(readInitialState);
@@ -54,11 +56,11 @@ export default function IndustrySuitesWorkspace({
     ? initial.state.offices.filter((office) => office.industryId === preferredIndustryId)
     : initial.state.offices;
   const initialOffice = officesForEntry.find((office) => Boolean(office.teamWorkspaceId)) ?? officesForEntry[0] ?? null;
-  const [selectedOfficeId, setSelectedOfficeId] = useState<string | null>(initialOffice?.id ?? null);
-  const [createOpen, setCreateOpen] = useState(() => preferredIndustryId
+  const [selectedOfficeId, setSelectedOfficeId] = useState<string | null>(activeWorkspace?.workspaceId ?? initialOffice?.id ?? null);
+  const [createOpen, setCreateOpen] = useState(() => activeWorkspace ? false : preferredIndustryId
     ? !initial.state.offices.some((office) => office.industryId === preferredIndustryId)
     : initial.state.offices.length === 0);
-  const [industryId, setIndustryId] = useState<IndustryId>(preferredIndustryId ?? 'business');
+  const [industryId, setIndustryId] = useState<IndustryId>(activeWorkspace?.suiteId ?? preferredIndustryId ?? 'business');
   const [officeName, setOfficeName] = useState('');
   const [country, setCountry] = useState('Tanzania');
   const [title, setTitle] = useState('');
@@ -78,7 +80,25 @@ export default function IndustrySuitesWorkspace({
   const [healthAdminPanel, setHealthAdminPanel] = useState<'management' | 'tasks'>('management');
   const [hospitalityPanel, setHospitalityPanel] = useState<'management' | 'tasks'>('management');
 
-  const activeOffice = state.offices.find((office) => office.id === selectedOfficeId) ?? null;
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    setSelectedOfficeId(activeWorkspace.workspaceId);
+    if (activeWorkspace.suiteId) setIndustryId(activeWorkspace.suiteId);
+    setCreateOpen(false);
+    setDataMode('shared');
+  }, [activeWorkspace?.workspaceId, activeWorkspace?.suiteId]);
+
+  const serverOffice: IndustryOffice | null = activeWorkspace?.suiteId ? {
+    id: activeWorkspace.workspaceId,
+    industryId: activeWorkspace.suiteId,
+    name: activeWorkspace.name,
+    country: 'Tanzania',
+    teamWorkspaceId: activeWorkspace.workspaceId,
+    createdAt: '',
+    updatedAt: '',
+    items: [],
+  } : null;
+  const activeOffice = activeWorkspace ? serverOffice : state.offices.find((office) => office.id === selectedOfficeId) ?? null;
   const definition = activeOffice ? getIndustryDefinition(activeOffice.industryId) : null;
   const accent = activeOffice ? accentByIndustry[activeOffice.industryId] : accentByIndustry[industryId];
   const sharedWorkspaceLabel = definition?.id === 'school' ? 'School Management system'
@@ -176,10 +196,10 @@ export default function IndustrySuitesWorkspace({
     <div className="industry-page-heading">
       <div>
         <span className="eyebrow industry-eyebrow"><Sparkles size={13} /> OFFICE SUITES · {activeOffice?.teamWorkspaceId && dataMode === 'shared' ? 'SHARED OFFICE TEAM' : dataMode === 'shared' ? 'TEAM SETUP REQUIRED' : 'DEVICE-LOCAL PREVIEW'}</span>
-        <h1>Work for your industry</h1>
-        <p className="page-lede">Choose a sector, link an Office Team, and open its specialist workspace. Device-local previews stay separate and are never copied automatically.</p>
+        <h1>{activeWorkspace?.name ?? 'Work for your industry'}</h1>
+        <p className="page-lede">{activeWorkspace && definition ? `${definition.summary} Your team, suite data and AI controls are scoped to this Office workspace.` : 'Choose a sector, link an Office Team, and open its specialist workspace. Device-local previews stay separate and are never copied automatically.'}</p>
       </div>
-      <button className="button-primary" onClick={() => { setIndustryId(preferredIndustryId ?? 'business'); setDataMode('shared'); setCreateOpen(true); }}><Plus size={16} /> New office</button>
+      <button className="button-primary" onClick={() => { if (activeWorkspace) window.dispatchEvent(new CustomEvent('cocce-office:navigate', { detail: { page: 'team' } })); else { setIndustryId(preferredIndustryId ?? 'business'); setDataMode('shared'); setCreateOpen(true); } }}><Plus size={16} /> {activeWorkspace ? 'New workspace' : 'New office'}</button>
     </div>
 
     {dataMode === 'device' && <div className="industry-boundary-note" role="note">
@@ -190,7 +210,7 @@ export default function IndustrySuitesWorkspace({
     {storageIssue && <div className="industry-alert" role="alert"><CircleAlert size={16} />{storageIssue}</div>}
     {feedback && <div className="industry-feedback" role={/could not|unreadable|unsupported|not saved|limit/i.test(feedback) ? 'alert' : 'status'}><Check size={15} />{feedback}<button type="button" aria-label="Dismiss message" onClick={() => setFeedback('')}><X size={14} /></button></div>}
 
-    {state.offices.length > 0 && <div className="industry-office-picker" role="group" aria-label="Your industry offices">
+    {!activeWorkspace && state.offices.length > 0 && <div className="industry-office-picker" role="group" aria-label="Your industry offices">
       {state.offices.map((office) => {
         const officeIndustry = getIndustryDefinition(office.industryId);
         return <button key={office.id} className={`industry-office-chip ${office.id === selectedOfficeId && !createOpen ? 'is-active' : ''}`} onClick={() => { setSelectedOfficeId(office.id); setIndustryId(office.industryId); setCreateOpen(false); setDataMode('shared'); setGovernmentPanel('correspondence'); setSchoolPanel('management'); setUniversityPanel('management'); setBusinessPanel('management'); setAccountingPanel('management'); setManufacturingPanel('management'); setHealthAdminPanel('management'); setRecordSearch(''); }}>
@@ -216,13 +236,13 @@ export default function IndustrySuitesWorkspace({
       {industryId === 'healthcare-admin' && <p className="industry-sector-note">Administrative only: no patient names, diagnoses, clinical records, or prescriptions.</p>}
     </section>}
 
-    {activeOffice && definition && !createOpen && activeOffice.teamWorkspaceId && <div className="industry-data-mode" role="tablist" aria-label="Industry workbench storage mode">
+    {!activeWorkspace && activeOffice && definition && !createOpen && activeOffice.teamWorkspaceId && <div className="industry-data-mode" role="tablist" aria-label="Industry workbench storage mode">
       <button type="button" role="tab" aria-selected={dataMode === 'device'} className={dataMode === 'device' ? 'is-active' : ''} onClick={() => setDataMode('device')}><LockKeyhole size={14} /> This device preview</button>
       <button type="button" role="tab" aria-selected={dataMode === 'shared'} className={dataMode === 'shared' ? 'is-active' : ''} onClick={() => setDataMode('shared')}><Users size={14} /> Shared team</button>
       <span>Local items are never copied automatically.</span>
     </div>}
 
-    {activeOffice && definition && !createOpen && !activeOffice.teamWorkspaceId && dataMode === 'shared' && <section className="industry-team-gate glass-card" aria-labelledby="industry-team-gate-title">
+    {!activeWorkspace && activeOffice && definition && !createOpen && !activeOffice.teamWorkspaceId && dataMode === 'shared' && <section className="industry-team-gate glass-card" aria-labelledby="industry-team-gate-title">
       <div className="industry-heading-icon"><Users size={19} /></div>
       <span className="eyebrow">OFFICE TEAM REQUIRED</span>
       <h2 id="industry-team-gate-title">Connect {activeOffice.name} to its shared workspace</h2>
@@ -230,7 +250,7 @@ export default function IndustrySuitesWorkspace({
       <div className="industry-form-actions"><button type="button" className="button-primary" onClick={openTeam}><Users size={15} /> Create or link Office Team</button><button type="button" className="button-secondary" onClick={() => setDataMode('device')}>Open device-local preview</button></div>
     </section>}
 
-    {activeOffice && definition && !createOpen && dataMode === 'device' && <>
+    {!activeWorkspace && activeOffice && definition && !createOpen && dataMode === 'device' && <>
       <section className="industry-office-hero glass-card">
         <div className="industry-office-hero-main"><span className="industry-office-mark"><Building2 size={22} /></span><div><span className="eyebrow">{definition.label.toUpperCase()} · {activeOffice.country.toUpperCase()}</span><h2>{activeOffice.name}</h2><p>{definition.workArea} · Local workspace</p></div></div>
         <div className="industry-office-actions"><span className={`industry-team-status ${activeOffice.teamWorkspaceId ? 'is-linked' : ''}`}><Users size={14} />{activeOffice.teamWorkspaceId ? 'Team linked' : 'No team yet'}</span><button className="button-secondary industry-team-button" onClick={openTeam}><Users size={15} />{activeOffice.teamWorkspaceId ? 'Open team' : 'Create team'}</button></div>
@@ -432,6 +452,7 @@ export default function IndustrySuitesWorkspace({
       </Suspense>
     </>}
 
-    {!activeOffice && !createOpen && <section className="industry-empty-office glass-card"><div className="industry-empty-icon"><Building2 size={21} /></div><h2>Create your first industry office</h2><p>Choose an industry to get its working register and stage flow.</p><button className="button-primary" onClick={() => setCreateOpen(true)}><Plus size={15} /> Choose an industry</button></section>}
+    {activeWorkspace && !activeWorkspace.suiteId && <section className="industry-empty-office glass-card"><div className="industry-empty-icon"><Building2 size={21} /></div><h2>Choose an Office suite</h2><p>This existing workspace has no suite assignment yet. Create a new workspace with the correct suite, or assign a suite to this workspace before opening its specialist dashboard.</p><button className="button-secondary" onClick={() => window.dispatchEvent(new CustomEvent('cocce-office:navigate', { detail: { page: 'team' } }))}>Manage workspaces</button></section>}
+    {!activeWorkspace && !activeOffice && !createOpen && <section className="industry-empty-office glass-card"><div className="industry-empty-icon"><Building2 size={21} /></div><h2>Create your first industry office</h2><p>Choose an industry to get its working register and stage flow.</p><button className="button-primary" onClick={() => setCreateOpen(true)}><Plus size={15} /> Choose an industry</button></section>}
   </div>;
 }
