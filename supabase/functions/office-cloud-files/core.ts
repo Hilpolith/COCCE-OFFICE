@@ -470,7 +470,7 @@ function assertSession(value: Record<string, unknown>, actorId: string): {
 
 function safeLinkRecord(value: Record<string, unknown>): {
   workspaceId: string; fileId: string; revisionId: string; storageLocationId: string; objectKey: string;
-  displayName: string; verifiedType: string; sizeBytes: number;
+  displayName: string; verifiedType: string; sizeBytes: number; sha256Hex: string;
 } | null {
   const workspaceId = value.workspace_id;
   const fileId = value.file_id;
@@ -480,13 +480,15 @@ function safeLinkRecord(value: Record<string, unknown>): {
   const displayName = value.display_name;
   const verifiedType = value.verified_content_type;
   const sizeBytes = value.verified_size_bytes;
+  const sha256Hex = normalizeSha256Hex(value.verified_sha256_hex);
   if (!uuid(workspaceId) || !uuid(fileId) || !uuid(revisionId)
     || storageLocationId !== STORAGE_LOCATION_ID
     || !isOfficeObjectKey(objectKey, workspaceId, fileId, revisionId)
     || typeof displayName !== 'string' || !safeDisplayName(displayName)
     || verifiedType !== 'application/octet-stream'
-    || typeof sizeBytes !== 'number' || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_FILE_BYTES) return null;
-  return { workspaceId, fileId, revisionId, storageLocationId, objectKey, displayName, verifiedType, sizeBytes };
+    || typeof sizeBytes !== 'number' || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_FILE_BYTES
+    || !sha256Hex) return null;
+  return { workspaceId, fileId, revisionId, storageLocationId, objectKey, displayName, verifiedType, sizeBytes, sha256Hex };
 }
 
 function safeByteCount(value: unknown): number | null {
