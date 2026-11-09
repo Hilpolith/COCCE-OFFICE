@@ -27,6 +27,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const [answer, setAnswer] = useState('');
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
   const [busy, setBusy] = useState(false);
+  const [showDriveConsent, setShowDriveConsent] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -122,6 +123,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setDriveFileHasMore(false);
     setDriveFilesError('');
     setDriveFilesOpen(false);
+    setShowDriveConsent(false);
     // Workspace selection and every selected file are revalidated by the Edge Function.
   };
 
@@ -253,8 +255,10 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     });
   };
 
-  const ask = async () => {
+  const ask = async (confirmedDriveSharing = false) => {
     if (!client || !workspaceId || !prompt.trim() || busy) return;
+    if (selectedFileIds.length > 0 && !confirmedDriveSharing) { setShowDriveConsent(true); return; }
+    setShowDriveConsent(false);
     setBusy(true);
     setError('');
     setAnswer('');
@@ -300,6 +304,21 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         </section>
         <div className="office-ai-answer" aria-live="polite">{answer ? <><div className="office-ai-answer-label"><Sparkles size={14} /> COCCE AI</div><p>{answer}</p></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose one workspace or all AI-enabled workspaces. Ask for summaries, plans, drafts, and practical next steps.</span></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder="Ask across your workspace…" disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
+        {showDriveConsent && <div className="office-ai-consent-backdrop">
+          <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
+            <div className="office-ai-consent-mark"><AlertCircle size={19} /></div>
+            <div><span className="eyebrow">EXTERNAL AI DATA SHARING</span><h3 id="office-ai-consent-title">Share selected Drive content with COCCE AI?</h3></div>
+            <p id="office-ai-consent-description">The selected file contents will be read from private Office Drive by the authenticated server and sent to OpenRouter's Google AI Studio free-model provider to generate this answer. The file contents are not stored in the COCCE AI chat history. This is not a zero-data-retention guarantee.</p>
+            <ul>{selectedFileIds.map((fileId) => {
+              const file = driveFiles.find((item) => item.fileId === fileId);
+              return <li key={fileId}>{file?.displayName ?? 'Selected Drive file'}</li>;
+            })}</ul>
+            <div className="office-ai-consent-actions">
+              <button type="button" className="button-secondary" onClick={() => setShowDriveConsent(false)}>Cancel</button>
+              <button type="button" className="button-primary" onClick={() => void ask(true)} disabled={busy}>Send selected content</button>
+            </div>
+          </section>
+        </div>}
         <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {selectedFileIds.length ? 'Selected text files are read server-side from their enabled workspace and limited to 3 files, 512 KiB and 8,000 characters each (20,000 total).' : 'Drive files are never read unless you explicitly select them.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
       </>}
       {error && status === 'ready' && <div className="office-ai-error" role="alert"><AlertCircle size={14} /> {error}</div>}
