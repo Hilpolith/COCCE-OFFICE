@@ -12,8 +12,10 @@ import { OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS } from './lib/officeAi';
 
 const mocks = vi.hoisted(() => {
   const auth = { getSession: vi.fn(), onAuthStateChange: vi.fn() };
-  return { auth, client: { auth } };
+  return { auth, client: { auth }, listWorkspaces: vi.fn() };
 });
+
+vi.mock('./lib/officeTeamApi', () => ({ officeTeamApi: { listWorkspaces: mocks.listWorkspaces } }));
 
 vi.mock('./lib/officeTeamSupabase', () => ({
   resolveOfficeTeamConfig: () => ({
@@ -89,6 +91,7 @@ beforeEach(() => {
     error: null,
   });
   mocks.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
+  mocks.listWorkspaces.mockResolvedValue([{ workspace_id: '11111111-1111-4111-8111-111111111111', name: 'Synthetic workspace', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
   window.localStorage.clear();
 });
 
@@ -112,6 +115,7 @@ describe('Docs AI writing studio', () => {
     expect(postCall).toBeTruthy();
     expect(JSON.parse(String(postCall?.init?.body))).toEqual({
       action: 'summarize',
+      workspaceId: '*',
       selectedText: 'Only the selected paragraph.',
     });
     expect(chain.insertContentAt).not.toHaveBeenCalled();
@@ -138,6 +142,7 @@ describe('Docs AI writing studio', () => {
     const postCall = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
     expect(JSON.parse(String(postCall?.init?.body))).toEqual({
       action: 'draft',
+      workspaceId: '*',
       prompt: 'Draft a memo from only the facts in this brief.',
     });
   });
@@ -164,7 +169,7 @@ describe('Docs AI writing studio', () => {
       expect(await screen.findByText('A preview edit.')).toBeTruthy();
       const draftCall = fetcher.mock.calls.map(([url, init]) => ({ url, init }))
         .find(({ init }) => init?.method === 'POST');
-      expect(JSON.parse(String(draftCall?.init?.body))).toEqual({ action: 'draft', prompt });
+      expect(JSON.parse(String(draftCall?.init?.body))).toEqual({ action: 'draft', workspaceId: '*', prompt });
       expect(String(draftCall?.init?.body)).not.toContain('Synthetic private cell');
       fireEvent.click(screen.getByRole('button', { name: 'Insert at cursor' }));
       expect((await screen.findByRole('alert')).textContent).toContain('table cell range is active');
@@ -222,7 +227,7 @@ describe('Docs AI writing studio', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
       expect(await screen.findByText('A preview edit.')).toBeTruthy();
       const request = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
-      expect(JSON.parse(String(request?.init?.body))).toEqual({ action: 'summarize', selectedText: excerpt });
+      expect(JSON.parse(String(request?.init?.body))).toEqual({ action: 'summarize', workspaceId: '*', selectedText: excerpt });
 
       selectSyntheticTableCells(editor);
       fireEvent.click(screen.getByRole('button', { name: 'Replace selection' }));
@@ -261,7 +266,7 @@ describe('Docs AI writing studio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
     expect(await screen.findByText('A preview edit.')).toBeTruthy();
     const postCall = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
-    expect(JSON.parse(String(postCall?.init?.body))).toEqual({ action: 'document_summary', documentText: syntheticText });
+    expect(JSON.parse(String(postCall?.init?.body))).toEqual({ action: 'document_summary', workspaceId: '*', documentText: syntheticText });
     expect(String(postCall?.init?.body)).not.toContain('Synthetic local report');
     expect(chain.insertContentAt).not.toHaveBeenCalled();
 
