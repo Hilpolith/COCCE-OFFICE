@@ -102,7 +102,7 @@ describe('COCCE AI workspace context', () => {
     expect(screen.queryByText('disabled.md')).toBeNull();
   });
 
-  it('attaches only selected Drive file IDs for server-side retrieval', async () => {
+  it('requires explicit consent before sending selected Drive file content to the external AI provider', async () => {
     mocks.listWorkspaces.mockResolvedValue([{ workspace_id: '11111111-1111-4111-8111-111111111111', name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
     render(<OfficeAiWorkspace />);
     await screen.findByRole('combobox', { name: 'Workspace' });
@@ -111,6 +111,9 @@ describe('COCCE AI workspace context', () => {
     fireEvent.click(screen.getByLabelText(/policy\.md/));
     fireEvent.change(screen.getByPlaceholderText('Ask across your workspace…'), { target: { value: 'Summarise the policy.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
+    expect(screen.getByRole('dialog', { name: 'Share selected Drive content with COCCE AI?' })).toBeTruthy();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1); // status check only; no file content has been sent
+    fireEvent.click(screen.getByRole('button', { name: 'Send selected content' }));
     await waitFor(() => expect(mocks.invoke).toHaveBeenLastCalledWith('office-ai-chat', {
       body: {
         action: 'chat', workspaceId: '*', prompt: 'Summarise the policy.',
