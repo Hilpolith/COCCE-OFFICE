@@ -7,6 +7,7 @@ const OPENROUTER_TEST_KEY = 'test-only-server-key';
 const LEGACY_OPENAI_TEST_KEY = 'must-not-be-used';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FREE_MODEL_ID = 'google/gemma-4-31b-it:free';
+const TEST_WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 
 function makeResponse() {
   return {
@@ -28,6 +29,8 @@ function makeHarness({
   output = 'A polished, shorter passage.',
   returnedModel = FREE_MODEL_ID,
   reportedCost = 0,
+  workspaceAiEnabled = true,
+  workspaceRows = [{ workspace_id: TEST_WORKSPACE_ID, name: 'Synthetic workspace' }],
   maxRequests = 12,
   windowMs = 600_000,
   now = () => 1_000,
@@ -45,6 +48,12 @@ function makeHarness({
     calls.push({ input: String(input), init });
     if (String(input) === `${COCCE_URL}/auth/v1/user`) {
       return { ok: authStatus >= 200 && authStatus < 300, status: authStatus, json: async () => user };
+    }
+    if (String(input) === `${COCCE_URL}/rest/v1/rpc/office_list_workspaces`) {
+      return { ok: true, status: 200, json: async () => workspaceRows };
+    }
+    if (String(input) === `${COCCE_URL}/rest/v1/rpc/office_get_workspace_ai_enabled`) {
+      return { ok: true, status: 200, json: async () => workspaceAiEnabled };
     }
     if (String(input) === OPENROUTER_URL) {
       return {
@@ -66,7 +75,10 @@ function makeHarness({
 async function invoke(handler, { method = 'POST', token = 'valid-user-access-token', body, contentLength } = {}) {
   const headers = token ? { authorization: `Bearer ${token}` } : {};
   if (contentLength !== undefined) headers['content-length'] = String(contentLength);
-  const req = { method, headers, body };
+  const scopedBody = method === 'POST' && body && typeof body === 'object' && !Array.isArray(body)
+    ? { workspaceId: TEST_WORKSPACE_ID, ...body }
+    : body;
+  const req = { method, headers, body: scopedBody };
   const res = makeResponse();
   await handler(req, res);
   return res;
