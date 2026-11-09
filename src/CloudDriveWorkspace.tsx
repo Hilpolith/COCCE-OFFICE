@@ -15,8 +15,10 @@ type Preview = { file: CloudFile; blob: Blob; url: string; docxHtml?: string; do
 const extension = (name: string) => name.includes('.') ? name.split('.').pop()!.slice(0, 8).toUpperCase() : 'FILE';
 function mimeOf(file: CloudFile) {
   const name = file.displayName.toLowerCase();
-  if (/\.(png|jpe?g|gif|webp|avif|svg)$/.test(name)) return name.endsWith('.png') ? 'image/png' : name.endsWith('.webp') ? 'image/webp' : name.endsWith('.gif') ? 'image/gif' : 'image/jpeg';
-  if (/\.(mp4|webm|mov|m4v)$/.test(name)) return 'video/mp4';
+  if (/\.(png|jpe?g|gif|webp|avif|svg)$/.test(name)) return name.endsWith('.png') ? 'image/png' : name.endsWith('.webp') ? 'image/webp' : name.endsWith('.gif') ? 'image/gif' : name.endsWith('.avif') ? 'image/avif' : name.endsWith('.svg') ? 'image/svg+xml' : 'image/jpeg';
+  if (/\.(mp4|m4v)$/.test(name)) return 'video/mp4';
+  if (name.endsWith('.webm')) return 'video/webm';
+  if (name.endsWith('.mov')) return 'video/quicktime';
   if (/\.(mp3|wav|ogg|m4a|aac|flac)$/.test(name)) return 'audio/mpeg';
   if (name.endsWith('.pdf')) return 'application/pdf';
   if (/\.(txt|md|markdown|csv|json|xml|yaml|yml|log)$/.test(name)) return 'text/plain';
@@ -124,7 +126,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
     const needle = query.trim().toLocaleLowerCase();
     return needle ? files.filter((file) => `${file.displayName} ${mimeOf(file)}`.toLocaleLowerCase().includes(needle)) : files;
   }, [files, query]);
-  const visible = useMemo(() => category === 'all' ? matching : matching.filter((file) => categoryOf(file) === category), [matching, category]);
+  const visible = useMemo(() => trash || category === 'all' ? matching : matching.filter((file) => categoryOf(file) === category), [matching, category, trash]);
 
   const loadMore = async () => {
     if (!api || !workspaceId || loadingMore || !hasMore) return;
