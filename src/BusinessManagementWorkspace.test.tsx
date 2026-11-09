@@ -50,8 +50,8 @@ describe('BusinessManagementWorkspace', () => {
   it('supports keyboard tab navigation with arrows, Home and End', async () => {
     render(<BusinessManagementWorkspace workspaceId="workspace-1" />); await screen.findByTestId('panels');
     const nav = screen.getByRole('tablist'); fireEvent.keyDown(nav, { key: 'ArrowRight' });
-    await waitFor(() => expect(screen.getByText('crm')).toBeTruthy());
-    fireEvent.keyDown(nav, { key: 'End' }); await waitFor(() => expect(screen.getByText('settings')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'CRM' }).getAttribute('aria-selected')).toBe('true'));
+    fireEvent.keyDown(nav, { key: 'End' }); await waitFor(() => expect(screen.getByRole('tab', { name: 'Settings' }).getAttribute('aria-selected')).toBe('true'));
   });
   it('loads the next page exactly once and appends using the current offset', async () => {
     setup({ resultSize: 100 }); render(<BusinessManagementWorkspace workspaceId="workspace-1" />); await screen.findByTestId('panels');
@@ -94,7 +94,7 @@ describe('BusinessManagementWorkspace', () => {
     await screen.findByTestId('panels');
     expect(screen.queryByRole('tab', { name: 'Settings' })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: 'Sales' }));
-    expect(screen.getByText('sales')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Sales' }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('private-hidden')).toBeTruthy();
   });
   it('keeps manager audit navigation available without granting admin settings capability', async () => {
@@ -102,7 +102,7 @@ describe('BusinessManagementWorkspace', () => {
     render(<BusinessManagementWorkspace workspaceId="workspace-1" />);
     await screen.findByTestId('panels');
     fireEvent.click(screen.getByRole('tab', { name: 'Settings' }));
-    expect(screen.getByText('settings')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Settings' }).getAttribute('aria-selected')).toBe('true');
   });
   it('does not show an Open Office Team action unless supplied', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } }); render(<BusinessManagementWorkspace workspaceId="workspace-1" />);
