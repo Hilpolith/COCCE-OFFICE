@@ -396,7 +396,7 @@ function App() {
             <MoreHorizontal size={21} strokeWidth={1.8} />
           </button>
         </nav>
-      </aside>aside>
+      </aside>
 
       {mobileMenuOpen && <button className="mobile-scrim" aria-label="Close navigation overlay" onClick={() => setMobileMenuOpen(false)} />}
 
