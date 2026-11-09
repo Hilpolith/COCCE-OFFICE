@@ -61,6 +61,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   const [selectedStoragePlan, setSelectedStoragePlan] = useState<CloudStoragePlan | null>(null);
   const [autoRenewChoice, setAutoRenewChoice] = useState(false);
   const [storageBusy, setStorageBusy] = useState(false);
+  const [storageError, setStorageError] = useState('');
   const [trash, setTrash] = useState(false);
   const [category, setCategory] = useState<Category>('all');
   const [loading, setLoading] = useState(true);
@@ -154,41 +155,35 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   }, [workspaces, workspaceId]);
 
   const refresh = useCallback(async () => {
-    if (!api || !workspaceId) { setFiles([]); setUsage(null); setStoragePlans([]); setStorageSubscriptions([]); setStorageHistory([]); setHasMore(false); return; }
+    if (!api || !workspaceId) {
+      setFiles([]); setUsage(null); setStoragePlans([]); setStorageSubscriptions([]); setStorageHistory([]);
+      setStorageError(''); setHasMore(false); return;
+    }
     const current = ++sequence.current;
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setStorageError('');
     try {
-      const [nextFiles, nextUsage] = await Promise.all([
-        api.list(workspaceId, trash),
-        api.usage(workspaceId),
+      const [nextFiles, nextUsage] = await Promise.all([api.list(workspaceId, trash), api.usage(workspaceId)]);
+      if (current !== sequence.current) return;
+      setFiles(nextFiles); setUsage(nextUsage); setHasMore(nextFiles.length === 50);
+      // Billing is optional; a billing RPC failure must never block existing Drive access.
+      const [plansResult, subscriptionsResult, historyResult] = await Promise.allSettled([
+        api.storagePlans(workspaceId),
+        canManageStorage ? api.storageSubscriptions(workspaceId) : Promise.resolve([]),
+        canManageStorage ? api.storageHistory(workspaceId) : Promise.resolve([]),
       ]);
-      const [nextPlans, nextSubscriptions, nextHistory] = storageSubscriptionsReady
-        ? await Promise.all([
-            api.storagePlans(workspaceId),
-            canManageStorage ? api.storageSubscriptions(workspaceId) : Promise.resolve([]),
-            canManageStorage ? api.storageHistory(workspaceId) : Promise.resolve([]),
-          ])
-        : [[], [], []] as [CloudStoragePlan[], CloudStorageSubscription[], CloudStorageHistoryEvent[]];
       if (current === sequence.current) {
-        setFiles(nextFiles); setUsage(nextUsage); setStoragePlans(nextPlans);
-        setStorageSubscriptions(nextSubscriptions); setStorageHistory(nextHistory);
-        setHasMore(nextFiles.length === 50);
+        setStoragePlans(plansResult.status === 'fulfilled' ? plansResult.value : []);
+        setStorageSubscriptions(subscriptionsResult.status === 'fulfilled' ? subscriptionsResult.value : []);
+        setStorageHistory(historyResult.status === 'fulfilled' ? historyResult.value : []);
+        const billingFailure = [plansResult, subscriptionsResult, historyResult].find((result) => result.status === 'rejected');
+        setStorageError(billingFailure?.status === 'rejected'
+          ? (billingFailure.reason instanceof Error ? billingFailure.reason.message : 'Monthly storage billing is temporarily unavailable.')
+          : '');
       }
     } catch (cause) {
       if (current === sequence.current) setError(cause instanceof Error ? cause.message : 'Cloud Drive could not be loaded.');
     } finally { if (current === sequence.current) setLoading(false); }
-  }, [api, workspaceId, trash, canManageStorage, storageSubscriptionsReady]);
-
-  useEffect(() => { void refresh(); return () => { sequence.current += 1; }; }, [refresh]);
-  useEffect(() => {
-    if (!preview) { setPreviewText(''); return; }
-    let alive = true;
-    if (preview.blob.type.startsWith('text/') && preview.blob.size <= 200000) {
-      void preview.blob.text().then((value) => { if (alive) setPreviewText(value); }).catch(() => { if (alive) setPreviewText('Text preview could not be loaded.'); });
-    } else setPreviewText('');
-    return () => { alive = false; URL.revokeObjectURL(preview.url); };
-  }, [preview]);
-
+  }, [api, workspaceId, trash, canManageStorage]);
   const matching = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return needle ? files.filter((file) => `${file.displayName} ${mimeOf(file)}`.toLocaleLowerCase().includes(needle)) : files;
@@ -344,6 +339,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
         <div><span className="eyebrow">WORKSPACE STORAGE ADD-ONS</span><h3>More room for your team</h3><p>Monthly add-ons increase the current workspace quota. Your existing files and base allowance stay unchanged.</p></div>
         {storageSubscriptionsReady && <button className="button-secondary" type="button" onClick={() => setShowStoragePlans((value) => !value)} disabled={!workspaceId || loading || storageBusy}>{showStoragePlans ? 'Hide plans' : 'View plans'}</button>}
       </div>
+      {storageError && <p className="drive-storage-admin-note" role="status">Storage billing is temporarily unavailable. Your existing Cloud Drive files remain accessible.</p>}
       <div className="drive-storage-billing-summary">
         <span>Included quota <strong>{usage ? formatFileSize(usage.baseQuotaBytes) : '—'}</strong></span>
         <span>Purchased add-ons <strong>{usage ? formatFileSize(usage.purchasedQuotaBytes) : '—'}</strong></span>
