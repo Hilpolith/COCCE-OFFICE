@@ -43,6 +43,9 @@ test('workspace owners and admins control AI availability with member checks', (
 
 test('AI checks every selected workspace setting and skips disabled workspaces', () => {
   assert.match(edge, /office_get_workspace_ai_enabled/);
+  assert.match(edge, /function isAllowedOrigin/);
+  assert.match(edge, /cocce-office\(\?:-\[a-z0-9-\]\+\)\?-hilpolithrothschild-7822s-projects/);
+  assert.match(edge, /if \(origin && !isAllowedOrigin\(origin\)\)/);
   assert.match(edge, /aiEnabled === true/);
   assert.match(edge, /WORKSPACE_AI_DISABLED/);
   assert.match(edge, /includeConversations !== false/);
