@@ -77,7 +77,7 @@ describe('Cloud Drive workspace', () => {
     const docxFile = { ...cloudFile, displayName: 'brief.docx' };
     mocks.cloudApi.list.mockResolvedValue([docxFile]);
     render(<CloudDriveWorkspace query="" />);
-    fireEvent.click(await screen.findByRole('button', { name: /brief\.docx/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^DOCX brief\.docx/ }));
     const frame = await screen.findByTitle('brief.docx') as HTMLIFrameElement;
     expect(mocks.importDocxFile).toHaveBeenCalledWith(expect.any(File));
     expect(frame.getAttribute('sandbox')).toBe('');
