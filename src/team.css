@@ -41,3 +41,6 @@
 .office-workspace-ai-control label{display:grid;place-items:center;min-width:28px;min-height:28px;cursor:pointer}
 .office-workspace-ai-control input{width:17px;height:17px;accent-color:var(--accent)}
 .office-workspace-ai-control input:disabled{opacity:.5;cursor:wait}
+
+
+.office-create-suite-field{display:grid;gap:6px;min-width:180px;color:var(--muted);font-size:10px;font-weight:700}.office-create-suite-field select{min-height:39px;padding:0 11px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft);color:var(--text);font-size:10px}.office-create-suite-field select:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}@media(max-width:620px){.office-create-suite-field{width:100%;min-width:0}.office-create-suite-field select{width:100%}}
