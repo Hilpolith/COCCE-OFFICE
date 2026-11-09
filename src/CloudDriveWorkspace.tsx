@@ -6,11 +6,12 @@ import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import { createOfficeCloudApi, OFFICE_CLOUD_MAX_FILE_BYTES } from './lib/officeCloudFiles';
 import type { CloudFile, CloudUsage } from './lib/officeCloudFiles';
 import { formatFileSize } from './lib/driveStore';
+import { importDocxFile, MAX_DOCX_FILE_BYTES, DOCX_MIME } from './lib/docxInterchange';
 import { AlertCircle, ArrowDownToLine, AudioLines, Check, Cloud, File, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
 import './drive.css';
 
 type Category = 'all' | 'documents' | 'images' | 'video' | 'audio' | 'other';
-type Preview = { file: CloudFile; blob: Blob; url: string };
+type Preview = { file: CloudFile; blob: Blob; url: string; docxHtml?: string; docxWarnings?: string[] };
 const extension = (name: string) => name.includes('.') ? name.split('.').pop()!.slice(0, 8).toUpperCase() : 'FILE';
 function mimeOf(file: CloudFile) {
   const name = file.displayName.toLowerCase();
@@ -167,8 +168,24 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
     try {
       const bytes = await api.download(file);
       const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeOf(file) });
-      if (open) setPreview({ file, blob, url: URL.createObjectURL(blob) });
-      else { saveBlob(blob, file.displayName); setNotice(`Downloaded ${file.displayName} after cloud integrity verification.`); }
+      if (open) {
+        let docxHtml: string | undefined;
+        let docxWarnings: string[] | undefined;
+        if (/\.docx$/i.test(file.displayName)) {
+          if (blob.size > MAX_DOCX_FILE_BYTES) {
+            setNotice('This DOCX exceeds the 5 MiB safe in-app preview limit. Use Download to open the full verified file.');
+          } else {
+            try {
+              const imported = await importDocxFile(new File([blob], file.displayName, { type: DOCX_MIME }));
+              docxHtml = imported.richText;
+              docxWarnings = imported.warnings;
+            } catch (cause) {
+              setNotice(cause instanceof Error ? cause.message : 'This DOCX cannot be previewed safely. Download the verified original.');
+            }
+          }
+        }
+        setPreview({ file, blob, url: URL.createObjectURL(blob), ...(docxHtml ? { docxHtml } : {}), ...(docxWarnings?.length ? { docxWarnings } : {}) });
+      } else { saveBlob(blob, file.displayName); setNotice(`Downloaded ${file.displayName} after cloud integrity verification.`); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'The cloud file could not be downloaded.'); }
     finally { setBusy(false); }
   };
@@ -210,6 +227,6 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
         </article>;
       })}</div>
       : <div className="drive-empty glass-card"><FolderOpen size={24}/><h3>{query ? 'No matching files' : trash ? 'Workspace trash is empty' : 'Your cloud Drive is ready'}</h3><p>{query ? 'Try another search.' : 'Upload files to make a private, integrity-checked workspace copy. Local files are never uploaded automatically.'}</p></div>}
-    {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? previewText || 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
+    {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.docxWarnings?.length ? <p className="drive-feedback">{preview.docxWarnings.join(' ')}</p> : null}{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.docxHtml ? <iframe className="drive-preview-pdf drive-preview-docx" title={preview.file.displayName} sandbox="" srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"></head><body style="font:15px/1.7 system-ui,sans-serif;color:#202433;padding:28px;max-width:850px;margin:auto">${preview.docxHtml}</body></html>`}/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? previewText || 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
   </section>;
 }
