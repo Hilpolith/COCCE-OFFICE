@@ -2,3 +2,11 @@
 @media(max-width:720px){.drive-title-row{flex-direction:column}.drive-title-actions{width:100%;justify-content:flex-start}.drive-title-actions button{flex:1}.drive-summary{padding:12px}.drive-dropzone{align-items:flex-start;flex-wrap:wrap}.drive-dropzone>div:nth-child(2){min-width:calc(100% - 55px)}.drive-dropzone button{margin-left:49px}.drive-file-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.drive-file-card{padding:10px}.drive-file-thumb{height:94px}.drive-modal-scrim{padding:12px}.drive-modal{padding:20px 16px}.drive-dialog-actions{flex-wrap:wrap}.drive-preview-size{min-width:100%}}
 @media(max-width:390px){.drive-file-grid{grid-template-columns:1fr}.drive-file-thumb{height:125px}.drive-draft-grid{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.drive-file-card,.drive-dropzone{transition:none}}
+
+
+.drive-category-tabs{display:flex;align-items:center;gap:7px;overflow-x:auto;padding:2px 1px 12px;margin:-2px 0 9px;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+.drive-category-tabs button{display:inline-flex;align-items:center;gap:8px;flex:none;min-height:34px;padding:0 12px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(255,255,255,.045);color:var(--muted);font-size:10px;font-weight:650;white-space:nowrap;cursor:pointer;transition:background .16s,border-color .16s,color .16s}
+.drive-category-tabs button:hover{background:rgba(255,255,255,.09);color:var(--text)}
+.drive-category-tabs button.is-active{border-color:rgba(255,255,255,.28);background:linear-gradient(135deg,rgba(255,255,255,.18),rgba(255,255,255,.08));color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 4px 14px rgba(0,0,0,.12)}
+.drive-category-tabs button span{min-width:17px;height:17px;display:inline-grid;place-items:center;padding:0 4px;border-radius:999px;background:rgba(255,255,255,.09);color:inherit;font-size:9px;font-variant-numeric:tabular-nums}
+@media(max-width:620px){.drive-category-tabs{margin-right:-2px;padding-bottom:10px}.drive-category-tabs button{min-height:32px;padding:0 10px}}
