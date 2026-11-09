@@ -66,7 +66,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('shared Office editor chrome and AI workbench', () => {
+describe('shared Office editor chrome and COCCE AI', () => {
   it('shows truthful local-storage status and navigates with editor pills', () => {
     const onNavigate = vi.fn();
     render(<OfficeEditorChrome active="sheets" storageLabel="Local Office space · this browser" onNavigate={onNavigate} />);
