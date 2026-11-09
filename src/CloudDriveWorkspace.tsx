@@ -53,6 +53,7 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [previewText, setPreviewText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const sequence = useRef(0);
 
@@ -75,7 +76,8 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
       if (!alive) return;
       setUserId(session?.user.id ?? '');
       setFiles([]); setUsage(null); setWorkspaces([]); setWorkspaceId('');
-      if (!session) setLoading(false);
+      if (session) { void loadWorkspaces().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Could not load your COCCE workspaces.')); }
+      else setLoading(false);
     });
     void (async () => {
       const { data, error: sessionError } = await client.auth.getSession();
@@ -105,7 +107,14 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
   }, [api, workspaceId, trash]);
 
   useEffect(() => { void refresh(); return () => { sequence.current += 1; }; }, [refresh]);
-  useEffect(() => { if (!preview) return; return () => URL.revokeObjectURL(preview.url); }, [preview]);
+  useEffect(() => {
+    if (!preview) { setPreviewText(''); return; }
+    let alive = true;
+    if (preview.blob.type.startsWith('text/') && preview.blob.size <= 200000) {
+      void preview.blob.text().then((value) => { if (alive) setPreviewText(value); }).catch(() => { if (alive) setPreviewText('Text preview could not be loaded.'); });
+    } else setPreviewText('');
+    return () => { alive = false; URL.revokeObjectURL(preview.url); };
+  }, [preview]);
 
   const matching = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
@@ -193,6 +202,6 @@ export default function CloudDriveWorkspace({ query }: { query: string }) {
         </article>;
       })}</div>
       : <div className="drive-empty glass-card"><FolderOpen size={24}/><h3>{query ? 'No matching files' : trash ? 'Workspace trash is empty' : 'Your cloud Drive is ready'}</h3><p>{query ? 'Try another search.' : 'Upload files to make a private, integrity-checked workspace copy. Local files are never uploaded automatically.'}</p></div>}
-    {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
+    {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? previewText || 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
   </section>;
 }
