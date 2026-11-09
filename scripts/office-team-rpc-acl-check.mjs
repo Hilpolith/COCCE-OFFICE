@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test, { before, after } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 
-const migration = await readFile(new URL('../supabase/migrations/20261109101631_office_revoke_anon_team_rpcs.sql', import.meta.url), 'utf8');
+const migration = await readFile(new URL('../supabase/migrations/20261109101703_office_revoke_anon_team_rpcs.sql', import.meta.url), 'utf8');
 let db;
 
 before(async () => {
