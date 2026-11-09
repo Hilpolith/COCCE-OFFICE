@@ -139,7 +139,7 @@ describe('Cloud Drive workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View plans' }));
     expect(await screen.findByText('5000000000 B additional')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Choose plan' }));
-    const autoRenew = screen.getByRole('checkbox', { name: /Automatically renew monthly/ });
+    const autoRenew = screen.getByRole('checkbox', { name: /Automatically renew monthly/ }) as HTMLInputElement;
     expect(autoRenew.checked).toBe(false);
     fireEvent.change(screen.getByLabelText('COCCE Wallet PIN'), { target: { value: '2468' } });
     fireEvent.click(screen.getByRole('button', { name: /Purchase · 2,000 Coins/ }));
