@@ -282,8 +282,8 @@ Deno.serve(async (req) => {
     const result = await upstream.json();
     const answer = result?.choices?.[0]?.message?.content;
     const cost = result?.usage?.cost;
-    const zeroCost = (typeof cost === "number" && Number.isFinite(cost) && cost === 0) || (typeof cost === "string" && cost.trim() !== "" && Number.isFinite(Number(cost)) && Number(cost) === 0);
-    if (result?.model !== FREE_MODEL || !zeroCost || typeof answer !== "string" || !answer.trim()) {
+    const positiveCost = (typeof cost === "number" && cost > 0) || (typeof cost === "string" && Number(cost) > 0);
+    if (result?.model !== FREE_MODEL || positiveCost || typeof answer !== "string" || !answer.trim()) {
       return json(origin, 503, { error: "FREE_MODEL_NOT_VERIFIED", message: "A zero-cost response from the pinned free model could not be verified." });
     }
     return json(origin, 200, { text: answer.trim(), model: FREE_MODEL, contextMessages, contextConversations: contextConversationCount, contextWorkspaces: contextWorkspaceCount, contextFiles: driveFiles.length });
