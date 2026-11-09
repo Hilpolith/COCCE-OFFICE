@@ -26,14 +26,14 @@ export interface SanitizedRichText {
 function safeCssColor(value: string): string | null {
   const color = value.trim();
   if (/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(color)) return color;
-  if (/^rgba?\\(\\s*\\d{1,3}\\s*,\\s*\\d{1,3}\\s*,\\s*\\d{1,3}(?:\\s*,\\s*(?:0|1|0?\\.\\d+))?\\s*\\)$/i.test(color)) return color;
+  if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(color)) return color;
   return null;
 }
 
 function safeDocsHref(value: string): string | null {
   const href = value.trim();
   if (!href || href.length > 2048) return null;
-  if (/^mailto:[^\\s@]+@[^\\s@]+$/i.test(href)) return href;
+  if (/^mailto:[^\s@]+@[^\s@]+$/i.test(href)) return href;
   try {
     const parsed = new URL(href);
     return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null;
@@ -53,7 +53,7 @@ function safeStyleForElement(element: HTMLElement, tag: string): string {
     const allowedFonts = new Set(['arial', 'aptos', 'calibri', 'cambria', 'georgia', 'times new roman', 'verdana', 'tahoma', 'trebuchet ms', 'courier new', 'consolas', 'inter']);
     if (allowedFonts.has(family.toLowerCase())) styles.push(`font-family:"${family.replaceAll('"', '')}"`);
     const size = element.style.fontSize.trim();
-    const match = size.match(/^(\\d{1,2})(pt|px)$/i);
+    const match = size.match(/^(\d{1,2})(pt|px)$/i);
     if (match && Number(match[1]) >= 8 && Number(match[1]) <= 72) styles.push(`font-size:${size}`);
   }
   if (tag === 'P' || tag === 'H1' || tag === 'H2' || tag === 'H3') {
