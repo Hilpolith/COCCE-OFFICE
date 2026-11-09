@@ -21,3 +21,14 @@
 .office-ai-drive-file strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text)}
 .office-ai-drive-error{margin:0;font-size:10px;color:var(--muted)}
 @media(max-width:560px){.office-ai-drive-heading{align-items:flex-start}.office-ai-drive-heading>.button-secondary{font-size:9px;padding:0 9px}}
+
+.office-ai-consent-backdrop{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:18px;background:rgba(20,32,52,.32);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.office-ai-consent{width:min(100%,460px);padding:22px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(232,241,252,.9));box-shadow:0 24px 80px rgba(20,40,70,.22);color:#30435d}
+.office-ai-consent-mark{display:grid;place-items:center;width:38px;height:38px;margin-bottom:12px;border-radius:13px;background:rgba(230,165,75,.14);color:#a66b20}
+.office-ai-consent h3{margin:5px 0 0;font-size:18px;letter-spacing:-.02em}
+.office-ai-consent p{font-size:12px;line-height:1.65;color:#667b96}
+.office-ai-consent ul{display:grid;gap:6px;padding-left:18px;color:#425a78;font-size:11px;overflow-wrap:anywhere}
+.office-ai-consent-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:18px}
+.office-ai-consent-actions button{min-height:38px;padding:0 14px;border-radius:12px;font-size:11px;font-weight:750;cursor:pointer}
+.office-ai-consent-actions .button-primary{border:0;background:linear-gradient(135deg,#648fc9,#87b0df);color:white}
+@media(max-width:480px){.office-ai-consent{padding:18px}.office-ai-consent-actions{display:grid;grid-template-columns:1fr 1fr}.office-ai-consent-actions button{padding:0 8px}}
