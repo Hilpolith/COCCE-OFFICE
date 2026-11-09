@@ -141,9 +141,16 @@ The AI/Drive integration has advanced beyond the earlier verification snapshot:
 
 - Selected Drive file context is implemented in COCCE AI. The browser submits up to three file IDs; the Edge Function resolves each with the caller's JWT, verifies the returned workspace is in the user's enabled AI scope, restricts downloads to the expected Bunny origin and workspace/file/revision path, bounds the bytes, and accepts only small UTF-8 text files. The helper has six focused tests covering authorised reads, cross-workspace denial, file type/size, URL pinning, size/UTF-8 checks, and context caps.
 - The AI workspace offers a Drive picker, caps selected files at three, and lists only files in AI-enabled workspaces. Conversation history can still be disabled separately; explicitly selected files remain attached until deselected.
-- Supabase `office-ai-chat` is ACTIVE at version 14 and `office-cloud-files` is ACTIVE at version 6; both retain JWT verification. Production Office collaboration and Cloud Drive feature flags are enabled.
+- Supabase `office-ai-chat` is ACTIVE at version 15 and `office-cloud-files` is ACTIVE at version 7; both retain JWT verification. Production Office collaboration and Cloud Drive feature flags are enabled.
 - The Cloud Drive Vercel-preview CORS preflight mismatch was corrected in source and deployed to `office-cloud-files` v6.
 - Focused tests for the Drive context helper and AI workspace passed (10/10), and a production TypeScript/Vite build passed at the immediately preceding main revision. A later full test run found one Cloud Drive OPTIONS preflight test failure; the source correction is now applied, and a GitHub Actions run for current main commit `22b766fe12d871cb8e5036220bfbf9542532e008` was pending. Do not call the current main branch fully green until that run completes successfully.
 - Vercel production deployment remains blocked by the team's HTTP 402 `api-deployments-free-per-day` quota. The live alias still returns HTTP 200, but serves the prior READY deployment; the current source has not been production-released.
 
 The latest full local test run could not be repeated after the isolated Vercel sandbox session stopped. The GitHub Actions run is the authoritative current-main verification path. After it passes, create a production deployment when Vercel's 24-hour quota window permits and verify READY plus the live alias.
+
+
+## Latest integrity and CI checkpoint — 2026-11-09 11:19 UTC
+
+The private Cloud Drive link response now includes the stored SHA-256 digest from the verified revision. COCCE AI compares the server-fetched Bunny bytes against that digest before decoding or adding any excerpt to model context. The Cloud Drive Edge Function is ACTIVE at version 7 and COCCE AI is ACTIVE at version 15; both still require JWT verification. The Drive-context test suite now covers the SHA-256 match and mismatch paths.
+
+GitHub Actions run `42607472160` completed successfully for an earlier main revision and executed both the full test command and production build. The latest main commit `f3c29c2d0ef353c980aa75012d686cb101382e60` has its own full validation run queued as `42608122219`; wait for that run to complete before treating the latest SHA as fully verified. Vercel production deployment remains blocked by the team's HTTP 402 `api-deployments-free-per-day` limit.
