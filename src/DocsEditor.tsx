@@ -32,7 +32,7 @@ import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import './docs.css';
 import {
   ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
-  FileText, Heading1, Heading2, Heading3, Italic, List, ListOrdered, LockKeyhole, MessageSquarePlus, Code, Minus, Eraser,
+  FileText, Heading1, Heading2, Heading3, Italic, List, ListOrdered, LockKeyhole, MessageSquarePlus, Code, Eraser,
   Pilcrow, Quote, Redo2, Replace, Rows3, Search, Strikethrough, Table2, Trash2, RotateCcw,
   Underline as UnderlineIcon, Undo2, X,
 } from 'lucide-react';
@@ -268,7 +268,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
   const editor = useEditor({
     extensions: [StarterKit.configure({
-      heading: { levels: [1, 2, 3, 4, 5, 6] }, link: false, underline: false,
+      heading: { levels: [1, 2, 3] }, link: false, underline: false,
       code: true, codeBlock: true, horizontalRule: true,
     }), Underline, TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } }), reviewCommentExtension, tableGuard],
     content: initialHtml,
@@ -678,9 +678,6 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Heading 1" icon={<Heading1 size={16} />} active={editorState.heading1} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()} />
         <FormattingButton label="Heading 2" icon={<Heading2 size={16} />} active={editorState.heading2} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} />
         <FormattingButton label="Heading 3" icon={<Heading3 size={16} />} active={editorState.heading3} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()} />
-        <FormattingButton label="Heading 4" icon={<Heading3 size={16} />} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 4 }).run()} />
-        <FormattingButton label="Heading 5" icon={<Heading3 size={16} />} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 5 }).run()} />
-        <FormattingButton label="Heading 6" icon={<Heading3 size={16} />} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 6 }).run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Text style">
@@ -696,7 +693,6 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Quote" icon={<Quote size={16} />} active={editorState.blockquote} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleBlockquote().run()} />
         <FormattingButton label="Inline code" icon={<Code size={16} />} onClick={() => editor?.chain().focus().toggleCode().run()} />
         <FormattingButton label="Code block" icon={<Code size={16} />} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleCodeBlock().run()} />
-        <FormattingButton label="Horizontal rule" icon={<Minus size={16} />} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().setHorizontalRule().run()} />
         <FormattingButton label="Clear formatting" icon={<Eraser size={16} />} onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
