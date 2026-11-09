@@ -62,3 +62,12 @@ Workspace owners and administrators can disable or re-enable COCCE AI per worksp
 The current workspace-wide Edge Function is ACTIVE as version 7 in the existing COCCE Supabase project, with `verify_jwt=true`. Its deployment was inspected after release and includes the all-authorised-workspaces loop and workspace-level AI gate. The `office_get_workspace_ai_enabled(uuid)` RPC returns a boolean and is executable by authenticated users only; it checks active membership server-side before returning the setting. The workspace/conversation/message RPCs likewise require authenticated execution and membership checks.
 
 The repository's full `pnpm test` suite passed in an isolated sandbox using PostgreSQL 18 for the repository's SQL-backed migration checks. The clean TypeScript/Vite build passed. Production Vercel deployment is currently blocked by the team's HTTP 402 `api-deployments-free-per-day` limit; no production release is claimed for this code until a deployment of the current `main` commit reaches READY.
+
+
+## Shared workspace AI policy for Docs — 2026-11-09
+
+The Docs writing studio now requires an explicit workspace scope: one authorised Office workspace or **All AI-enabled workspaces (up to 20)**. Its selection edits, prompt-only drafts and confirmed full-document summaries send the scope alongside the user-triggered text. The Vercel `/api/office-ai` handler rechecks the signed-in user's workspace membership with `office_list_workspaces`, then checks `office_get_workspace_ai_enabled` using that user's JWT before calling the model. A missing scope, non-member workspace, or disabled AI setting is rejected before provider access. The all-workspaces option succeeds only when at least one of the first 20 authorised workspaces has AI enabled. The UI is advisory; the server check is authoritative.
+
+The Government correspondence review route is subject to the same workspace AI switch in addition to its existing record eligibility and non-sensitive-text checks. This keeps the owner/admin AI setting consistent across the dedicated COCCE AI chat and Docs writing actions. Local-only documents are not automatically uploaded; the user must still choose what text to send and confirm full-document summaries separately.
+
+These Vercel API changes are on `main` but are not considered production-released until the current commit receives a READY deployment. The separate Supabase `office-ai-chat` Edge Function remains ACTIVE version 7 with JWT verification enabled.
