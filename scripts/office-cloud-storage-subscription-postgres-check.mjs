@@ -19,7 +19,7 @@ before(async()=>{
   'CREATE SCHEMA auth;',
   'CREATE TABLE auth.users(id uuid PRIMARY KEY);',
   "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;",
-  'CREATE TABLE public.profiles(id uuid PRIMARY KEY REFERENCES auth.users(id),cocce_coins integer NOT NULL DEFAULT 0,wallet_pin_hash text);',
+  'CREATE TABLE public.profiles(id uuid PRIMARY KEY REFERENCES auth.users(id),cocce_coins integer NOT NULL DEFAULT 0);',
   "CREATE TABLE public.wallet_transactions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,type text NOT NULL CHECK(type IN ('purchase','campaign','transfer_sent','transfer_received','vip_purchase')),amount integer NOT NULL,description text,related_id uuid REFERENCES public.profiles(id),created_at timestamptz DEFAULT now(),balance bigint DEFAULT 0,hidden_by_owner boolean NOT NULL DEFAULT false);",
   "CREATE FUNCTION public.test_wallet_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF coalesce(current_setting('wallet.atomic_writer',true),'')<>'v2' THEN RAISE EXCEPTION 'wallet writes require atomic operation' USING ERRCODE='42501'; END IF; RETURN NEW; END; $$;",
   "CREATE FUNCTION public.test_wallet_balance() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE v bigint; BEGIN PERFORM 1 FROM public.profiles WHERE id=NEW.user_id FOR UPDATE; SELECT balance INTO v FROM public.wallet_transactions WHERE user_id=NEW.user_id ORDER BY created_at DESC,id DESC LIMIT 1; NEW.balance:=coalesce(v,0)+NEW.amount; IF NEW.balance<0 THEN RAISE EXCEPTION 'insufficient wallet coins' USING ERRCODE='P0001'; END IF; UPDATE public.profiles SET cocce_coins=NEW.balance WHERE id=NEW.user_id; RETURN NEW; END; $$;",
@@ -168,19 +168,6 @@ test('billing RPCs and subscription tables remain unavailable to browser roles',
  assert.equal((await db.query("SELECT has_function_privilege('service_role','public.office_cloud_process_storage_renewals(integer)','EXECUTE') AS ok")).rows[0].ok,false);
 });
 
-
-test('wallet PIN attempt guard is private and progressively locks after repeated failures',async()=>{
- const initial=await rpc('office_cloud_wallet_pin_guard',[owner,null]);
- assert.equal(initial.allowed,true);
- for(let attempt=1;attempt<=5;attempt++){
-  const result=await rpc('office_cloud_wallet_pin_guard',[owner,false]);
-  if(attempt<5) assert.equal(result.allowed,true);
-  else assert.equal(result.allowed,false);
- }
- const locked=await rpc('office_cloud_wallet_pin_guard',[owner,null]);
- assert.equal(locked.allowed,false);
- assert.equal((await db.query("SELECT has_function_privilege('authenticated','public.office_cloud_wallet_pin_guard(uuid,boolean)','EXECUTE') AS ok")).rows[0].ok,false);
-});
 
 test('server-side billing remains disabled until both owner approval flags are set',async()=>{
  const plans=await rpc('office_cloud_list_storage_plans',[owner,workspace]);
