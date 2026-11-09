@@ -68,5 +68,5 @@ test('AI checks every selected workspace setting and skips disabled workspaces',
   assert.match(edge, /Promise\.all\(boundedWorkspaces\.map/);
   assert.match(edge, /WORKSPACE_AI_CONTROL_UNAVAILABLE/);
   assert.match(edge, /office_list_conversations/);
-  assert.match(edge, /office_list_messages/);
+  assert.match(edge, /office_search_ai_messages/);
 });
