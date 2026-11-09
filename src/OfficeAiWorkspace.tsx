@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ArrowUp, Bot, CheckCircle2, LoaderCircle, MessageCircle, Sparkles } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
 import { createOfficeCloudApi } from './lib/officeCloudFiles';
@@ -20,6 +20,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const [driveFilesError, setDriveFilesError] = useState('');
   const [driveFileOffsets, setDriveFileOffsets] = useState<Record<string, number>>({});
   const [driveFileHasMore, setDriveFileHasMore] = useState(false);
+  const driveLoadGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
@@ -78,6 +79,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     }
     const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
+        driveLoadGeneration.current += 1;
+        setDriveFilesLoading(false);
         setWorkspaces([]);
         setUserId('');
         setDriveFiles([]); setSelectedFileIds([]); setDriveFileOffsets({}); setDriveFileHasMore(false); setDriveFilesOpen(false);
@@ -93,8 +96,9 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   }, [client, config.status, initialWorkspaceId]);
 
   useEffect(() => {
+    driveLoadGeneration.current += 1;
+    setDriveFilesLoading(false);
     setPrompt(initialPrompt ?? '');
-    setAnswer('');
     setError('');
     setDriveFiles([]);
     setSelectedFileIds([]);
@@ -105,6 +109,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   }, [initialPrompt, initialWorkspaceId]);
 
   const changeWorkspace = (nextId: string) => {
+    driveLoadGeneration.current += 1;
+    setDriveFilesLoading(false);
     setWorkspaceId(nextId);
     setAnswer('');
     setError('');
@@ -123,6 +129,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     if (driveFilesOpen) { setDriveFilesOpen(false); return; }
     setDriveFilesOpen(true);
     if (!client || config.status !== 'ready' || !userId || driveFilesLoading) return;
+    const generation = ++driveLoadGeneration.current;
+    const generation = ++driveLoadGeneration.current;
     setDriveFilesLoading(true);
     setDriveFilesError('');
     try {
@@ -133,6 +141,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         try { return await officeTeamApi.getWorkspaceAiEnabled(client, space.workspace_id) ? space : null; }
         catch { return null; }
       }))).filter((space): space is OfficeWorkspace => Boolean(space));
+      if (generation !== driveLoadGeneration.current) return;
       const pageSize = workspaceId === '*' ? 5 : 50;
       const results = await Promise.all(enabledScope.map(async (space) => {
         try {
@@ -141,6 +150,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
           return { workspaceId: space.workspace_id, files: rows, offset: rows.length, hasMore: page.length > rows.length || page.length === 50 };
         } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset: 0, hasMore: false }; }
       }));
+      if (generation !== driveLoadGeneration.current) return;
       const files = results.flatMap((result) => result.files).filter(supportedDriveFile).slice(0, 80);
       setDriveFiles(files);
       setDriveFileOffsets(Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])));
@@ -149,7 +159,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     } catch (reason) {
       setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
     } finally {
-      setDriveFilesLoading(false);
+      if (generation === driveLoadGeneration.current) setDriveFilesLoading(false);
     }
   };
 
@@ -165,6 +175,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         try { return await officeTeamApi.getWorkspaceAiEnabled(client, space.workspace_id) ? space : null; }
         catch { return null; }
       }))).filter((space): space is OfficeWorkspace => Boolean(space));
+      if (generation !== driveLoadGeneration.current) return;
       const pageSize = workspaceId === '*' ? 5 : 50;
       const results = await Promise.all(enabledScope.map(async (space) => {
         const offset = driveFileOffsets[space.workspace_id] ?? 0;
@@ -174,6 +185,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
           return { workspaceId: space.workspace_id, files: rows, offset: offset + rows.length, hasMore: page.length === 50 };
         } catch { return { workspaceId: space.workspace_id, files: [] as CloudFile[], offset, hasMore: false }; }
       }));
+      if (generation !== driveLoadGeneration.current) return;
       const more = results.flatMap((result) => result.files).filter(supportedDriveFile);
       const seen = new Set(driveFiles.map((file) => file.fileId));
       const nextFiles = [...driveFiles, ...more.filter((file) => !seen.has(file.fileId))].slice(0, 80);
@@ -182,7 +194,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFileHasMore(results.some((result) => result.hasMore) && nextFiles.length < 80);
     } catch (reason) {
       setDriveFilesError(reason instanceof Error ? reason.message : 'More private Drive files could not be loaded.');
-    } finally { setDriveFilesLoading(false); }
+    } finally { if (generation === driveLoadGeneration.current) setDriveFilesLoading(false); }
   };
 
   const toggleDriveFile = (fileId: string, checked: boolean) => {
