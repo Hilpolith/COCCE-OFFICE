@@ -426,12 +426,12 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
 
   return <section className="office-ai-panel" aria-label="AI writing studio">
     <button className="office-ai-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>AI writing studio</strong><small>Selection tools, confirmed document summaries, workflows, and draft starters</small></span></span>
+      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>AI writing studio</strong><small>Edit selected text or draft with COCCE AI</small></span></span>
       <span className="office-ai-disclosure-status">{availabilityLabel}{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
     </button>
 
     {expanded && <div className="office-ai-body">
-      <p className="office-ai-privacy"><ShieldCheck size={16} /><span>Nothing is uploaded automatically. Selection edits send only the text you select (up to {OFFICE_AI_MAX_SELECTION_CHARS.toLocaleString()} characters), and new drafts send only your typed prompt. A full-document summary sends the document's plain text only after the separate confirmation below. No file, title, or document metadata is sent.</span></p>
+      <p className="office-ai-privacy"><ShieldCheck size={16} /><span>Nothing is uploaded automatically. Selection actions send only selected text; drafts send only your prompt. Full-document summaries require a separate confirmation.</span></p>
       <p className="office-ai-help">User-triggered text is sent through OpenRouter to its fixed free Google AI Studio model. The current provider policy lists 55-day prompt retention and no training. No paid model or alternate provider fallback is used; send only text you are permitted to share.</p>
       <label className="office-ai-field office-ai-workspace-scope"><span className="office-ai-label">AI workspace scope</span><select aria-label="AI workspace scope" value={workspaceId} disabled={workspaceLoading || workspaces.length === 0} onChange={(event) => { setWorkspaceId(event.target.value); setResult(''); setPreviewTarget(null); setError(''); }}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map((space) => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select><span className="office-ai-help">The server checks membership and the owner/admin AI switch for every request. Disabled workspaces are excluded.</span></label>
       {authStatus === 'signed-in' && !workspaceLoading && workspaces.length === 0 && <div className="office-ai-state" role="status"><AlertCircle size={16} /><span>Create or join an Office Team workspace before using the writing assistant. No document text has been sent.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Open Team</button></div>}
@@ -481,7 +481,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
 
       <div className="office-ai-workflows-block">
         <div className="office-ai-section-heading"><div><span className="eyebrow">REUSABLE RECIPES</span><h3>Saved workflows</h3></div><button className="office-ai-inline-button" onClick={() => setWorkflowFormOpen((open) => !open)}><Plus size={14} /> Save a workflow</button></div>
-        <p className="office-ai-help">Workflow names and instructions stay in this browser. Running one sends its instruction and only the selected excerpt.</p>
+        <p className="office-ai-help">Saved workflows stay in this browser and send only the selected excerpt when run.</p>
         {workflowFormOpen && <div className="office-ai-workflow-form">
           <label className="office-ai-field"><span className="office-ai-label">Name</span><input value={workflowName} maxLength={60} onChange={(event) => setWorkflowName(event.target.value)} placeholder="e.g. Executive-ready summary" /></label>
           <label className="office-ai-field"><span className="office-ai-label">Instructions</span><textarea className="office-ai-textarea" value={workflowInstruction} maxLength={OFFICE_AI_MAX_PROMPT_CHARS} onChange={(event) => setWorkflowInstruction(event.target.value)} placeholder="Describe how to transform or review the selected text." rows={3} /></label>
