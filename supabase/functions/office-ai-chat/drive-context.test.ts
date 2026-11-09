@@ -129,4 +129,52 @@ describe('COCCE AI selected Drive context', () => {
     expect(result.map((file) => file.text.length)).toEqual([8_000, 8_000, 4_000]);
     expect(result.reduce((total, file) => total + file.text.length, 0)).toBe(20_000);
   });
+
+  it('extracts bounded COCCE Docs and Sheets cloud copies as readable, untrusted text', async () => {
+    const docsBytes = new TextEncoder().encode(JSON.stringify({
+      format: 'cocce-office-docs-copy', version: 1, title: 'Operations plan',
+      html: '<h1>Launch plan</h1><p>Launch &amp; expand safely.</p>',
+    }));
+    const sheetsBytes = new TextEncoder().encode(JSON.stringify({
+      format: 'cocce-office-sheets-copy', version: 1, title: 'Monthly budget',
+      activeWorksheetIndex: 0,
+      worksheets: [{ name: 'TZS budget', cells: { A1: 'Category', B1: 'Amount', A2: 'Transport', B2: '=SUM(B3:B4)' } }],
+    }));
+    const ids = [fileId, '55555555-5555-4555-8555-555555555555'];
+    const payloads = new Map([[ids[0]!, docsBytes], [ids[1]!, sheetsBytes]]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/office-cloud-files')) {
+        const request = JSON.parse(String(init?.body));
+        const id = request.fileId as string;
+        const bytes = payloads.get(id)!;
+        const name = id === ids[0] ? 'operations.cocce-docs.json' : 'budget.cocce-sheets.json';
+        return cloudLink({
+          fileId: id, displayName: name, sizeBytes: bytes.byteLength,
+          sha256Hex: await sha256Hex(bytes), url: bunnyUrl.replace(fileId, id),
+        });
+      }
+      const id = new URL(String(input)).pathname.match(/\/files\/([0-9a-f-]{36})\//)?.[1];
+      return new Response(payloads.get(id!)!);
+    });
+    const result = await loadSelectedDriveFiles(ids, enabled, supabaseUrl, 'key', 'jwt', fetchImpl);
+    expect(result).toHaveLength(2);
+    expect(result[0]!.text).toContain('Document: Operations plan');
+    expect(result[0]!.text).toContain('Launch & expand safely.');
+    expect(result[1]!.text).toContain('Workbook: Monthly budget');
+    expect(result[1]!.text).toContain('Sheet: TZS budget');
+    expect(result[1]!.text).toContain('B2: =SUM(B3:B4)');
+  });
+
+  it('rejects unsafe embedded content in a COCCE Docs cloud copy', async () => {
+    const bytes = new TextEncoder().encode(JSON.stringify({
+      format: 'cocce-office-docs-copy', version: 1, title: 'Unsafe',
+      html: '<h1>Title</h1><script>steal()</script>',
+    }));
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/office-cloud-files')
+      ? cloudLink({ displayName: 'unsafe.cocce-docs.json', sizeBytes: bytes.byteLength, sha256Hex: await sha256Hex(bytes) })
+      : new Response(bytes));
+    await expect(loadSelectedDriveFiles([fileId], enabled, supabaseUrl, 'key', 'jwt', fetchImpl))
+      .rejects.toMatchObject({ status: 415, code: 'DRIVE_DOCS_COPY_UNSAFE' });
+  });
+
 });
