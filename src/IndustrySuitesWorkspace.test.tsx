@@ -245,7 +245,7 @@ describe('industry office workbench', () => {
     expect(screen.queryByRole('heading', { name: 'Private device-only preview item' })).toBeNull();
     const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);
     expect(persisted.offices[0].items[0].title).toBe('Private device-only preview item');
-    expect(persisted.offices[0].teamWorkspaceId).toBeUndefined();
+    expect(persisted.offices[0].teamWorkspaceId).toBeNull();
   });
 
   it('does not guess a specialist suite for an existing server workspace with no suite metadata', () => {
