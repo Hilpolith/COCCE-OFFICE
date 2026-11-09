@@ -61,6 +61,6 @@ test('restored message-search migration retains server-side membership and ACL g
   assert.match(migration, /office_private\.can_read_conversation/);
   assert.match(migration, /m\.deleted_at\s+is\s+null/i);
   assert.match(migration, /SECURITY DEFINER/);
-  assert.match(migration, /REVOKE ALL ON FUNCTION/);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION .*authenticated, service_role/);
+  assert.match(migration, /revoke all on function/i);
+  assert.match(migration, /grant execute on function .*authenticated, service_role/i);
 });
