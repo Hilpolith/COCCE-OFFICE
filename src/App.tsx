@@ -4,7 +4,7 @@ import {
   Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness, Building2,
   Check, ChevronLeft, CircleHelp, CloudOff, Command,
   FileSpreadsheet, FileText, FolderOpen, Grid2X2,
-  LockKeyhole, Menu, MessageCircle, MoreHorizontal, Plus, Search,
+  LockKeyhole, Menu, MessageCircle, Plus, Search, UserRound,
   ShieldCheck, Sparkles, Sun, X,
 } from 'lucide-react';
 import {
@@ -365,7 +365,7 @@ function App() {
           </button>
           <span className="visionos-dock-divider" aria-hidden="true" />
           <button type="button" className={`visionos-dock-button ${page === 'settings' ? 'is-active' : ''}`} aria-label="Profile and preferences" title="Profile & preferences" onClick={() => goTo('settings')}>
-            <MoreHorizontal size={21} strokeWidth={1.8} />
+            <UserRound size={21} strokeWidth={1.8} />
           </button>
         </nav>
       </aside>
