@@ -49,7 +49,7 @@ describe('COCCE AI workspace context', () => {
     const selector = await screen.findByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement;
     await waitFor(() => expect(selector.value).toBe('*'));
     expect(Array.from(selector.options).map((option) => option.textContent)).toEqual([
-      'All authorised workspaces', 'Operations', 'Finance',
+      'All AI-enabled workspaces (up to 20)', 'Operations', 'Finance',
     ]);
     fireEvent.change(selector, { target: { value: 'workspace-two' } });
     expect(selector.value).toBe('workspace-two');
