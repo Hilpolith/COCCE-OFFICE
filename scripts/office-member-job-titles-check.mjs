@@ -41,6 +41,17 @@ test('workspace owners and admins control AI availability with member checks', (
   assert.match(aiNotificationSql, /'ai_setting_changed'/);
 });
 
+test('AI Drive context is explicit, bounded, server-fetched and workspace-authorised', () => {
+  assert.match(edge, /MAX_DRIVE_FILES = 3/);
+  assert.match(edge, /MAX_DRIVE_FILE_BYTES = 512 \* 1024/);
+  assert.match(edge, /OFFICE_CLOUD_FUNCTION = '\/functions\/v1\/office-cloud-files'/);
+  assert.match(edge, /enabledById\.has\(link\.workspaceId\)/);
+  assert.match(edge, /signed\.origin !== BUNNY_DOWNLOAD_ORIGIN/);
+  assert.match(edge, /new TextDecoder\('utf-8', \{ fatal: true \}\)/);
+  assert.match(edge, /DRIVE_FILE_NOT_TEXT/);
+  assert.match(edge, /body\.fileIds/);
+});
+
 test('AI checks every selected workspace setting and skips disabled workspaces', () => {
   assert.match(edge, /office_get_workspace_ai_enabled/);
   assert.match(edge, /function isAllowedOrigin/);
