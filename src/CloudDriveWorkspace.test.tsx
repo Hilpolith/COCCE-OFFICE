@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
     getUser: vi.fn(),
     onAuthStateChange: vi.fn(),
   };
-  return { cloudApi, auth, listWorkspaces: vi.fn(), confirm: vi.fn() };
+  return { cloudApi, auth, listWorkspaces: vi.fn(), confirm: vi.fn(), importDocxFile: vi.fn() };
 });
 
 vi.mock('./FrostedConfirm', () => ({ useFrostedConfirm: () => mocks.confirm }));
@@ -35,6 +35,7 @@ vi.mock('./lib/officeCloudFiles', () => ({
   createOfficeCloudApi: () => mocks.cloudApi,
   OFFICE_CLOUD_MAX_FILE_BYTES: 25 * 1024 * 1024,
 }));
+vi.mock('./lib/docxInterchange', () => ({ importDocxFile: mocks.importDocxFile, MAX_DOCX_FILE_BYTES: 5 * 1024 * 1024, DOCX_MIME: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
 vi.mock('./lib/driveStore', () => ({
   formatFileSize: (value: number) => `${value} B`,
 }));
@@ -57,6 +58,7 @@ beforeEach(() => {
   mocks.cloudApi.upload.mockResolvedValue(undefined);
   mocks.cloudApi.finalize.mockResolvedValue({ status: 'finalized' });
   mocks.cloudApi.recover.mockResolvedValue({ status: 'recovered' });
+  mocks.importDocxFile.mockResolvedValue({ title: 'brief', content: 'Preview body', richText: '<h1>Imported brief</h1><p>Preview body</p>', warnings: [] });
 });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -68,6 +70,32 @@ describe('Cloud Drive workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: /^TXT brief/ }));
     expect(await screen.findByText('hello')).toBeTruthy();
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(cloudFile);
+  });
+
+  it('renders a sandboxed DOCX reading preview after verified download', async () => {
+    const docxFile = { ...cloudFile, displayName: 'brief.docx' };
+    mocks.cloudApi.list.mockResolvedValue([docxFile]);
+    render(<CloudDriveWorkspace query="" />);
+    fireEvent.click(await screen.findByRole('button', { name: /brief\.docx/ }));
+    const frame = await screen.findByTitle('brief.docx') as HTMLIFrameElement;
+    expect(mocks.importDocxFile).toHaveBeenCalledWith(expect.any(File));
+    expect(frame.getAttribute('sandbox')).toBe('');
+    expect(frame.getAttribute('srcdoc')).toContain('Imported brief');
+    expect(mocks.cloudApi.download).toHaveBeenCalledWith(docxFile);
+  });
+
+  it('loads subsequent 50-file pages without replacing the first page', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) => ({
+      ...cloudFile, fileId: `file-${index + 1}`, displayName: `page-${index + 1}.txt`,
+    }));
+    const secondPage = [{ ...cloudFile, fileId: 'file-51', displayName: 'page-51.txt' }];
+    mocks.cloudApi.list.mockResolvedValueOnce(firstPage).mockResolvedValueOnce(secondPage);
+    render(<CloudDriveWorkspace query="" />);
+    expect(await screen.findByText('page-1.txt')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more files' }));
+    expect(await screen.findByText('page-51.txt')).toBeTruthy();
+    expect(screen.getByText('page-1.txt')).toBeTruthy();
+    expect(mocks.cloudApi.list).toHaveBeenLastCalledWith('workspace-1', false, 50);
   });
 
   it('requires explicit confirmation, then uploads, finalizes and refreshes a cloud copy', async () => {
