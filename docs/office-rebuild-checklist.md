@@ -19,7 +19,7 @@ This checklist tracks the user's requested rebuild. A checked item means the rel
 - [x] Require per-request explicit consent before selected private Drive files are sent to the AI provider.
 - [x] Verify selected Drive file bytes against the stored SHA-256 digest before using them as context.
 - [x] Keep the model pinned to `google/gemma-4-31b-it:free`, with no paid or alternate-provider fallback.
-- [ ] Add secure extraction for PDF, DOCX, XLSX and PPTX. Current AI Drive context is limited to supported UTF-8 text files.
+- [ ] Add secure extraction for PDF, DOCX, XLSX and PPTX. Current AI Drive context supports supported UTF-8 text files and explicitly selected native COCCE Docs/Sheets snapshots; standard PDF/DOCX/XLSX/PPTX extraction remains outstanding.
 - [ ] Add contextual AI actions inside every tab of every specialist suite.
 - [ ] Add permission-scoped access to structured sector records, not just Teams messages and selected Drive text files.
 - [ ] Add safe, explicit AI actions for approved create/update workflows with human confirmation and audit events.
@@ -72,6 +72,8 @@ Distinct specialist components and tab structures are present for government, sc
 - [ ] Add in-app PPTX/ODP presentation preview with slide navigation.
 - [ ] Improve DOCX/PDF previews, including large-file handling, page navigation and accessibility.
 - [ ] Add preview tests for unsupported, malformed, encrypted and oversized files.
+- [ ] Complete optional monthly storage subscriptions only after explicit billing approval; current subscription work is gated off by default and is not live.
+- [ ] Add and verify a scheduled renewal job before enabling automatic subscription renewal or charging wallets.
 - [ ] Keep local files local unless the user explicitly uploads them.
 
 ## 6. Docs document editor
@@ -111,7 +113,7 @@ Distinct specialist components and tab structures are present for government, sc
 ## 9. Validation and release gate
 
 - [x] Keep all application code changes on `main` in `Hilpolith/COCCE-OFFICE`.
-- [x] Verify `office-ai-chat` is ACTIVE version 18 with JWT verification enabled.
+- [x] Verify `office-ai-chat` is ACTIVE version 19 with JWT verification enabled.
 - [x] Verify `office-cloud-files` is ACTIVE version 8 with JWT verification enabled.
 - [x] Audit all 257 public `office_*` tables: RLS is enabled on all 257. The 193 RLS tables without policies have no direct anon or authenticated SELECT/INSERT/UPDATE/DELETE grants (RPC-only access); continue reviewing SECURITY DEFINER membership checks as modules evolve.
 - [x] Verify the workspace suite table has RLS enabled and no direct anon/authenticated SELECT grant.
