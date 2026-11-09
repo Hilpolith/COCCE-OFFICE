@@ -291,6 +291,14 @@ export default function IndustrySuitesWorkspace({
         <div className="industry-office-hero-main"><span className="industry-office-mark"><Building2 size={22} /></span><div><span className="eyebrow">{definition.label.toUpperCase()} · {activeOffice.country.toUpperCase()}</span><h2>{activeOffice.name}</h2><p>{definition.workArea} · Shared team workspace</p></div></div>
         <div className="industry-office-actions"><span className="industry-team-status is-linked"><Users size={14} />Team linked</span><button className="button-secondary industry-team-button" onClick={openTeam}><Users size={15} />Open team</button></div>
       </section>
+      <div className="industry-ai-action-row">
+        <div><Sparkles size={16}/><span><strong>COCCE AI for {definition.shortLabel}</strong><small>Ask about authorised team conversations. Sector records and Drive files are not included.</small></span></div>
+        <button type="button" className="button-secondary" onClick={() => window.dispatchEvent(new CustomEvent('cocce-office:navigate', { detail: {
+          page: 'ai',
+          workspaceId: activeOffice.teamWorkspaceId,
+          prompt: `Help me review the recent authorised team conversations for the ${definition.label} workspace “${activeOffice.name}”. Summarise current priorities, decisions, unresolved questions and practical next steps. Use only the conversations you can access; do not assume access to sector database records, Drive files, patient/student/beneficiary records, or other private data.`,
+        } }))}><Sparkles size={15}/> Ask COCCE AI</button>
+      </div>
       {activeOffice.industryId === 'government' && <div className="government-module-tabs" role="tablist" aria-label="Government office modules">
         <button type="button" role="tab" aria-selected={governmentPanel === 'correspondence'} className={governmentPanel === 'correspondence' ? 'is-active' : ''} onClick={() => setGovernmentPanel('correspondence')}><FileText size={14} /> Correspondence</button>
         <button type="button" role="tab" aria-selected={governmentPanel === 'tasks'} className={governmentPanel === 'tasks' ? 'is-active' : ''} onClick={() => setGovernmentPanel('tasks')}><Check size={14} /> Shared work items</button>
