@@ -669,7 +669,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
     {cloudEnabled && cloudOpen && onRestoreCloudCopy && <div id="docs-cloud-area"><DocsCloudPanel key={document.id} document={document} hasUnsavedChanges={hasUnsavedChanges} onRestore={onRestoreCloudCopy} onGoToTeam={onGoToTeam} /></div>}
 
-    <OfficeWorkbenchLayout className="docs-workbench-layout" rail={<OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} />}>
+    <OfficeWorkbenchLayout className="docs-workbench-layout" rail={<OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} defaultExpanded />}>
       <div className="docs-editor-main">
     <div className="docs-format-toolbar glass-card" role="toolbar" aria-label="Document formatting">
       <span className="docs-format-group" aria-label="Paragraph style">
