@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { CellSelection } from '@tiptap/pm/tables';
-import { AlertCircle, Check, ChevronDown, ChevronRight, LoaderCircle, Plus, Save, ShieldCheck, Sparkles, WandSparkles, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronRight, FileText, LoaderCircle, Plus, Save, ShieldCheck, Sparkles, WandSparkles, X } from 'lucide-react';
 import {
   buildOfficeAiRequest,
   buildOfficeAiDocumentSummaryRequest,
@@ -16,7 +16,6 @@ import {
   OFFICE_AI_MAX_REQUEST_BYTES,
   OFFICE_AI_MAX_PROMPT_CHARS,
   OFFICE_AI_MAX_SAVED_WORKFLOWS,
-  OFFICE_AI_MAX_SELECTION_CHARS,
   OfficeAiError,
   requestOfficeAi,
   saveOfficeAiWorkflows,
