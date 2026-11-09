@@ -21,10 +21,11 @@ export const OFFICE_AI_ACTIONS = [
 export type OfficeAiAction = typeof OFFICE_AI_ACTIONS[number]['id'] | 'custom' | 'draft';
 export type OfficeAiSelectionRequest = {
   action: OfficeAiAction;
+  workspaceId: string;
   selectedText?: string;
   prompt?: string;
 };
-export type OfficeAiDocumentSummaryRequest = { action: 'document_summary'; documentText: string };
+export type OfficeAiDocumentSummaryRequest = { action: 'document_summary'; workspaceId: string; documentText: string };
 export type GovernmentReviewAction = 'summarize' | 'proofread' | 'quality_check';
 export type GovernmentReviewRequest = {
   action: 'government_review';
@@ -96,19 +97,21 @@ export function extractOfficeAiDocumentText(doc: {
   return doc.textBetween(0, doc.content.size, '\n');
 }
 
-export function buildOfficeAiDocumentSummaryRequest(documentText: string): OfficeAiDocumentSummaryRequest {
+export function buildOfficeAiDocumentSummaryRequest(documentText: string, workspaceId: string): OfficeAiDocumentSummaryRequest {
+  if (typeof workspaceId !== 'string' || (workspaceId !== '*' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId))) throw new OfficeAiError('WORKSPACE_REQUIRED', 'Choose an Office workspace with COCCE AI enabled.');
   if (!documentText.trim()) throw new OfficeAiError('DOCUMENT_TEXT_REQUIRED', 'This document has no text to summarize.');
   if (documentText.length > OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS) {
     throw new OfficeAiError('DOCUMENT_TOO_LARGE', `Full-document summaries are limited to ${OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS.toLocaleString()} characters and ${Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB per request. Use a shorter document or summarize selected text instead; no text has been sent.`);
   }
-  const payload: OfficeAiDocumentSummaryRequest = { action: 'document_summary', documentText };
+  const payload: OfficeAiDocumentSummaryRequest = { action: 'document_summary', workspaceId, documentText };
   if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > OFFICE_AI_MAX_REQUEST_BYTES) {
     throw new OfficeAiError('DOCUMENT_TOO_LARGE', `This document exceeds the ${Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB request limit. Use a shorter document or summarize selected text instead; no text has been sent.`);
   }
   return payload;
 }
 
-export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: string, prompt: string): OfficeAiRequest {
+export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: string, prompt: string, workspaceId: string): OfficeAiRequest {
+  if (typeof workspaceId !== 'string' || (workspaceId !== '*' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(workspaceId))) throw new OfficeAiError('WORKSPACE_REQUIRED', 'Choose an Office workspace with COCCE AI enabled.');
   const cleanPrompt = prompt.trim();
   if (cleanPrompt.length > OFFICE_AI_MAX_PROMPT_CHARS) {
     throw new OfficeAiError('PROMPT_TOO_LONG', `Instructions must be ${OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters or fewer.`);
@@ -120,7 +123,7 @@ export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: strin
     if (cleanPrompt.length > OFFICE_AI_MAX_PROMPT_CHARS) {
       throw new OfficeAiError('PROMPT_TOO_LONG', `Instructions must be ${OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters or fewer.`);
     }
-    return { action, prompt: cleanPrompt };
+    return { action, workspaceId, prompt: cleanPrompt };
   }
 
   if (!selectedText.trim()) throw new OfficeAiError('SELECTION_REQUIRED', 'Select some text in the document first.');
@@ -134,7 +137,7 @@ export function buildOfficeAiRequest(action: OfficeAiAction, selectedText: strin
     throw new OfficeAiError('PROMPT_TOO_LONG', `Instructions must be ${OFFICE_AI_MAX_PROMPT_CHARS.toLocaleString()} characters or fewer.`);
   }
 
-  return action === 'custom' ? { action, selectedText, prompt: cleanPrompt } : { action, selectedText };
+  return action === 'custom' ? { action, workspaceId, selectedText, prompt: cleanPrompt } : { action, workspaceId, selectedText };
 }
 
 export function buildGovernmentReviewRequest(workspaceId: string, correspondenceId: string, selectedText: string, reviewAction: GovernmentReviewAction): GovernmentReviewRequest {
