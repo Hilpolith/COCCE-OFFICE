@@ -4,6 +4,18 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const FREE_MODEL = "google/gemma-4-31b-it:free";
 const ALLOWED_ORIGINS = new Set(["https://cocce-office.vercel.app", "http://localhost:5173"]);
+
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === "https:"
+      && parsed.origin === origin
+      && /^cocce-office(?:-[a-z0-9-]+)?-hilpolithrothschild-7822s-projects\.vercel\.app$/i.test(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 const MAX_PROMPT = 1600;
 const MAX_HISTORY = 24;
 const MAX_BODY_BYTES = 8_000;
@@ -17,7 +29,7 @@ function cors(origin: string | null) {
     "X-Content-Type-Options": "nosniff",
     "Vary": "Origin",
   });
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
     headers.set("Access-Control-Allow-Headers", "authorization, apikey, content-type, x-client-info");
@@ -49,7 +61,7 @@ function freeError(status: number, code?: string) {
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
-  if (origin && !ALLOWED_ORIGINS.has(origin)) return json(null, 403, { error: "ORIGIN_NOT_ALLOWED" });
+  if (origin && !isAllowedOrigin(origin)) return json(null, 403, { error: "ORIGIN_NOT_ALLOWED" });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
   if (req.method !== "POST") return json(origin, 405, { error: "METHOD_NOT_ALLOWED" });
 
