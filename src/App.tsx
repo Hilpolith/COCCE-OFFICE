@@ -439,7 +439,7 @@ function App() {
           {page === 'industry' && <IndustrySuitesWorkspace key={`${serverWorkspace?.workspaceId ?? 'local'}-${industryFocus ?? 'all'}`} preferredIndustryId={industryFocus} activeWorkspace={serverWorkspace} onCreateTeam={openIndustryTeam} />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
           {page === 'chats' && <ChatsWorkspace />}
-          {page === 'ai' && <OfficeAiWorkspace initialWorkspaceId={aiContext?.workspaceId} initialPrompt={aiContext?.prompt} />}
+          {page === 'ai' && <OfficeAiWorkspace initialWorkspaceId={aiContext?.workspaceId ?? serverWorkspace?.workspaceId} initialPrompt={aiContext?.prompt} />}
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
