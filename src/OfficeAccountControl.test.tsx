@@ -36,7 +36,7 @@ function makeClient() {
 async function openSignedOutPanel() {
   render(<OfficeAccountControl />);
   fireEvent.click(screen.getByRole('button', { name: 'Sign in to COCCE Office' }));
-  await screen.findByLabelText('Email');
+  await screen.findByLabelText('Email address');
 }
 
 beforeEach(() => {
@@ -62,7 +62,7 @@ describe('Office account control', () => {
     render(<OfficeAccountControl />);
     await waitFor(() => expect(mocks.getUser).toHaveBeenCalled());
     fireEvent.click(await screen.findByRole('button', { name: /Account: synthetic@example.test/ }));
-    expect(await screen.findByText('synthetic@example.test')).toBeTruthy();
+    expect(screen.getAllByText('synthetic@example.test').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(mocks.signOut).toHaveBeenCalledWith({ scope: 'local' }));
     expect(await screen.findByRole('button', { name: 'Sign in to COCCE Office' })).toBeTruthy();
@@ -70,7 +70,7 @@ describe('Office account control', () => {
 
   it('signs in only through existing COCCE email/password auth', async () => {
     await openSignedOutPanel();
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'synthetic@example.test' } });
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'synthetic@example.test' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'synthetic-password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(mocks.signInWithPassword).toHaveBeenCalledWith({ email: 'synthetic@example.test', password: 'synthetic-password' }));
