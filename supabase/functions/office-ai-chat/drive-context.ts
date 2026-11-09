@@ -4,7 +4,13 @@ export const MAX_DRIVE_FILES = 3;
 const MAX_DRIVE_FILE_BYTES = 512 * 1024;
 const MAX_DRIVE_FILE_CHARS = 8_000;
 const MAX_DRIVE_CONTEXT_CHARS = 20_000;
-const DRIVE_TEXT_EXTENSIONS = new Set(['txt', 'md', 'csv', 'tsv', 'json', 'xml', 'yaml', 'yml', 'log']);
+const DRIVE_TEXT_EXTENSIONS = new Set([
+  'txt','md','markdown','mdx','csv','tsv','json','jsonl','ndjson','xml','yaml','yml','log',
+  'ts','tsx','js','jsx','mjs','cjs','css','scss','sass','less','html','htm','sql','py','sh','bash','zsh',
+  'toml','ini','conf','properties','dart','java','kt','kts','go','rs','php','rb','swift','c','h','cpp','hpp',
+  'cs','r','lua','ps1','bat','graphql','gql','prisma','vue','svelte','astro',
+]);
+const SENSITIVE_DRIVE_NAME = /^(?:\\.env(?:\\..*)?|secrets?(?:\\..*)?|credentials?(?:\\..*)?|service-account(?:\\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
 const OFFICE_CLOUD_FUNCTION = '/functions/v1/office-cloud-files';
 const BUNNY_DOWNLOAD_ORIGIN = 'https://de-s3.storage.bunnycdn.com';
 
@@ -109,8 +115,10 @@ function extractOfficeSnapshot(name: string, text: string): string {
   return name.toLowerCase().endsWith('.cocce-docs.json') ? extractDocsCopy(parsed) : extractSheetsCopy(parsed);
 }
 
-function supportedDriveTextFile(name: string): boolean {
-  const extension = name.split('.').pop()?.toLowerCase() ?? '';
+export function isSupportedDriveTextFile(name: string): boolean {
+  const normalized = name.normalize('NFC').trim();
+  if (!normalized || SENSITIVE_DRIVE_NAME.test(normalized)) return false;
+  const extension = normalized.split('.').pop()?.toLowerCase() ?? '';
   return DRIVE_TEXT_EXTENSIONS.has(extension);
 }
 
@@ -181,7 +189,7 @@ export async function loadSelectedDriveFiles(
     if (link.sizeBytes > MAX_DRIVE_FILE_BYTES) {
       throw { status: 413, code: 'DRIVE_FILE_TOO_LARGE', message: 'A selected Drive file exceeds the 512 KiB AI context limit.' } satisfies DriveContextError;
     }
-    if (!supportedDriveTextFile(link.displayName)) {
+    if (!isSupportedDriveTextFile(link.displayName)) {
       throw { status: 415, code: 'DRIVE_FILE_UNSUPPORTED_TYPE', message: 'Only UTF-8 text files with supported extensions can be attached to COCCE AI.' } satisfies DriveContextError;
     }
     const signed = new URL(link.url);
