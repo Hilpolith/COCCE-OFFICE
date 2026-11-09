@@ -329,7 +329,7 @@ async function verifyUser(config: CloudConfig, token: string, fetcher: Fetcher):
 }
 
 async function officeRpc(config: CloudConfig, name: string, payload: Record<string, unknown>, fetcher: Fetcher): Promise<unknown> {
-  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload|list_storage_plans|list_storage_subscriptions|list_storage_history|purchase_storage_subscription|renew_storage_subscription|set_storage_subscription_auto_renew)$/.test(name)) {
+  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload|list_storage_plans|list_storage_subscriptions|list_storage_history|purchase_storage_subscription|renew_storage_subscription|set_storage_subscription_auto_renew|wallet_pin_guard)$/.test(name)) {
     throw new Error('Office RPC not allowed');
   }
   const response = await fetcher(`${config.supabaseUrl}/rest/v1/rpc/${name}`, {
@@ -382,6 +382,8 @@ function apiErrorStatus(error: unknown): number {
   const status = rpcError?.status;
   if (rpcError?.sqlState === '42501') return 403;
   if (rpcError?.sqlState === 'P0001') return 402;
+  if (rpcError?.sqlState === '28000') return 403;
+  if (rpcError?.sqlState === '57014') return 429;
   if (rpcError?.sqlState === '55000') return 409;
   if (rpcError?.sqlState === '54000') return 429;
   if (rpcError?.sqlState === '22023') return 400;
@@ -624,6 +626,85 @@ function errorMessage(status: number): string {
   if (status === 429) return 'The workspace cloud limit or upload rate limit has been reached.';
   if (status === 422) return 'Bunny reported metadata that did not match the expected size, checksum or upload session; the cloud copy was not published.';
   return 'Cloud storage is temporarily unavailable. Your local original is unchanged.';
+}
+
+
+type WalletPinFailure = { status: number; error: string; message: string };
+async function verifyOfficeWalletPin(
+  config: CloudConfig,
+  actorId: string,
+  pin: string,
+  fetcher: Fetcher,
+): Promise<WalletPinFailure | null> {
+  // PINs are only handled in this Edge Function's memory. Never log or return
+  // the submitted PIN or the private profile field.
+  if (!/^\d{4}$/.test(pin)) {
+    return { status: 400, error: 'INVALID_WALLET_PIN_FORMAT', message: 'Enter your four-digit COCCE Wallet PIN.' };
+  }
+  const current = rpcObject(await officeRpc(config, 'office_cloud_wallet_pin_guard', {
+    p_actor_id: actorId, p_success: null,
+  }, fetcher));
+  if (!current || typeof current.allowed !== 'boolean') throw new Error('Wallet PIN guard response was invalid.');
+  if (!current.allowed) {
+    return { status: 429, error: 'WALLET_PIN_LOCKED', message: 'Too many incorrect wallet PIN attempts. Try again in 15 minutes.' };
+  }
+
+  const profileUrl = new URL('/rest/v1/profiles', config.supabaseUrl);
+  profileUrl.searchParams.set('id', 'eq.' + actorId);
+  profileUrl.searchParams.set('select', 'wallet_pin_hash');
+  let response: Response;
+  try {
+    response = await fetcher(profileUrl.toString(), {
+      method: 'GET',
+      headers: {
+        apikey: config.serviceRoleKey,
+        Authorization: 'Bearer ' + config.serviceRoleKey,
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+      redirect: 'error',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      signal: AbortSignal.timeout(8_000),
+    });
+  } catch {
+    throw new Error('Wallet PIN verification is temporarily unavailable.');
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error('Wallet PIN verification is temporarily unavailable.');
+  }
+  let storedPin: unknown = null;
+  try {
+    const rows: unknown = await response.json();
+    if (Array.isArray(rows) && rows.length === 1 && rows[0] && typeof rows[0] === 'object') {
+      storedPin = (rows[0] as Record<string, unknown>).wallet_pin_hash;
+    }
+  } catch {
+    throw new Error('Wallet PIN verification returned an invalid profile response.');
+  }
+  if (typeof storedPin !== 'string' || !/^\d{4}$/.test(storedPin)) {
+    return {
+      status: 409,
+      error: 'WALLET_PIN_UNAVAILABLE',
+      message: 'A supported four-digit Wallet PIN is not configured for this account. Update it in COCCE Wallet before purchasing storage.',
+    };
+  }
+  if (storedPin !== pin) {
+    const failed = rpcObject(await officeRpc(config, 'office_cloud_wallet_pin_guard', {
+      p_actor_id: actorId, p_success: false,
+    }, fetcher));
+    if (!failed || typeof failed.allowed !== 'boolean') throw new Error('Wallet PIN guard response was invalid.');
+    if (!failed.allowed) {
+      return { status: 429, error: 'WALLET_PIN_LOCKED', message: 'Too many incorrect wallet PIN attempts. Try again in 15 minutes.' };
+    }
+    return { status: 403, error: 'INVALID_WALLET_PIN', message: 'The COCCE Wallet PIN is incorrect.' };
+  }
+  const accepted = rpcObject(await officeRpc(config, 'office_cloud_wallet_pin_guard', {
+    p_actor_id: actorId, p_success: true,
+  }, fetcher));
+  if (!accepted || accepted.allowed !== true) throw new Error('Wallet PIN verification could not be completed.');
+  return null;
 }
 
 export function createOfficeCloudHandler({
@@ -939,12 +1020,15 @@ export function createOfficeCloudHandler({
       }
 
       if (body.action === 'purchase_storage') {
-        if (!onlyKeys(body, ['action', 'workspaceId', 'planCode', 'idempotencyKey', 'autoRenew'])
+        if (!onlyKeys(body, ['action', 'workspaceId', 'planCode', 'idempotencyKey', 'autoRenew', 'walletPin'])
           || !uuid(body.workspaceId) || !uuid(body.idempotencyKey)
           || typeof body.planCode !== 'string' || !STORAGE_PLAN_CODES.has(body.planCode)
+          || typeof body.walletPin !== 'string'
           || (body.autoRenew !== undefined && typeof body.autoRenew !== 'boolean')) {
           return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
         }
+        const pinFailure = await verifyOfficeWalletPin(config, actorId, body.walletPin, fetchImpl);
+        if (pinFailure) return jsonResponse(origin, pinFailure.status, { error: pinFailure.error, message: pinFailure.message });
         const result = rpcObject(await officeRpc(config, 'office_cloud_purchase_storage_subscription', {
           p_actor_id: actorId, p_workspace_id: body.workspaceId.toLowerCase(),
           p_plan_code: body.planCode, p_idempotency_key: body.idempotencyKey,
@@ -956,10 +1040,12 @@ export function createOfficeCloudHandler({
       }
 
       if (body.action === 'renew_storage') {
-        if (!onlyKeys(body, ['action', 'subscriptionId', 'idempotencyKey'])
-          || !uuid(body.subscriptionId) || !uuid(body.idempotencyKey)) {
+        if (!onlyKeys(body, ['action', 'subscriptionId', 'idempotencyKey', 'walletPin'])
+          || !uuid(body.subscriptionId) || !uuid(body.idempotencyKey) || typeof body.walletPin !== 'string') {
           return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
         }
+        const pinFailure = await verifyOfficeWalletPin(config, actorId, body.walletPin, fetchImpl);
+        if (pinFailure) return jsonResponse(origin, pinFailure.status, { error: pinFailure.error, message: pinFailure.message });
         const result = rpcObject(await officeRpc(config, 'office_cloud_renew_storage_subscription', {
           p_actor_id: actorId, p_subscription_id: body.subscriptionId.toLowerCase(),
           p_idempotency_key: body.idempotencyKey,
@@ -975,9 +1061,15 @@ export function createOfficeCloudHandler({
       }
 
       if (body.action === 'set_storage_auto_renew') {
-        if (!onlyKeys(body, ['action', 'subscriptionId', 'autoRenew'])
-          || !uuid(body.subscriptionId) || typeof body.autoRenew !== 'boolean') {
+        if (!onlyKeys(body, ['action', 'subscriptionId', 'autoRenew', 'walletPin'])
+          || !uuid(body.subscriptionId) || typeof body.autoRenew !== 'boolean'
+          || (body.autoRenew && typeof body.walletPin !== 'string')
+          || (!body.autoRenew && body.walletPin !== undefined)) {
           return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
+        }
+        if (body.autoRenew) {
+          const pinFailure = await verifyOfficeWalletPin(config, actorId, body.walletPin as string, fetchImpl);
+          if (pinFailure) return jsonResponse(origin, pinFailure.status, { error: pinFailure.error, message: pinFailure.message });
         }
         const result = rpcObject(await officeRpc(config, 'office_cloud_set_storage_subscription_auto_renew', {
           p_actor_id: actorId, p_subscription_id: body.subscriptionId.toLowerCase(),
