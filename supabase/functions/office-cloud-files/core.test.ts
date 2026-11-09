@@ -781,6 +781,8 @@ describe('Office cloud Edge Function', () => {
 
   it('purchases storage through the atomic server RPC and defaults recurring billing off', async () => {
     const { fetchImpl, calls } = routedFetch((url, init) => {
+      if (url.pathname.endsWith('/office_cloud_wallet_pin_guard')) return Response.json({ allowed: true, lockedUntil: null, attemptsRemaining: 5 });
+      if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: '2468' }]);
       expect(url.pathname).toBe('/rest/v1/rpc/office_cloud_purchase_storage_subscription');
       expect(new Headers(init.headers).get('Authorization')).toBe('Bearer synthetic-service-role-token');
       return Response.json({
@@ -794,7 +796,7 @@ describe('Office cloud Edge Function', () => {
     const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
     const response = await handler(request({
       action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
-      idempotencyKey: '88888888-8888-4888-8888-888888888888',
+      idempotencyKey: '88888888-8888-4888-8888-888888888888', walletPin: '2468',
     }));
     expect(response.status).toBe(200);
     expect((await response.json()).purchase.autoRenew).toBe(false);
@@ -803,10 +805,36 @@ describe('Office cloud Edge Function', () => {
       p_actor_id: actorId, p_workspace_id: workspaceId, p_plan_code: 'storage_5gb_monthly',
       p_idempotency_key: '88888888-8888-4888-8888-888888888888', p_auto_renew: false,
     });
+    expect(calls.some((call) => call.url.endsWith('/office_cloud_wallet_pin_guard'))).toBe(true);
+    expect(calls.some((call) => call.url.includes('/rest/v1/profiles?') && call.url.includes('wallet_pin_hash'))).toBe(true);
+  });
+
+  it('rejects an incorrect wallet PIN before any wallet debit RPC and locks after the configured attempt threshold', async () => {
+    const { fetchImpl, calls } = routedFetch((url) => {
+      if (url.pathname.endsWith('/office_cloud_wallet_pin_guard')) {
+        const body = calls.find((call) => call.url.endsWith('/office_cloud_wallet_pin_guard'))?.init.body;
+        const parsed = body ? JSON.parse(body) : {};
+        return Response.json(parsed.p_success === false
+          ? { allowed: true, lockedUntil: null, attemptsRemaining: 4 }
+          : { allowed: true, lockedUntil: null, attemptsRemaining: 5 });
+      }
+      if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: '2468' }]);
+      throw new Error('Wallet debit must not be reached for an incorrect PIN');
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const response = await handler(request({
+      action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
+      idempotencyKey: '88888888-8888-4888-8888-888888888888', walletPin: '0000',
+    }));
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toBe('INVALID_WALLET_PIN');
+    expect(calls.some((call) => call.url.endsWith('/office_cloud_purchase_storage_subscription'))).toBe(false);
   });
 
   it('requires an explicit boolean before enabling auto-renew and maps low wallet balance to payment required', async () => {
     const { fetchImpl } = routedFetch((url) => {
+      if (url.pathname.endsWith('/office_cloud_wallet_pin_guard')) return Response.json({ allowed: true, lockedUntil: null, attemptsRemaining: 5 });
+      if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: '2468' }]);
       if (url.pathname.endsWith('/office_cloud_purchase_storage_subscription')) {
         return new Response(JSON.stringify({ code: 'P0001', message: 'private wallet detail' }), { status: 400 });
       }
@@ -820,7 +848,7 @@ describe('Office cloud Edge Function', () => {
     expect(invalid.status).toBe(400);
     const insufficient = await handler(request({
       action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
-      idempotencyKey: '99999999-9999-4999-8999-999999999999', autoRenew: false,
+      idempotencyKey: '99999999-9999-4999-8999-999999999999', autoRenew: false, walletPin: '2468',
     }));
     expect(insufficient.status).toBe(402);
     expect(JSON.stringify(await insufficient.json())).not.toContain('private wallet detail');
