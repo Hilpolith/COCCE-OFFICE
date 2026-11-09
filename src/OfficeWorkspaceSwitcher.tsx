@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, ChevronDown, LoaderCircle, Plus } from 'lucide-react';
 import { officeTeamApi, type OfficeWorkspace, type OfficeWorkspaceSuite } from './lib/officeTeamApi';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
@@ -11,9 +11,11 @@ export default function OfficeWorkspaceSwitcher() {
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const schemaReady = config.status === 'ready' && config.schemaReady;
   const [userId, setUserId] = useState('');
+  const userIdRef = useRef('');
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
   const [suites, setSuites] = useState<OfficeWorkspaceSuite[]>([]);
   const [selectedId, setSelectedId] = useState('');
+  const selectedIdRef = useRef('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,13 +27,18 @@ export default function OfficeWorkspaceSwitcher() {
     let alive = true;
     let authVersion = 0;
 
-    const clear = () => {
-      setUserId('');
+    const clearWorkspaceContext = () => {
       setWorkspaces([]);
       setSuites([]);
+      selectedIdRef.current = '';
       setSelectedId('');
-      setLoading(false);
       window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
+    };
+    const clear = () => {
+      userIdRef.current = '';
+      setUserId('');
+      clearWorkspaceContext();
+      setLoading(false);
     };
     const load = async () => {
       const version = authVersion;
@@ -43,17 +50,22 @@ export default function OfficeWorkspaceSwitcher() {
           officeTeamApi.listWorkspaceSuites(client),
         ]);
         if (!alive || version !== authVersion) return;
+        const currentSelectedId = selectedIdRef.current;
+        const nextSelectedId = nextWorkspaces.some((item) => item.workspace_id === currentSelectedId)
+          ? currentSelectedId
+          : nextWorkspaces[0]?.workspace_id ?? '';
+        if (nextSelectedId !== currentSelectedId) {
+          selectedIdRef.current = nextSelectedId;
+          if (currentSelectedId) window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
+        }
+        if (!nextSelectedId) window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
         setWorkspaces(nextWorkspaces);
         setSuites(nextSuites);
-        setSelectedId((current) => nextWorkspaces.some((item) => item.workspace_id === current)
-          ? current
-          : nextWorkspaces[0]?.workspace_id ?? '');
+        setSelectedId(nextSelectedId);
       } catch (cause) {
         if (!alive || version !== authVersion) return;
         setError(cause instanceof Error ? cause.message : 'Office workspaces could not be loaded.');
-        setWorkspaces([]);
-        setSuites([]);
-        setSelectedId('');
+        clearWorkspaceContext();
       } finally {
         if (alive && version === authVersion) setLoading(false);
       }
@@ -61,11 +73,13 @@ export default function OfficeWorkspaceSwitcher() {
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       authVersion += 1;
-      if (!session) clear();
-      else {
-        setUserId(session.user.id);
-        window.setTimeout(() => { if (alive) void load(); }, 0);
+      if (!session) { clear(); return; }
+      if (userIdRef.current !== session.user.id) {
+        userIdRef.current = session.user.id;
+        clearWorkspaceContext();
       }
+      setUserId(session.user.id);
+      window.setTimeout(() => { if (alive) void load(); }, 0);
     });
 
     const restore = async () => {
@@ -73,6 +87,10 @@ export default function OfficeWorkspaceSwitcher() {
         const { data, error: sessionError } = await client.auth.getSession();
         if (!alive) return;
         if (sessionError || !data.session) { clear(); return; }
+        if (userIdRef.current !== data.session.user.id) {
+          userIdRef.current = data.session.user.id;
+          clearWorkspaceContext();
+        }
         setUserId(data.session.user.id);
         await load();
       } catch {
@@ -113,7 +131,7 @@ export default function OfficeWorkspaceSwitcher() {
 
   return <label className="office-workspace-switcher" title={error || 'Switch your active Office workspace'}>
     <Building2 size={15} aria-hidden="true" />
-    <select aria-label="Active Office workspace" value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+    <select aria-label="Active Office workspace" value={selectedId} onChange={(event) => { selectedIdRef.current = event.target.value; setSelectedId(event.target.value); }}>
       {workspaces.map((workspace) => {
         const suiteId = suites.find((item) => item.workspace_id === workspace.workspace_id)?.suite_id ?? null;
         return <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.name} · {suiteLabel(suiteId)}</option>;
