@@ -88,7 +88,7 @@ describe('Office account control', () => {
 
   it('starts Google OAuth on the current Office origin using the existing client', async () => {
     await openSignedOutPanel();
-    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    fireEvent.click(screen.getByRole('button', { name: /Continue with Google/ }));
     await waitFor(() => expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
       provider: 'google',
       options: { redirectTo: window.location.origin },
