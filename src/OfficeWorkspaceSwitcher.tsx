@@ -117,6 +117,12 @@ export default function OfficeWorkspaceSwitcher() {
     };
   }, [client, schemaReady]);
 
+  useEffect(() => {
+    if (userId && !loading && workspaces.length === 0) {
+      window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
+    }
+  }, [userId, loading, workspaces.length]);
+
   const selected = workspaces.find((item) => item.workspace_id === selectedId) ?? null;
   const selectedSuite = suites.find((item) => item.workspace_id === selectedId)?.suite_id ?? null;
   const suiteLabel = (suiteId: string | null) => industryCatalog.find((item) => item.id === suiteId)?.shortLabel ?? 'Suite not assigned';
