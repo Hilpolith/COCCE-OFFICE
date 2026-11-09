@@ -101,6 +101,28 @@ test('availability status is authenticated, cache disabled, and returns no crede
   assert.equal(JSON.stringify(res.body).includes(OPENROUTER_TEST_KEY), false);
 });
 
+test('rejects requests without a workspace scope before provider access', async () => {
+  const { handler, calls } = makeHarness();
+  const res = await invoke(handler, { body: { workspaceId: null, action: 'summarize', selectedText: 'Excerpt.' } });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'WORKSPACE_REQUIRED');
+  assert.equal(providerCallFrom(calls), undefined);
+});
+
+test('workspace AI controls block disabled workspaces and non-members before provider access', async () => {
+  const disabled = makeHarness({ workspaceAiEnabled: false });
+  const disabledResponse = await invoke(disabled.handler, { body: { action: 'summarize', selectedText: 'Excerpt.' } });
+  assert.equal(disabledResponse.statusCode, 403);
+  assert.equal(disabledResponse.body.error, 'WORKSPACE_AI_DISABLED');
+  assert.equal(providerCallFrom(disabled.calls), undefined);
+
+  const nonMember = makeHarness({ workspaceRows: [] });
+  const deniedResponse = await invoke(nonMember.handler, { body: { action: 'summarize', selectedText: 'Excerpt.' } });
+  assert.equal(deniedResponse.statusCode, 403);
+  assert.equal(deniedResponse.body.error, 'WORKSPACE_ACCESS_DENIED');
+  assert.equal(providerCallFrom(nonMember.calls), undefined);
+});
+
 test('POST sends only an explicitly selected excerpt to the fixed free OpenRouter model', async () => {
   const { handler, calls } = makeHarness();
   const res = await invoke(handler, { body: { action: 'summarize', selectedText: 'Only the passage the user selected.' } });
