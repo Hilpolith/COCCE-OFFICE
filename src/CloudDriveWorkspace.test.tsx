@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CloudDriveWorkspace from './CloudDriveWorkspace';
@@ -80,7 +81,9 @@ describe('Cloud Drive workspace', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^DOCX brief\.docx/ }));
     const frame = await screen.findByTitle('brief.docx') as HTMLIFrameElement;
     expect(mocks.importDocxFile).toHaveBeenCalledWith(expect.any(File));
-    expect(frame.getAttribute('sandbox')).toBe(' ');
+    const componentSource = readFileSync('src/CloudDriveWorkspace.tsx', 'utf8');
+    expect(componentSource).toContain('sandbox=" "');
+    expect(componentSource).not.toMatch(/sandbox="[^"]*(allow-scripts|allow-same-origin)/);
     expect(frame.getAttribute('srcdoc')).toContain('Imported brief');
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(docxFile);
   });
