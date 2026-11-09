@@ -20,6 +20,15 @@ interface Props {
 }
 
 type Preview = { file: DriveFile; blob: Blob; url: string };
+type DriveCategory = 'all' | 'documents' | 'images' | 'video' | 'audio' | 'other';
+const driveCategoryOf = (file: DriveFile): Exclude<DriveCategory, 'all'> => {
+  if (file.mimeType.startsWith('image/')) return 'images';
+  if (file.mimeType.startsWith('video/')) return 'video';
+  if (file.mimeType.startsWith('audio/')) return 'audio';
+  if (file.mimeType === 'application/pdf' || file.mimeType.startsWith('text/')
+    || /\.(docx?|odt|rtf|xlsx?|ods|pptx?|odp|md|markdown|csv|json|xml|yaml|yml|log)$/i.test(file.name)) return 'documents';
+  return 'other';
+};
 
 const extensionOf = (name: string) => name.includes('.') ? name.split('.').pop()!.slice(0, 8).toUpperCase() : 'FILE';
 const isTextPreview = (file: DriveFile) => file.mimeType.startsWith('text/') || /\.(md|markdown|csv|json|xml|yaml|yml|log)$/i.test(file.name);
@@ -47,6 +56,7 @@ export default function DriveWorkspace({
 }: Props) {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [showTrash, setShowTrash] = useState(false);
+  const [fileCategory, setFileCategory] = useState<DriveCategory>('all');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -90,6 +100,10 @@ export default function DriveWorkspace({
     const needle = query.trim().toLocaleLowerCase();
     return needle ? files.filter((file) => `${file.name} ${file.mimeType}`.toLocaleLowerCase().includes(needle)) : files;
   }, [files, query]);
+  const visibleFiles = useMemo(
+    () => fileCategory === 'all' ? matchingFiles : matchingFiles.filter((file) => driveCategoryOf(file) === fileCategory),
+    [matchingFiles, fileCategory],
+  );
   const usedBytes = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
 
   const uploadFiles = async (incoming: FileList | File[]) => {
@@ -190,6 +204,14 @@ export default function DriveWorkspace({
         <button role="tab" aria-selected={!showTrash} className={!showTrash ? 'drive-tab-active' : ''} onClick={() => { setLoading(true); setShowTrash(false); setNotice(''); setError(''); }}>My files</button>
         <button role="tab" aria-selected={showTrash} className={showTrash ? 'drive-tab-active' : ''} onClick={() => { setLoading(true); setShowTrash(true); setNotice(''); setError(''); }}><Trash2 size={14} /> Trash</button>
       </div>
+      {!showTrash && <div className="drive-category-tabs" role="tablist" aria-label="Filter files by type">
+        {([
+          ['all', 'All files'], ['documents', 'Documents'], ['images', 'Images'],
+          ['video', 'Video'], ['audio', 'Audio'], ['other', 'Other'],
+        ] as const).map(([category, label]) => <button key={category} type="button" role="tab"
+          aria-selected={fileCategory === category} className={fileCategory === category ? 'is-active' : ''}
+          onClick={() => setFileCategory(category)}>{label}<span>{category === 'all' ? matchingFiles.length : matchingFiles.filter((file) => driveCategoryOf(file) === category).length}</span></button>)}
+      </div>}
 
       {notice && <div className="drive-feedback" role="status"><Check size={15} />{notice}</div>}
       {error && <div className="drive-feedback drive-error" role="alert">{error}</div>}
@@ -198,7 +220,7 @@ export default function DriveWorkspace({
       </div>}
 
       <section className="drive-files-section" aria-label={showTrash ? 'Files in local trash' : 'Local files'}>
-        {loading ? <div className="drive-empty glass-card" role="status">Reading this browser’s local files…</div> : matchingFiles.length ? <div className="drive-file-grid">{matchingFiles.map((file) => <DriveFileCard key={file.id} file={file} trashed={showTrash} onPreview={() => void openPreview(file)} onDownload={() => void download(file)} onRename={() => startRename(file)} onTrash={() => void moveToTrash(file)} onRestore={() => void restore(file)} onDeletePermanently={() => setPurgeTarget(file)} />)}</div> : <div className="drive-empty glass-card"><div className="drive-empty-icon"><HardDrive size={24} /></div><h2>{query ? 'No matching files' : showTrash ? 'Trash is empty' : 'Your local Drive is ready'}</h2><p>{query ? 'Try a different search term.' : showTrash ? 'Files moved here remain in this browser until you restore or permanently delete them.' : 'Save a file in this browser, or create a text draft with Docs. No upload to COCCE services occurs.'}</p>{!showTrash && <button className="button-primary" onClick={() => inputRef.current?.click()}><Upload size={15} /> Add a file</button>}</div>}
+        {loading ? <div className="drive-empty glass-card" role="status">Reading this browser’s local files…</div> : visibleFiles.length ? <div className="drive-file-grid">{visibleFiles.map((file) => <DriveFileCard key={file.id} file={file} trashed={showTrash} onPreview={() => void openPreview(file)} onDownload={() => void download(file)} onRename={() => startRename(file)} onTrash={() => void moveToTrash(file)} onRestore={() => void restore(file)} onDeletePermanently={() => setPurgeTarget(file)} />)}</div> : <div className="drive-empty glass-card"><div className="drive-empty-icon"><HardDrive size={24} /></div><h2>{query ? 'No matching files' : showTrash ? 'Trash is empty' : 'Your local Drive is ready'}</h2><p>{query ? 'Try a different search term.' : showTrash ? 'Files moved here remain in this browser until you restore or permanently delete them.' : 'Save a file in this browser, or create a text draft with Docs. No upload to COCCE services occurs.'}</p>{!showTrash && <button className="button-primary" onClick={() => inputRef.current?.click()}><Upload size={15} /> Add a file</button>}</div>}
       </section>
 
       {!showTrash && documents.length > 0 && <section className="drive-documents-section"><div className="panel-heading"><div><span className="eyebrow">COCCE DOCS DRAFTS</span><h2>{documents.length} local {documents.length === 1 ? 'draft' : 'drafts'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div><div className="drive-draft-grid">{documents.slice(0, 6).map((document) => <button key={document.id} className="drive-draft-card glass-card" onClick={() => onOpenDocument(document)}><span><FileText size={17} /></span><strong>{document.title || 'Untitled document'}</strong><small>{new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(document.updatedAt))} · Draft</small><ArrowUpRight size={14} /></button>)}</div></section>}
