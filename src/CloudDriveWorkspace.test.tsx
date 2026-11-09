@@ -72,14 +72,13 @@ describe('Cloud Drive workspace', () => {
 
   it('requires explicit confirmation, then uploads, finalizes and refreshes a cloud copy', async () => {
     render(<CloudDriveWorkspace query="" />);
-    const input = await screen.findByLabelText('') .catch(() => null);
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();
     fireEvent.change(fileInput, { target: { files: [new File(['draft'], 'new.txt', { type: 'text/plain' })] } });
     await waitFor(() => expect(mocks.confirm).toHaveBeenCalled());
     await waitFor(() => expect(mocks.cloudApi.reserve).toHaveBeenCalledWith('workspace-1', 'new.txt', expect.any(Uint8Array), expect.any(String)));
-    expect(mocks.cloudApi.upload).toHaveBeenCalled();
-    expect(mocks.cloudApi.finalize).toHaveBeenCalledWith('session-1');
+    await waitFor(() => expect(mocks.cloudApi.upload).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.cloudApi.finalize).toHaveBeenCalledWith('session-1'));
     expect(mocks.cloudApi.list).toHaveBeenCalled();
   });
 });
