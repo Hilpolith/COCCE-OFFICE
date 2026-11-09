@@ -71,7 +71,7 @@ describe('Office account control', () => {
   it('signs in only through existing COCCE email/password auth', async () => {
     await openSignedOutPanel();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'synthetic@example.test' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'synthetic-password' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'synthetic-password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(mocks.signInWithPassword).toHaveBeenCalledWith({ email: 'synthetic@example.test', password: 'synthetic-password' }));
     expect(await screen.findByRole('button', { name: /Account: synthetic@example.test/ })).toBeTruthy();
@@ -79,10 +79,10 @@ describe('Office account control', () => {
 
   it('clears an unsubmitted password when the account panel closes', async () => {
     await openSignedOutPanel();
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'temporary-test-secret' } });
+    fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'temporary-test-secret' } });
     fireEvent.click(screen.getByRole('button', { name: 'Close account panel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Sign in to COCCE Office' }));
-    const password = await screen.findByLabelText('Password') as HTMLInputElement;
+    const password = await screen.findByPlaceholderText('Enter your password') as HTMLInputElement;
     expect(password.value).toBe('');
   });
 
