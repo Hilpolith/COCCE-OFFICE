@@ -58,10 +58,7 @@ export default function OfficeWorkspaceSwitcher() {
         const nextSelectedId = preferredId && nextWorkspaces.some((item) => item.workspace_id === preferredId)
           ? preferredId
           : nextWorkspaces.some((item) => item.workspace_id === currentSelectedId) ? currentSelectedId : nextWorkspaces[0]?.workspace_id ?? '';
-        if (nextSelectedId !== currentSelectedId) {
-          selectedIdRef.current = nextSelectedId;
-          if (currentSelectedId) window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
-        }
+        if (nextSelectedId !== currentSelectedId) selectedIdRef.current = nextSelectedId;
         if (!nextSelectedId) window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
         setWorkspaces(nextWorkspaces);
         setSuites(nextSuites);
