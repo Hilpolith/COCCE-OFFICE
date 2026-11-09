@@ -56,7 +56,7 @@ on conflict (singleton) do nothing;
 
 create table if not exists public.office_cloud_wallet_pin_attempts (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  failed_attempts smallint not null default 0 check (failed_attempts between 0 and 5),
+  failed_attempts smallint not null default 0 check (failed_attempts between 0 and 15),
   window_started_at timestamptz not null default now(),
   locked_until timestamptz,
   updated_at timestamptz not null default now()
@@ -159,6 +159,15 @@ begin
   from public.office_cloud_wallet_pin_attempts a
   where a.user_id = p_actor_id
   for update;
+  if v_attempt.window_started_at < now() - interval '24 hours' then
+    update public.office_cloud_wallet_pin_attempts
+    set failed_attempts = 0, window_started_at = now(), locked_until = null, updated_at = now()
+    where user_id = p_actor_id;
+    select * into v_attempt
+    from public.office_cloud_wallet_pin_attempts a
+    where a.user_id = p_actor_id
+    for update;
+  end if;
 
   if v_attempt.locked_until is not null and v_attempt.locked_until > now() then
     return jsonb_build_object(
@@ -188,10 +197,15 @@ begin
         locked_until = null, updated_at = now()
     where user_id = p_actor_id;
   else
-    v_count := least(5, v_attempt.failed_attempts + 1);
+    v_count := least(15, v_attempt.failed_attempts + 1);
     update public.office_cloud_wallet_pin_attempts
     set failed_attempts = v_count,
-        locked_until = case when v_count >= 5 then now() + interval '15 minutes' else null end,
+        locked_until = case
+          when v_count >= 15 then now() + interval '24 hours'
+          when v_count >= 10 then now() + interval '1 hour'
+          when v_count >= 5 then now() + interval '15 minutes'
+          else null
+        end,
         updated_at = now()
     where user_id = p_actor_id;
   end if;
