@@ -1,3 +1,4 @@
+import OfficeSuiteAiAction from './OfficeSuiteAiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -680,7 +681,8 @@ export default function BusinessManagementWorkspace({
       )}
       {status === "ready" && capabilities && (
         <>
-          <nav
+          <div className="office-suite-ai-toolbar"><OfficeSuiteAiAction workspaceId={workspaceId} suiteLabel="Business" tabLabel={activeTab.replaceAll("_", " ")} /></div>
+      <nav
             className="business-tabs"
             aria-label="Business sections"
             role="tablist"
