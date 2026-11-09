@@ -630,7 +630,10 @@ function errorMessage(status: number): string {
 
 
 type WalletPinFailure = { status: number; error: string; message: string };
-function walletPinVerifierUnavailable(): WalletPinFailure {
+function walletPinVerifierUnavailable(pin: string): WalletPinFailure {
+  if (!/^\d{4}$/.test(pin)) {
+    return { status: 400, error: 'INVALID_WALLET_PIN_FORMAT', message: 'Enter your four-digit COCCE Wallet PIN.' };
+  }
   return {
     status: 409,
     error: 'WALLET_PIN_VERIFIER_UNAVAILABLE',
@@ -958,7 +961,7 @@ export function createOfficeCloudHandler({
           || (body.autoRenew !== undefined && typeof body.autoRenew !== 'boolean')) {
           return jsonResponse(origin, 400, { error: 'INVALID_REQUEST', message: errorMessage(400) });
         }
-        const pinFailure = walletPinVerifierUnavailable();
+        const pinFailure = walletPinVerifierUnavailable(body.walletPin as string);
         if (pinFailure) return jsonResponse(origin, pinFailure.status, { error: pinFailure.error, message: pinFailure.message });
         const result = rpcObject(await officeRpc(config, 'office_cloud_purchase_storage_subscription', {
           p_actor_id: actorId, p_workspace_id: body.workspaceId.toLowerCase(),
