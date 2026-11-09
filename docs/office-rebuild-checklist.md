@@ -20,7 +20,7 @@ This checklist tracks the user's requested rebuild. A checked item means the rel
 - [x] Verify selected Drive file bytes against the stored SHA-256 digest before using them as context.
 - [x] Keep the model pinned to `google/gemma-4-31b-it:free`, with no paid or alternate-provider fallback.
 - [ ] Add secure extraction for PDF, DOCX, XLSX and PPTX. Current AI Drive context supports supported UTF-8 text files and explicitly selected native COCCE Docs/Sheets snapshots; standard PDF/DOCX/XLSX/PPTX extraction remains outstanding.
-- [ ] Add contextual AI actions inside every tab of every specialist suite.
+- [x] Add a contextual COCCE AI action in all ten specialist modules; its label and prompt follow the currently selected tab.
 - [ ] Add permission-scoped access to structured sector records, not just Teams messages and selected Drive text files.
 - [ ] Add safe, explicit AI actions for approved create/update workflows with human confirmation and audit events.
 
@@ -57,7 +57,7 @@ Distinct specialist components and tab structures are present for government, sc
 - [ ] Audit each suite independently for its dashboard, tabs, real CRUD workflows, validation, search, pagination, audit history and empty/error states.
 - [ ] Verify role/permission matrices for owner, administrator, manager, supervisor, officer and member.
 - [ ] Verify every module's data isolation and RLS with synthetic cross-workspace tests.
-- [ ] Add a compact, context-aware COCCE AI action to every tab.
+- [x] Add a compact, context-aware COCCE AI action to every specialist tab context.
 - [ ] Ensure each AI action uses only the selected workspace's authorised records and selected files.
 - [ ] Complete sector-specific acceptance tests and do not label a suite complete while it relies on placeholder or browser-local data.
 
