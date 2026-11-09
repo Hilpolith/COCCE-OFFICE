@@ -143,6 +143,13 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         catch { return null; }
       }))).filter((space): space is OfficeWorkspace => Boolean(space));
       if (generation !== driveLoadGeneration.current) return;
+      if (!enabledScope.length) {
+        setDriveFiles([]);
+        setDriveFileOffsets({});
+        setDriveFileHasMore(false);
+        setDriveFilesError('No AI-enabled workspace could be verified in this scope. Check the connection or ask an owner to enable COCCE AI.');
+        return;
+      }
       const pageSize = workspaceId === '*' ? 5 : 50;
       const results = await Promise.all(enabledScope.map(async (space) => {
         try {
@@ -178,6 +185,10 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         catch { return null; }
       }))).filter((space): space is OfficeWorkspace => Boolean(space));
       if (generation !== driveLoadGeneration.current) return;
+      if (!enabledScope.length) {
+        setDriveFilesError('No AI-enabled workspace could be verified in this scope.');
+        return;
+      }
       const pageSize = workspaceId === '*' ? 5 : 50;
       const results = await Promise.all(enabledScope.map(async (space) => {
         const offset = driveFileOffsets[space.workspace_id] ?? 0;
