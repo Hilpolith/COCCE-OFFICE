@@ -79,7 +79,7 @@ describe('Cloud Drive workspace', () => {
     mocks.cloudApi.list.mockResolvedValue([docxFile]);
     render(<CloudDriveWorkspace query="" />);
     fireEvent.click(await screen.findByRole('button', { name: /^DOCX brief\.docx/ }));
-    const frame = await screen.findByTitle('brief.docx') as HTMLIFrameElement;
+    await screen.findByTitle('brief.docx');
     expect(mocks.importDocxFile).toHaveBeenCalledWith(expect.any(File));
     const componentSource = readFileSync('src/CloudDriveWorkspace.tsx', 'utf8');
     const docxFrame = componentSource.match(/<iframe className="drive-preview-pdf drive-preview-docx"[^>]*>/)?.[0] ?? '';
