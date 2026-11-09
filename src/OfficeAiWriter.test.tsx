@@ -134,7 +134,7 @@ describe('Docs Writing assistant', () => {
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
     await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
-    expect(await screen.findByText(/Create or join an Office Team workspace/)).toBeTruthy();
+    expect(await screen.findByText('No Office workspace yet.')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Draft preview' }) as HTMLButtonElement).disabled).toBe(true);
   });
