@@ -296,3 +296,49 @@ hr { border-color:rgba(255,255,255,.15) !important; }
 @media(prefers-reduced-motion:reduce) {
   *,*:before,*:after { animation-duration:.01ms !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
 }
+/* Auth surfaces are intentionally explicit: the auth component ships a few legacy !important declarations. */
+.office-auth-panel {
+  border:1px solid rgba(255,255,255,.24) !important;
+  border-radius:30px !important;
+  background:linear-gradient(145deg,rgba(255,255,255,.16),rgba(255,255,255,.055)),rgba(33,32,31,.94) !important;
+  color:#f6f0e9 !important;
+  box-shadow:0 30px 100px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.18) !important;
+  backdrop-filter:blur(40px) saturate(165%) !important;
+  -webkit-backdrop-filter:blur(40px) saturate(165%) !important;
+}
+.office-auth-brand {
+  background:linear-gradient(110deg,rgba(255,255,255,.12),rgba(255,255,255,.035)) !important;
+  border-bottom:1px solid rgba(255,255,255,.13) !important;
+}
+.office-auth-symbol { background:rgba(255,145,77,.2) !important; color:#ffc08e !important; border:1px solid rgba(255,255,255,.16) !important; }
+.office-auth-brand b,.office-auth-content h2 { color:#fff !important; }
+.office-auth-brand small,.office-auth-intro,.office-auth-switch,.office-auth-legal { color:#c5bbb1 !important; }
+.office-auth-eyebrow,.office-auth-text-link,.office-auth-switch button { color:#ffb47d !important; }
+.office-auth-close,.office-auth-signout {
+  color:#f6eee6 !important; background:rgba(255,255,255,.07) !important;
+  border:1px solid rgba(255,255,255,.2) !important; border-radius:999px !important;
+}
+.office-auth-form label { color:#e4dbd2 !important; }
+.office-auth-input-wrap {
+  background:rgba(0,0,0,.18) !important; border:1px solid rgba(255,255,255,.2) !important;
+  border-radius:15px !important; color:#cfc4ba !important;
+}
+.office-auth-input-wrap input { color:#fff !important; }
+.office-auth-input-wrap:focus-within { border-color:rgba(255,165,103,.75) !important; box-shadow:0 0 0 3px rgba(255,145,77,.13) !important; }
+.office-auth-eye { color:#cfc4ba !important; }
+.office-auth-submit {
+  color:#24160e !important; background:linear-gradient(115deg,#ffb276,#ff8a43) !important;
+  border:1px solid rgba(255,205,165,.6) !important; border-radius:999px !important;
+  box-shadow:0 8px 24px rgba(255,125,55,.23),inset 0 1px 0 rgba(255,255,255,.45) !important;
+}
+.office-auth-submit:hover:not(:disabled) { background:linear-gradient(115deg,#ffc18e,#ff9858) !important; }
+.office-auth-google {
+  color:#f4eee8 !important; background:rgba(255,255,255,.075) !important;
+  border:1px solid rgba(255,255,255,.2) !important; border-radius:999px !important;
+}
+.office-auth-divider { color:#bdb3a9 !important; }
+.office-auth-divider:before,.office-auth-divider:after { background:rgba(255,255,255,.16) !important; }
+.office-auth-config-error,.office-account-message,.office-account-message.is-error {
+  color:#f6eee6 !important; background:rgba(255,255,255,.07) !important;
+  border:1px solid rgba(255,255,255,.17) !important; border-radius:16px !important;
+}
