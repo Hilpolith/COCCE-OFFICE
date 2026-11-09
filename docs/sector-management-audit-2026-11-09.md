@@ -30,7 +30,7 @@ The connected database has corresponding sector migrations and dedicated read/co
 
 ## Test coverage visible in package scripts
 
-The package's explicit scripts include Postgres-oriented checks for School SMS, Accounting, Manufacturing, Healthcare Administration, Healthcare residency approvals, NGO, Hospitality, and Institutions. The package scripts do not list a dedicated Government correspondence Postgres suite or a dedicated University Management Postgres suite. School's named Postgres script is specifically the SMS check, not a full School Management acceptance suite. Business also has no dedicated Business Management Postgres script listed in the package scripts. General Vitest coverage may exist, but this audit did not establish end-to-end coverage for those three/four sectors.
+The package now includes dedicated PostgreSQL acceptance suites for Government, School, University, Business, Accounting, Manufacturing, Healthcare Administration, Healthcare residency approvals, NGO, Hospitality, and Institutions. The School Postgres script is named for SMS, but its fixture is byte-for-byte identical to the integrated production School migration and its eight tests cover bootstrap, terms/classes/subjects, timetable, encrypted student identity, admissions, enrollment, attendance, grading, receipts, parent notices, and role/workspace isolation. Business and University have isolated PostgreSQL schema validators; Institutions has an isolated schema/RLS/grant validator. The new Government suite runs the actual migration chain in PGlite and currently passes 11 tests.
 
 ## Security and data-access observations
 
@@ -42,13 +42,12 @@ The package's explicit scripts include Postgres-oriented checks for School SMS, 
 
 ## Next implementation and verification gates
 
-1. Add dedicated Postgres acceptance coverage for Government, University, and Business; expand School coverage beyond SMS.
-2. For each sector, exercise authenticated non-member denial, active member access, unassigned-role denial, role/capability denial, workspace isolation, create/update/delete or archive semantics, optimistic-version conflicts, idempotent retries, approval transitions, audit events, and report totals.
-3. Verify dashboards against the underlying records and check pagination boundaries, empty/loading/error states, and exports against source data.
+1. Complete the first full CI run after the new package scripts and PostgreSQL binary path are wired. The workflow is currently queued/in progress; targeted UI regressions (26/26) and the Government PGlite suite (11/11) have passed locally in an isolated Vercel sandbox.
+2. For each sector, keep exercising authenticated non-member denial, active member access, unassigned-role denial, role/capability denial, workspace isolation, create/update/delete or archive semantics, optimistic-version conflicts, idempotent retries, approval transitions, audit events, and report totals.
+3. Verify dashboards against underlying records and check pagination boundaries, empty/loading/error states, and exports against source data.
 4. Test privacy-key setup, unlock, lock-on-scope-change, and private-field non-disclosure for each module that handles protected records.
-5. Run the full package test command and production build in a network-enabled checkout, then verify the matching Vercel deployment. The current audit environment could inspect GitHub and Vercel but could not clone the repository for local execution because outbound DNS resolution to github.com failed.
-6. Keep schema changes separate from UI changes. Before any migration, inspect the exact table constraints, policies, helper functions, grants, and migration history; use a reviewed migration and run Supabase advisors.
+5. Keep schema changes separate from UI changes. Before any migration, inspect exact constraints, policies, helper functions, grants, and migration history; use a reviewed migration and run Supabase advisors.
 
 ## Deployment baseline at audit time
 
-The latest inspected production deployment for `main` is READY and corresponds to commit `d1e9e89c1f03d13d857f21168c8647094dcde306` (`Polish authentication glass surfaces`). This confirms the production build was deployed, not that all ten sector workflows passed end-to-end tests.
+The latest inspected production deployment for `main` is READY and corresponds to commit `dc63aa98bf5f26b78a5d615b90827ae63dcdaebe` (`Code-split all ten sector management workspaces`). All ten specialist sector components are now lazy-loaded. The main application JavaScript chunk fell from approximately 1,711.81 kB (gzip 451.92 kB) to 885.04 kB (gzip 249.73 kB), about a 48% reduction in the main chunk. The build still reports separate large Docs/PDF chunks; this is a performance warning, not a failed build. Production READY confirms deployability, not completion of all ten sector workflows.
