@@ -6,8 +6,8 @@ const source = readFileSync('src/glass.css', 'utf8');
 const indexSource = readFileSync('src/index.css', 'utf8');
 const sheet = new CSSStyleSheet();
 sheet.replaceSync(source);
-const screen = sheet.cssRules[0] as CSSMediaRule;
-const rules = Array.from(screen.cssRules);
+const screenSheets = Array.from(sheet.cssRules).filter((rule) => 'conditionText' in rule && (rule as CSSMediaRule).conditionText === 'screen') as CSSMediaRule[];
+const rules = screenSheets.flatMap((screenRule) => Array.from(screenRule.cssRules));
 const style = (selector: string) => rules.find((rule) => 'selectorText' in rule && rule.selectorText === selector) as CSSStyleRule | undefined;
 const nestedRules = rules.flatMap((rule) => ('cssRules' in rule ? Array.from((rule as CSSGroupingRule).cssRules) : []));
 const allRules = [...rules, ...nestedRules];
@@ -47,8 +47,8 @@ const selectorClasses = (selector: string) => [...selector.matchAll(/\.([a-zA-Z0
 
 describe('glass design rendering boundaries', () => {
   it('contains all new appearance styling in screen media, leaving print rules untouched', () => {
-    expect(sheet.cssRules.length).toBe(1);
-    expect(screen.conditionText).toBe('screen');
+    expect(screenSheets.length).toBeGreaterThan(0);
+    expect(screenSheets.length).toBe(sheet.cssRules.length);
     expect(source).not.toContain('@import');
     expect(source).toContain("url('/brand/cocce-light-frosted-ambient.webp')");
     expect(source).not.toMatch(/url\s*\(['"]?https?:/i);
