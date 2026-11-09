@@ -75,6 +75,8 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   const sequence = useRef(0);
 
   const schemaReady = config.status === 'ready' ? config.schemaReady : false;
+  // Billing stays disabled until the owner approves pricing and server-side wallet PIN verification is complete.
+  const storageSubscriptionsReady = String(import.meta.env.VITE_OFFICE_CLOUD_STORAGE_SUBSCRIPTIONS_READY ?? '') === 'true';
   const canManageStorage = useMemo(() => ['owner', 'admin'].includes(workspaces.find((space) => space.workspace_id === workspaceId)?.role ?? ''), [workspaces, workspaceId]);
   const api = useMemo(() => {
     if (!client || config.status !== 'ready' || !config.schemaReady || !userId) return null;
@@ -156,13 +158,17 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
     const current = ++sequence.current;
     setLoading(true); setError('');
     try {
-      const [nextFiles, nextUsage, nextPlans, nextSubscriptions, nextHistory] = await Promise.all([
+      const [nextFiles, nextUsage] = await Promise.all([
         api.list(workspaceId, trash),
         api.usage(workspaceId),
-        api.storagePlans(workspaceId),
-        canManageStorage ? api.storageSubscriptions(workspaceId) : Promise.resolve([]),
-        canManageStorage ? api.storageHistory(workspaceId) : Promise.resolve([]),
       ]);
+      const [nextPlans, nextSubscriptions, nextHistory] = storageSubscriptionsReady
+        ? await Promise.all([
+            api.storagePlans(workspaceId),
+            canManageStorage ? api.storageSubscriptions(workspaceId) : Promise.resolve([]),
+            canManageStorage ? api.storageHistory(workspaceId) : Promise.resolve([]),
+          ])
+        : [[], [], []] as [CloudStoragePlan[], CloudStorageSubscription[], CloudStorageHistoryEvent[]];
       if (current === sequence.current) {
         setFiles(nextFiles); setUsage(nextUsage); setStoragePlans(nextPlans);
         setStorageSubscriptions(nextSubscriptions); setStorageHistory(nextHistory);
@@ -171,7 +177,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
     } catch (cause) {
       if (current === sequence.current) setError(cause instanceof Error ? cause.message : 'Cloud Drive could not be loaded.');
     } finally { if (current === sequence.current) setLoading(false); }
-  }, [api, workspaceId, trash, canManageStorage]);
+  }, [api, workspaceId, trash, canManageStorage, storageSubscriptionsReady]);
 
   useEffect(() => { void refresh(); return () => { sequence.current += 1; }; }, [refresh]);
   useEffect(() => {
@@ -271,7 +277,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   };
 
   const purchaseStorage = async () => {
-    if (!api || !workspaceId || !selectedStoragePlan || !canManageStorage || storageBusy) return;
+    if (!storageSubscriptionsReady || !api || !workspaceId || !selectedStoragePlan || !canManageStorage || storageBusy) return;
     setStorageBusy(true); setError(''); setNotice('');
     try {
       const result = await api.purchaseStorage(workspaceId, selectedStoragePlan.planCode, crypto.randomUUID(), autoRenewChoice);
@@ -284,7 +290,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   };
 
   const renewStorage = async (subscription: CloudStorageSubscription) => {
-    if (!api || !canManageStorage || storageBusy) return;
+    if (!storageSubscriptionsReady || !api || !canManageStorage || storageBusy) return;
     if (!await confirm('Renew ' + subscription.displayName + ' storage for ' + subscription.monthlyCoins.toLocaleString() + ' COCCE Coins? This adds one month to the current subscription period.')) return;
     setStorageBusy(true); setError(''); setNotice('');
     try {
@@ -336,14 +342,14 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
     <section className="drive-storage-billing glass-card" aria-label="Monthly workspace storage">
       <div className="drive-storage-billing-head">
         <div><span className="eyebrow">WORKSPACE STORAGE ADD-ONS</span><h3>More room for your team</h3><p>Monthly add-ons increase the current workspace quota. Your existing files and base allowance stay unchanged.</p></div>
-        <button className="button-secondary" type="button" onClick={() => setShowStoragePlans((value) => !value)} disabled={!workspaceId || loading || storageBusy}>{showStoragePlans ? 'Hide plans' : 'View plans'}</button>
+        {storageSubscriptionsReady && <button className="button-secondary" type="button" onClick={() => setShowStoragePlans((value) => !value)} disabled={!workspaceId || loading || storageBusy}>{showStoragePlans ? 'Hide plans' : 'View plans'}</button>}
       </div>
       <div className="drive-storage-billing-summary">
         <span>Included quota <strong>{usage ? formatFileSize(usage.baseQuotaBytes) : '—'}</strong></span>
         <span>Purchased add-ons <strong>{usage ? formatFileSize(usage.purchasedQuotaBytes) : '—'}</strong></span>
         <span>Total workspace quota <strong>{usage ? formatFileSize(usage.quotaBytes) : '—'}</strong></span>
       </div>
-      {storageSubscriptions.length > 0 && <div className="drive-storage-subscriptions">
+      {storageSubscriptionsReady && storageSubscriptions.length > 0 && <div className="drive-storage-subscriptions">
         <h4>Subscriptions</h4>
         {storageSubscriptions.map((subscription) => <article className="drive-storage-subscription" key={subscription.subscriptionId}>
           <div className="drive-storage-subscription-main">
@@ -358,7 +364,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
           </div>
         </article>)}
       </div>}
-      {showStoragePlans && <div className="drive-storage-plans">
+      {storageSubscriptionsReady && showStoragePlans && <div className="drive-storage-plans">
         <div className="drive-storage-plans-intro"><strong>Choose an additional storage package</strong><span>Prices are monthly. 1 COCCE Coin = TSh 1.</span></div>
         <div className="drive-storage-plan-grid">
           {storagePlans.map((plan) => <article className="drive-storage-plan" key={plan.planCode}>
@@ -370,8 +376,8 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
         {!canManageStorage && <p className="drive-storage-admin-note">Only workspace owners and admins can purchase or manage monthly storage. Ask a workspace administrator to add a package.</p>}
         <p className="drive-storage-policy">Auto-renew is optional and off by default. If enabled, the administrator who enables it is charged monthly. Failed payments have a three-day grace period; after expiry, only the add-on quota is removed. Existing files are never deleted, but uploads can pause if usage exceeds the remaining quota.</p>
       </div>}
-      {storageHistory.length > 0 && <details className="drive-storage-history"><summary>Subscription history</summary><ul>{storageHistory.slice(0,12).map((event) => <li key={event.eventId}><span>{event.displayName} · {event.eventType.replaceAll('_',' ')}</span><small>{event.coins ? event.coins.toLocaleString() + ' Coins' : '—'} · {new Date(event.createdAt).toLocaleString()}</small></li>)}</ul></details>}
-      {selectedStoragePlan && <div className="drive-storage-dialog-backdrop">
+      {storageSubscriptionsReady && storageHistory.length > 0 && <details className="drive-storage-history"><summary>Subscription history</summary><ul>{storageHistory.slice(0,12).map((event) => <li key={event.eventId}><span>{event.displayName} · {event.eventType.replaceAll('_',' ')}</span><small>{event.coins ? event.coins.toLocaleString() + ' Coins' : '—'} · {new Date(event.createdAt).toLocaleString()}</small></li>)}</ul></details>}
+      {storageSubscriptionsReady && selectedStoragePlan && <div className="drive-storage-dialog-backdrop">
         <section className="drive-storage-dialog" role="dialog" aria-modal="true" aria-labelledby="drive-storage-dialog-title">
           <span className="eyebrow">CONFIRM STORAGE PURCHASE</span>
           <h3 id="drive-storage-dialog-title">Add {selectedStoragePlan.displayName} to this workspace?</h3>
