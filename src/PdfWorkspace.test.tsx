@@ -280,6 +280,7 @@ describe('PDF search overlays and navigation', () => {
 
     rerender(<PdfWorkspace workspaceId="another-local-space" repository={repository} />);
     await waitFor(() => expect(screen.queryByText('No matches for “missing” in this PDF.')).toBeNull());
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Search text in PDF' })).toBeTruthy());
     expect((screen.getByRole('textbox', { name: 'Search text in PDF' }) as HTMLInputElement).value).toBe('');
   });
 
