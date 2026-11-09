@@ -102,3 +102,18 @@ The Docs listing-tab DOCX-limit paragraph was removed as requested; the import c
 Release validation passed **558 Vitest tests across 56 files** (`pnpm exec vitest run --maxWorkers=1`), **47 Node checks**, TypeScript/production Vite build, and lint with zero errors. Lint still reports the same three intentional control-character-regex warnings in existing filename validation; Vite retains its existing large-chunk advisory. Independent review found no release blockers. Added regressions cover canceled consent, interrupted/stale reservations and recovery without re-upload, duplicate worksheet-name fidelity, malformed cloud payloads, fresh-ID restore, and restore persistence failure preserving the original.
 
 Commit `ba7fd96bd5023a090b638ca869ac5f70ba906c06` deployed to existing Vercel project `cocce-office` as `dpl_9rPjESU1jgEbhUr8pPzfPXCzBxRN` (`READY`, production). The canonical alias `https://cocce-office.vercel.app/` returned HTTP 200, and its delivered JavaScript bundle contains the Sheets cloud-copy, explicit save, and restore-as-new controls. No Vercel project, domain, SSO, or production environment setting was changed. No live Sheets cloud transaction or user-file upload was run; the Sheets flow was verified with synthetic repository tests, while the shared cloud backend had already passed its separate synthetic lifecycle and Docs browser checks above.
+
+
+## Monthly workspace storage subscriptions — staged, not live (2026-11-09)
+
+The repository now contains a draft Office-only monthly workspace add-on implementation in `supabase/migrations/20261109190000_office_cloud_storage_subscriptions.sql`, with a PGlite regression harness in `scripts/office-cloud-storage-subscription-postgres-check.mjs`. It defines six proposed monthly plans (5 GB/2,000 Coins; 25 GB/5,000; 100 GB/12,000; 250 GB/25,000; 1 TB/60,000; 2 TB/100,000), owner/admin purchase, an immutable wallet-ledger debit using the existing `wallet.atomic_writer=v2` guard, idempotency, optional auto-renew, a three-day failed-payment grace period, and quota-only expiry.
+
+**This migration has not been applied.** The live migration history currently ends at `20261109150325`; it does not contain `20261109190000`. The live `office-cloud-files` Edge Function is ACTIVE v8 with JWT verification and its deployed source does not yet expose subscription-plan, purchase, renewal or auto-renew actions. No storage subscription purchase or debit has occurred.
+
+The new subscription UI/API path is now gated by `VITE_OFFICE_CLOUD_STORAGE_SUBSCRIPTIONS_READY=true`, which is intentionally not enabled by this change. With the flag unset/false, Drive does not call the staged subscription endpoints and ordinary file listing/usage remains independent of billing.
+
+Two launch gates remain:
+1. The six prices are still proposals in the current storage review, not confirmed commercial prices. Obtain explicit owner approval before applying the migration or enabling the UI flag.
+2. The purchase and renewal functions use the guarded atomic wallet ledger, but they do **not** verify the user's `wallet_pin_hash`. A profile PIN-hash column exists, but this path has no verified server-side PIN verifier. Do not apply the migration or expose purchase/renewal until a reviewed server-side PIN check is implemented using the canonical wallet PIN hashing scheme. Do not compare PINs in the browser or write wallet balances directly.
+
+This implementation is for **shared workspace storage add-ons**, not personal-account Drive storage. Personal account storage still needs its own account-scoped file API, entitlement model and approved checkout flow. The two products must not be conflated.
