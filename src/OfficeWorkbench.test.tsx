@@ -119,7 +119,7 @@ describe('shared Office editor chrome and AI workbench', () => {
     const postCall = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
     expect(postCall).toBeTruthy();
     const payload = JSON.parse(String(postCall?.init?.body));
-    expect(payload).toEqual({ action: 'draft', prompt: 'Write one formula for A1: total the three values' });
+    expect(payload).toEqual({ action: 'draft', workspaceId: '*', prompt: 'Write one formula for A1: total the three values' });
     expect(JSON.stringify(payload)).not.toContain('PRIVATE_CELL_VALUE_MUST_NOT_BE_SENT');
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply formula' }));
