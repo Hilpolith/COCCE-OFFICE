@@ -93,12 +93,12 @@ describe('global Office workspace selection', () => {
   });
 
   it('clears the previous account workspace immediately when the signed-in COCCE user changes', async () => {
-    let resolveNextWorkspaces: ((value: Array<typeof workspaceB>) => void) | null = null;
+    const pendingWorkspaceLoad: { resolve?: (value: Array<typeof workspaceB>) => void } = {};
     let loadCount = 0;
     mocks.listWorkspaces.mockImplementation(() => {
       loadCount += 1;
       if (loadCount === 1) return Promise.resolve([workspaceA]);
-      return new Promise((resolve) => { resolveNextWorkspaces = resolve; });
+      return new Promise((resolve) => { pendingWorkspaceLoad.resolve = resolve; });
     });
     mocks.listWorkspaceSuites.mockImplementation(() => Promise.resolve([
       { workspace_id: workspaceA.workspace_id, suite_id: 'school', created_at: workspaceA.created_at },
@@ -113,7 +113,7 @@ describe('global Office workspace selection', () => {
     expect(events.slice(previousEventCount).some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceA.workspace_id)).toBe(false);
 
     await waitFor(() => expect(loadCount).toBe(2));
-    resolveNextWorkspaces?.([workspaceB]);
+    pendingWorkspaceLoad.resolve?.([workspaceB]);
     mocks.listWorkspaceSuites.mockResolvedValue([{ workspace_id: workspaceB.workspace_id, suite_id: 'business', created_at: workspaceB.created_at }]);
     await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceB.workspace_id)).toBe(true));
   });
@@ -139,8 +139,8 @@ describe('global Office workspace selection', () => {
     expect(events.some((item) => item.type === 'changed')).toBe(false);
   });
   it('ignores a stale initial session lookup after a newer COCCE auth event', async () => {
-    let resolveInitialSession: ((value: { data: { session: { user: typeof userA } }; error: null }) => void) | null = null;
-    mocks.auth.getSession.mockImplementation(() => new Promise((resolve) => { resolveInitialSession = resolve; }));
+    const pendingInitialSession: { resolve?: (value: { data: { session: { user: typeof userA } }; error: null }) => void } = {};
+    mocks.auth.getSession.mockImplementation(() => new Promise((resolve) => { pendingInitialSession.resolve = resolve; }));
     mocks.listWorkspaces.mockResolvedValue([workspaceB]);
     mocks.listWorkspaceSuites.mockResolvedValue([{ workspace_id: workspaceB.workspace_id, suite_id: 'business', created_at: workspaceB.created_at }]);
 
@@ -148,7 +148,7 @@ describe('global Office workspace selection', () => {
     emitAuthState?.('SIGNED_IN', { user: userB });
 
     await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceB.workspace_id)).toBe(true));
-    resolveInitialSession?.({ data: { session: { user: userA } }, error: null });
+    pendingInitialSession.resolve?.({ data: { session: { user: userA } }, error: null });
     await new Promise((resolve) => window.setTimeout(resolve, 20));
 
     expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceA.workspace_id)).toBe(false);
