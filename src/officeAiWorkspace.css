@@ -5,3 +5,19 @@
 .office-ai-context-toggle input{width:17px;height:17px;accent-color:var(--accent);flex:none}
 .office-ai-context-toggle small{font-size:10px;font-weight:550;color:var(--muted)}
 @media(max-width:680px){.office-ai-context .office-ai-context-toggle{align-items:flex-start;flex-direction:column}.office-ai-context-toggle>span:last-child{width:100%}}
+
+
+.office-ai-drive-context{display:grid;gap:10px;margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.025));box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+.office-ai-drive-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.office-ai-drive-heading>div{display:grid;gap:3px;min-width:0}
+.office-ai-drive-heading strong{font-size:11px;color:var(--text)}
+.office-ai-drive-heading small,.office-ai-drive-file small{font-size:9px;line-height:1.45;color:var(--muted)}
+.office-ai-drive-heading>.button-secondary{flex:none;min-height:32px;padding:0 11px;font-size:10px}
+.office-ai-drive-selected{font-size:10px;color:var(--accent)}
+.office-ai-drive-list{display:grid;gap:6px;max-height:240px;overflow:auto;padding-top:8px;border-top:1px solid var(--border)}
+.office-ai-drive-file{display:flex;align-items:flex-start;gap:9px;padding:8px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.035);cursor:pointer}
+.office-ai-drive-file input{margin-top:2px;accent-color:var(--accent);flex:none}
+.office-ai-drive-file span{display:grid;gap:3px;min-width:0}
+.office-ai-drive-file strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--text)}
+.office-ai-drive-error{margin:0;font-size:10px;color:var(--muted)}
+@media(max-width:560px){.office-ai-drive-heading{align-items:flex-start}.office-ai-drive-heading>.button-secondary{font-size:9px;padding:0 9px}}
