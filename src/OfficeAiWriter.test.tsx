@@ -217,7 +217,7 @@ describe('Docs Writing assistant', () => {
       expect(postBodies[1]).toMatchObject({ action: 'document_summary' });
       expect(String(postBodies[1]?.documentText)).toContain('Synthetic private cell alpha');
       expect(postBodies[1]).not.toHaveProperty('documentTitle');
-      fireEvent.click(screen.getByRole('button', { name: 'Insert summary at cursor' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Insert summary' }));
       expect((await screen.findByRole('alert')).textContent).toContain('table cell range is active');
       expect(editor.getHTML()).toBe(originalHtml);
 
@@ -228,7 +228,7 @@ describe('Docs Writing assistant', () => {
       if (afterTablePosition < 0) throw new Error('Safe synthetic insertion point was not found.');
       const originalTableHtml = new DOMParser().parseFromString(originalHtml, 'text/html').querySelector('table')?.outerHTML;
       editor.commands.setTextSelection(afterTablePosition);
-      fireEvent.click(screen.getByRole('button', { name: 'Insert summary at cursor' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Insert summary' }));
       await waitFor(() => expect(editor.state.doc.textContent).toContain('A preview edit.'));
       const finalTableHtml = new DOMParser().parseFromString(editor.getHTML(), 'text/html').querySelector('table')?.outerHTML;
       expect(finalTableHtml).toBe(originalTableHtml);
@@ -301,7 +301,7 @@ describe('Docs Writing assistant', () => {
     expect(String(postCall?.init?.body)).not.toContain('Synthetic local report');
     expect(chain.insertContentAt).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Insert summary at cursor' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Insert summary' }));
     expect(chain.insertContentAt).toHaveBeenCalledWith({ from: 30, to: 30 }, { type: 'text', text: 'A preview edit.' });
   });
 
