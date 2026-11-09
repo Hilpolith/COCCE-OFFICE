@@ -41,6 +41,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         const { data: sessionData, error: sessionError } = await client.auth.getSession();
         if (!active) return;
         if (sessionError || !sessionData.session) {
+          driveLoadGeneration.current += 1;
+          setDriveFilesLoading(false);
           setWorkspaces([]);
           setUserId('');
           setDriveFiles([]); setSelectedFileIds([]); setDriveFileOffsets({}); setDriveFileHasMore(false);
@@ -130,7 +132,6 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setDriveFilesOpen(true);
     if (!client || config.status !== 'ready' || !userId || driveFilesLoading) return;
     const generation = ++driveLoadGeneration.current;
-    const generation = ++driveLoadGeneration.current;
     setDriveFilesLoading(true);
     setDriveFilesError('');
     try {
@@ -157,7 +158,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFileHasMore(results.some((result) => result.hasMore) && files.length < 80);
       if (!files.length) setDriveFilesError('No supported text files were found in this workspace scope. Only .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files up to 512 KiB can be attached.');
     } catch (reason) {
-      setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
+      if (generation === driveLoadGeneration.current) setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
     } finally {
       if (generation === driveLoadGeneration.current) setDriveFilesLoading(false);
     }
@@ -165,6 +166,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
 
   const loadMoreDriveFiles = async () => {
     if (!client || config.status !== 'ready' || !userId || driveFilesLoading || !driveFileHasMore) return;
+    const generation = ++driveLoadGeneration.current;
     setDriveFilesLoading(true);
     setDriveFilesError('');
     try {
@@ -193,7 +195,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFileOffsets((current) => ({ ...current, ...Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])) }));
       setDriveFileHasMore(results.some((result) => result.hasMore) && nextFiles.length < 80);
     } catch (reason) {
-      setDriveFilesError(reason instanceof Error ? reason.message : 'More private Drive files could not be loaded.');
+      if (generation === driveLoadGeneration.current) setDriveFilesError(reason instanceof Error ? reason.message : 'More private Drive files could not be loaded.');
     } finally { if (generation === driveLoadGeneration.current) setDriveFilesLoading(false); }
   };
 
