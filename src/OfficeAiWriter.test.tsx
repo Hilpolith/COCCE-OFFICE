@@ -127,6 +127,17 @@ describe('Docs AI writing studio', () => {
     );
   });
 
+  it('keeps every Docs AI action disabled when the account has no Office workspace', async () => {
+    mocks.listWorkspaces.mockResolvedValue([]);
+    const { editor } = makeEditor();
+    render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    expect(await screen.findByText(/Create or join an Office Team workspace/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Summarize' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Draft preview' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('lets the writer target one authorised workspace and carries that scope to the server', async () => {
     const fetcher = mockFetch();
     const { editor } = makeEditor();
