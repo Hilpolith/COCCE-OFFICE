@@ -22,7 +22,7 @@ describe('local Docs content conversion and safety', () => {
     const html = '<p style="text-align:center;position:fixed"><span style="font-family:Arial;font-size:14pt;color:#ff0000;background-image:url(javascript:bad)">Hello</span><mark style="background-color:#fff2a8"> highlighted</mark> <a href="javascript:alert(1)">unsafe</a> <a href="https://example.com">safe link</a></p>';
     const safe = sanitizeRichTextHtml(html);
     expect(safe).toContain('<p style="text-align:center">');
-    expect(safe).toContain('<span style="font-family:&quot;Arial&quot;;font-size:14pt;color:#ff0000">Hello</span>');
+    expect(safe).toContain('<span style="color:#ff0000;font-family:&quot;Arial&quot;;font-size:14pt">Hello</span>');
     expect(safe).toContain('<mark style="background-color:#fff2a8"> highlighted</mark>');
     expect(safe).toContain('unsafe');
     expect(safe).toContain('<a href="https://example.com/" target="_blank" rel="noopener noreferrer">safe link</a>');
