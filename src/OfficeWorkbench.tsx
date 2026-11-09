@@ -33,7 +33,7 @@ export function OfficeWorkbenchLayout({
   const [collapsed, setCollapsed] = useState(false);
   const railId = `office-ai-rail-${useId()}`;
   return <div className={`office-workbench-layout ${collapsed ? 'is-collapsed' : ''} ${className}`.trim()}>
-    <aside className="office-workbench-rail" aria-label="AI workbench">
+    <aside className="office-workbench-rail" aria-label="COCCE AI">
       <div className="office-workbench-rail-heading">
         <span className="office-workbench-rail-title"><span className="office-workbench-rail-icon"><Sparkles size={16} /></span><span>COCCE AI</span></span>
         <button type="button" className="office-workbench-collapse" aria-label={collapsed ? 'Expand COCCE AI' : 'Collapse COCCE AI'} aria-controls={railId} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>
