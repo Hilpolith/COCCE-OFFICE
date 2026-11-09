@@ -86,7 +86,7 @@ describe('Cloud Drive workspace', () => {
     await waitFor(() => expect((selector as HTMLSelectElement).value).toBe('workspace-1'));
   };
   it('lists membership-scoped cloud files and previews downloaded text', async () => {
-    render(<CloudDriveWorkspace query="" />);
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
     expect(await screen.findByText('brief.txt')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^TXT brief/ }));
@@ -97,7 +97,7 @@ describe('Cloud Drive workspace', () => {
   it('renders a sandboxed DOCX reading preview after verified download', async () => {
     const docxFile = { ...cloudFile, displayName: 'brief.docx' };
     mocks.cloudApi.list.mockResolvedValue([docxFile]);
-    render(<CloudDriveWorkspace query="" />);
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
     fireEvent.click(await screen.findByRole('button', { name: /^DOCX brief\.docx/ }));
     await screen.findByTitle('brief.docx');
@@ -118,7 +118,7 @@ describe('Cloud Drive workspace', () => {
     }));
     const secondPage = [{ ...cloudFile, fileId: 'file-51', displayName: 'page-51.txt' }];
     mocks.cloudApi.list.mockResolvedValueOnce(firstPage).mockResolvedValueOnce(secondPage);
-    render(<CloudDriveWorkspace query="" />);
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
     expect(await screen.findByText('page-1.txt')).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Load more files' }));
@@ -128,7 +128,7 @@ describe('Cloud Drive workspace', () => {
   });
 
   it('requires explicit confirmation, then uploads, finalizes and refreshes a cloud copy', async () => {
-    render(<CloudDriveWorkspace query="" />);
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();
