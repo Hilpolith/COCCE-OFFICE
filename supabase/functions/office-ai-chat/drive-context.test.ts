@@ -21,7 +21,7 @@ describe('COCCE AI selected Drive context', () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
       const url = String(input);
       calls.push({ input: url, init });
-      if (url === supabaseUrl + '/functions/v1/office-cloud-files') return cloudLink();
+      if (url === supabaseUrl + '/functions/v1/office-cloud-files') return cloudLink({ sizeBytes: 7 });
       if (url === bunnyUrl) return new Response('pol\u0001icy');
       throw new Error('Unexpected URL ' + url);
     });
