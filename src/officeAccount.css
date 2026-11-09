@@ -103,3 +103,19 @@
 
 
 .office-auth-field-hint{display:block;margin-top:2px;color:rgba(255,255,255,.48);font-size:10px;font-weight:450;line-height:1.5}.office-auth-form select{width:100%;min-height:46px;padding:0 13px;border:1px solid rgba(255,255,255,.18);border-radius:13px;background:rgba(255,255,255,.075);color:#fff;font-size:12px}.office-auth-form select:focus{outline:0;border-color:rgba(222,207,180,.72);box-shadow:0 0 0 3px rgba(222,207,180,.12)}.office-auth-form select option{background:#20252a;color:#fff}
+
+.office-auth-brand{min-height:92px;gap:16px;padding:19px 26px}
+.office-auth-brand-logo{display:block;width:min(190px,48%);height:52px;object-fit:contain;object-position:left center;flex:none}
+.office-auth-brand-caption{max-width:150px;color:rgba(255,255,255,.56);font-size:10px;line-height:1.5}
+.office-auth-content{padding:31px 34px 30px}
+.office-auth-content h2{margin:10px 0 8px;font-size:30px;line-height:1.12}
+.office-auth-intro{margin-bottom:23px;max-width:390px}
+.office-auth-form{gap:16px}
+.office-auth-form label{gap:8px}
+.office-auth-form input,.office-auth-form textarea,.office-auth-input-wrap,.office-auth-form select{min-height:49px}
+.office-auth-input-wrap input{min-height:43px}
+.office-auth-submit{min-height:52px;border-radius:16px;font-size:12px}
+.office-auth-google{min-height:49px;border-radius:15px}
+.office-auth-switch{margin-top:19px}
+.office-auth-legal{margin-top:22px}
+@media(max-width:520px){.office-auth-brand{min-height:82px;padding:15px 18px}.office-auth-brand-logo{width:155px;height:45px}.office-auth-brand-caption{display:none}.office-auth-content{padding:24px 20px 22px}.office-auth-content h2{font-size:26px}}
