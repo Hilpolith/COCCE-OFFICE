@@ -58,7 +58,7 @@ async function balance(user){
 async function quota(workspaceId){
  return (await db.query('SELECT base_quota_bytes,purchased_quota_bytes,subscription_quota_bytes,quota_bytes FROM public.office_cloud_workspace_quotas WHERE workspace_id=$1',[workspaceId])).rows[0];
 }
-async function enableBilling(){ await db.exec("UPDATE public.office_cloud_storage_billing_config SET enabled=true,price_approved_at=now(),wallet_security_approved_at=now() WHERE singleton=true"); }
+async function enableBilling(){ await db.exec("INSERT INTO public.office_cloud_storage_billing_config(singleton,enabled,price_approved_at,wallet_security_approved_at) VALUES (true,true,now(),now()) ON CONFLICT(singleton) DO UPDATE SET enabled=true,price_approved_at=excluded.price_approved_at,wallet_security_approved_at=excluded.wallet_security_approved_at,updated_at=now()"); }
 async function purchase(user,space,plan,key,auto=false){
  return rpc('office_cloud_purchase_storage_subscription',[user,space,plan,key,auto]);
 }
@@ -152,7 +152,7 @@ test('auto-renew opt-out cancels at period end without another debit',async()=>{
  const bought=await purchase(owner,workspace,'storage_5gb_monthly','dddddddd-dddd-4ddd-8ddd-dddddddddddd',true);
  await rpc('office_cloud_set_storage_subscription_auto_renew',[owner,bought.subscription_id,false]);
  const before=await balance(owner);
- await db.query("UPDATE public.office_cloud_storage_subscriptions SET current_period_end=now()-interval '1 hour' WHERE subscription_id=$1",[bought.subscription_id]);
+ await db.query("UPDATE public.office_cloud_storage_subscriptions SET current_period_start=now()-interval '2 months',current_period_end=now()-interval '1 hour' WHERE subscription_id=$1",[bought.subscription_id]);
  const result=await rpc('office_cloud_process_storage_renewals',[100]);
  assert.equal(result.expired,1); assert.equal(await balance(owner),before);
  assert.equal(Number((await quota(workspace)).subscription_quota_bytes),0);
