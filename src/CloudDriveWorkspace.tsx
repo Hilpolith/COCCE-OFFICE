@@ -259,6 +259,17 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       const bytes = await api.download(file);
       const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeOf(file) });
       if (open) {
+        setPreviewText('');
+        if (blob.type.startsWith('text/')) {
+          if (blob.size <= 200000) {
+            try {
+              const text = await blob.text();
+              setPreviewText(text || 'This file is empty.');
+            } catch {
+              setPreviewText('Text preview could not be decoded safely. Download the verified original.');
+            }
+          }
+        }
         let docxHtml: string | undefined;
         let docxWarnings: string[] | undefined;
         if (/\.docx$/i.test(file.displayName)) {
