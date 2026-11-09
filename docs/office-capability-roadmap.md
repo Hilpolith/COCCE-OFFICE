@@ -174,3 +174,31 @@ GitHub Actions run `42607472160` completed successfully for an earlier main revi
 - If full-text search returns no matches, COCCE AI uses recent membership-checked rich messages and explicitly filters deleted_at rows. The prompt context is bounded to 24 excerpts across the selected workspace scope.
 - Office Chats now renders safe inline image, video and audio previews from verified Bunny Cloud Drive downloads. Audio waveform bars are derived locally when the browser can decode the recording; temporary object URLs are cleaned up on preview close, conversation switch and unmount.
 - office-ai-chat is ACTIVE version 17 with JWT verification. Its free model/provider routing and zero-cost response checks remain pinned. The latest full CI and Vercel exact-commit production checks remain release gates.
+
+
+## Latest sector acceptance and production release — 2026-11-09
+
+This checkpoint supersedes the earlier pending-CI and Vercel deployment-quota notes in the historical entries above.
+
+- Full GitHub Actions run `42647820453` passed for main commit `311ef82dd30a1770c0893037c91b5f53b71ec39e`.
+- Vitest: 132/132 files, 1,105 passed, 1 skipped.
+- Node acceptance scripts: 163 passed.
+- Hospitality: 46 passed; Institutions: 38 passed; Institutions PostgreSQL schema/RLS/grants: 38 passed; Government PostgreSQL acceptance: 11 passed.
+- University and Business PostgreSQL schema/workflow validators passed. Business acceptance covers 40 distinct command workflows and 27 paginated read resources.
+- TypeScript and Vite production build passed.
+- School now has bounded server-side offset pagination and load-more controls for admissions, learners, attendance, assessments, fees and notices. Its nine-test SQL acceptance harness covers stable page boundaries and invalid offset rejection.
+- Workspace-switching, account-change cleanup, revoked-membership cleanup, cross-workspace isolation, AI permission/context settings, Drive list/preview/upload behavior and Docs AI consent regressions pass.
+
+### Production release
+
+The READY production deployment is `dpl_HLGwsrg2FoYe7ewHTbVtr3dyT1cC`, source commit `b003490af1f4c2efa93fe40c4099c2cc5ec9ddbb`, serving `https://cocce-office.vercel.app`. Validated main commit `311ef82` is its direct child and changes only a case-insensitive SQL ACL assertion in an acceptance script; application source is identical. Production HTML, JS and CSS returned HTTP 200, and the last-hour runtime-error query returned no errors.
+
+The main application chunk is approximately 949.92 kB (267.21 kB gzip), versus the earlier 1,711.81 kB (451.92 kB gzip) baseline. The ten specialist workspaces remain lazy-loaded. Separate Docs/PDF chunks still produce a Vite size warning; the production build itself succeeds.
+
+### Security and release boundaries
+
+A read-only production catalog check found 257 Office tables with RLS enabled, zero anonymous table SELECT/write grants, and zero anonymous execution grants across 120 Office RPC functions. All 108 security-definer Office functions inspected have an empty pinned search path. The School offset-pagination migration is recorded as already applied in production.
+
+Monthly Cloud Drive storage subscriptions remain disabled: the billing migration is not applied to production and the Vercel approval flag is absent. Do not enable wallet deductions until the owner explicitly approves the commercial pricing and terms.
+
+The sector-management acceptance chain is green, but this does not mean full Microsoft Office/GenOffice feature parity or statutory/regulatory certification. Existing local editor compatibility limits and the remaining roadmap items above remain in force.
