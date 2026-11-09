@@ -152,7 +152,7 @@ describe('COCCE AI workspace context', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(2));
 
-    window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
+    act(() => { window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared')); });
     expect((screen.getByPlaceholderText('Ask across your workspace…') as HTMLTextAreaElement).value).toBe('');
     expect((screen.getByPlaceholderText('Ask across your workspace…') as HTMLTextAreaElement).disabled).toBe(true);
 
