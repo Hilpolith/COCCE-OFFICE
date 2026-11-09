@@ -18,6 +18,17 @@ describe('local Docs content conversion and safety', () => {
     expect(sanitizeRichTextHtml('<p onclick="bad()">Hi <b style="color:red">safe</b><img src="x" onerror="bad()"></p><script>bad()</script>'))
       .toBe('<p>Hi <strong>safe</strong></p>');
   });
+  it('preserves safe font, colour, highlight, alignment and links while removing unsafe styles and URLs', () => {
+    const html = '<p style="text-align:center;position:fixed"><span style="font-family:Arial;font-size:14pt;color:#ff0000;background-image:url(javascript:bad)">Hello</span><mark style="background-color:#fff2a8"> highlighted</mark> <a href="javascript:alert(1)">unsafe</a> <a href="https://example.com">safe link</a></p>';
+    const safe = sanitizeRichTextHtml(html);
+    expect(safe).toContain('<p style="text-align:center">');
+    expect(safe).toContain('<span style="font-family:&quot;Arial&quot;;font-size:14pt;color:#ff0000">Hello</span>');
+    expect(safe).toContain('<mark style="background-color:#fff2a8"> highlighted</mark>');
+    expect(safe).toContain('unsafe');
+    expect(safe).toContain('<a href="https://example.com/" target="_blank" rel="noopener noreferrer">safe link</a>');
+    expect(safe).not.toMatch(/javascript:|position:fixed|background-image|onclick/i);
+  });
+
   it('preserves supported Heading 3 and strikethrough markup while removing attributes', () => {
     expect(sanitizeRichTextHtml('<h3 data-level="3">Roadmap</h3><p><s title="remove">Done</s> <del>too</del></p>'))
       .toBe('<h3>Roadmap</h3><p><del>Done</del> <del>too</del></p>');
