@@ -13,6 +13,7 @@ import CloudDriveWorkspace from './CloudDriveWorkspace';
 
 interface Props {
   workspaceId: string | null;
+  officeWorkspaceId?: string | null;
   documents: OfficeDocument[];
   query: string;
   onOpenDocument: (document: OfficeDocument) => void;
@@ -52,7 +53,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export default function DriveWorkspace({
-  workspaceId, documents, query, onOpenDocument, onCreateDocument,
+  workspaceId, officeWorkspaceId, documents, query, onOpenDocument, onCreateDocument,
   repository = localDriveRepository,
 }: Props) {
   const [files, setFiles] = useState<DriveFile[]>([]);
@@ -191,7 +192,7 @@ export default function DriveWorkspace({
         <button type="button" role="tab" aria-selected={driveMode === 'device'} className={driveMode === 'device' ? 'is-active' : ''} onClick={() => setDriveMode('device')}><HardDrive size={15}/> This device</button>
         <button type="button" role="tab" aria-selected={driveMode === 'cloud'} className={driveMode === 'cloud' ? 'is-active' : ''} onClick={() => setDriveMode('cloud')}><LockKeyhole size={15}/> Cloud workspaces</button>
       </div>
-      {driveMode === 'cloud' ? <CloudDriveWorkspace query={query} /> : <>
+      {driveMode === 'cloud' ? <CloudDriveWorkspace query={query} initialWorkspaceId={officeWorkspaceId ?? undefined} /> : <>
       <div className="page-title-row drive-title-row">
         <div><span className="eyebrow">COCCE DRIVE · BROWSER-LOCAL MODE</span><h1>{showTrash ? 'Trash' : 'My files'}</h1><p className="page-lede">Add files to this browser, preview and download them, or move them to a restorable local trash. These files are not synced or backed up.</p></div>
         <div className="drive-title-actions">
