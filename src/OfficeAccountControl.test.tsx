@@ -109,7 +109,7 @@ describe('Office account control', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Account: synthetic@example.test/ }));
     await screen.findByLabelText('Organisation or workspace name');
     fireEvent.change(screen.getByLabelText('Organisation or workspace name'), { target: { value: 'Kijiji Academy' } });
-    fireEvent.change(screen.getByRole('combobox', { name: /Choose your Office suite/ }), { target: { value: 'school' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Office suite' }), { target: { value: 'school' } });
     fireEvent.click(screen.getByRole('button', { name: /Create organisation/ }));
 
     await waitFor(() => expect(mocks.officeApi.createWorkspaceWithSuite).toHaveBeenCalledWith(
