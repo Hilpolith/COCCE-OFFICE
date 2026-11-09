@@ -1,6 +1,6 @@
 export type DriveContextError = { status: number; code: string; message: string };
 
-const MAX_DRIVE_FILES = 3;
+export const MAX_DRIVE_FILES = 3;
 const MAX_DRIVE_FILE_BYTES = 512 * 1024;
 const MAX_DRIVE_FILE_CHARS = 8_000;
 const MAX_DRIVE_CONTEXT_CHARS = 20_000;
@@ -8,7 +8,7 @@ const DRIVE_TEXT_EXTENSIONS = new Set(['txt', 'md', 'csv', 'tsv', 'json', 'xml',
 const OFFICE_CLOUD_FUNCTION = '/functions/v1/office-cloud-files';
 const BUNNY_DOWNLOAD_ORIGIN = 'https://de-s3.storage.bunnycdn.com';
 
-function isUuid(value: unknown): value is string {
+export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
