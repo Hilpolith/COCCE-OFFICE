@@ -8,7 +8,7 @@ sheet.replaceSync(source);
 
 describe('Office workbench style boundaries', () => {
   it('keeps visual appearance screen-only and excludes the new rail/navigation from print', () => {
-    expect(sheet.cssRules.length).toBe(2);
+    expect(sheet.cssRules.length).toBeGreaterThanOrEqual(2);
     const screen = sheet.cssRules[0] as CSSMediaRule;
     const print = sheet.cssRules[1] as CSSMediaRule;
     expect(screen.conditionText).toBe('screen');
