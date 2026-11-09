@@ -106,3 +106,10 @@ The new regression checks are included in the repository's pnpm test command. Th
 ## Live backend verification — 2026-11-09
 
 The existing `office-ai-chat` Edge Function was redeployed after the workspace-aware Teams search change. Current live status: ACTIVE version 19 with JWT verification enabled. The deployed source includes permission-checked `office_search_ai_messages` retrieval and the explicit-consent selected-Drive context flow. The supporting `20261109104406_office_ai_message_search` migration is already applied; it was not re-applied during this deployment. Version 19 also supports explicitly selected native COCCE Docs/Sheets snapshots in addition to supported UTF-8 text files. Standard PDF/DOCX/XLSX/PPTX extraction is still outstanding. The function remains pinned to `google/gemma-4-31b-it:free` with no paid or alternate-provider fallback.
+
+
+## External AI provider retention and free-tier limits
+
+The pinned free endpoint is currently listed by OpenRouter as Google AI Studio. OpenRouter's provider directory currently lists Google AI Studio as **not training on prompts** but retaining prompts for **55 days**. The UI's Drive consent dialog discloses this before selected file content is sent. Do not describe this integration as zero-retention or suitable for confidential/regulated records without a separate privacy and legal review.
+
+OpenRouter's free `:free` model variants are rate-limited. Its current documentation lists 20 requests per minute and 50 requests per day for accounts below the $10 cumulative-credit threshold (up to 1,000/day after that threshold). COCCE Office also applies its own per-user request guard. Free-model availability and upstream limits can change; no paid-model or alternate-provider fallback is enabled.
