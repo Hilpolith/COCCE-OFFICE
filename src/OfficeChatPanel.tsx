@@ -89,6 +89,8 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     void refresh().catch((cause) => { if (alive) setError(cause instanceof Error ? cause.message : 'Could not load messages.'); })
       .finally(() => { if (alive) setLoading(false); });
     poll();
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') void refresh().catch(() => undefined); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     const channel = client.channel('office-chat-' + conversationId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'office_messages', filter: 'conversation_id=eq.' + conversationId }, () => {
         void refresh().catch((cause) => { if (alive) setError(cause instanceof Error ? cause.message : 'Could not refresh messages.'); });
@@ -104,13 +106,19 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     return () => {
       alive = false;
       stopPoll();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       setLive(false);
       void client.removeChannel(channel);
     };
   }, [client, conversationId, refresh]);
 
   useEffect(() => () => {
-    recorder.current?.stop();
+    const activeRecorder = recorder.current;
+    if (activeRecorder) {
+      activeRecorder.ondataavailable = null;
+      activeRecorder.onstop = null;
+      try { activeRecorder.stop(); } catch { /* It may already be stopped. */ }
+    }
     recordingStream.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
@@ -120,7 +128,6 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     const scope = conversationId;
     setUploading(true);
     setError('');
-    const uploaded: OfficeChatAttachment[] = [];
     try {
       for (const file of files) {
         if (!file.size || file.size > MAX_CHAT_FILE_BYTES) throw new Error(file.name + ' exceeds the 25 MiB attachment limit.');
@@ -134,13 +141,13 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
         } else {
           fileId = reservation.fileId;
         }
-        uploaded.push({ fileId, name: file.name, sizeBytes: file.size, mimeType: file.type || 'application/octet-stream' });
+        const attachment = { fileId, name: file.name, sizeBytes: file.size, mimeType: file.type || 'application/octet-stream' };
+        if (scopeRef.current === scope) setPending((current) => [...current, attachment]);
       }
-      if (scopeRef.current === scope) setPending((current) => [...current, ...uploaded]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The Bunny upload could not be completed.');
     } finally {
-      if (scopeRef.current === scope) setUploading(false);
+      setUploading(false);
     }
   };
 
@@ -169,7 +176,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
         recordingStream.current = null;
         recorder.current = null;
         setRecording(false);
-        if (blob.size) void uploadFiles([new File([blob], 'voice-message-' + Date.now() + '.webm', { type: blob.type })]);
+        if (blob.size) void uploadFiles([new File([blob], 'voice-message-' + Date.now() + (blob.type.includes('mp4') ? '.m4a' : blob.type.includes('ogg') ? '.ogg' : '.webm'), { type: blob.type })]);
       };
       instance.start(250);
       setRecording(true);
@@ -220,8 +227,12 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
   const downloadAttachment = async (attachment: OfficeChatAttachment) => {
     try {
       setError('');
-      const files = await cloud.list(workspaceId);
-      const file = files.find((item) => item.fileId === attachment.fileId);
+      let file = null;
+      for (let offset = 0; offset <= 10000; offset += 50) {
+        const page = await cloud.list(workspaceId, false, offset);
+        file = page.find((item) => item.fileId === attachment.fileId) ?? null;
+        if (file || page.length < 50) break;
+      }
       if (!file) throw new Error('This attachment is no longer available in the workspace cloud.');
       const bytes = await cloud.download(file);
       const safeBuffer = bytes.slice().buffer as ArrayBuffer;
@@ -277,6 +288,6 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
       <textarea value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} placeholder="Write a message…" disabled={disabled || uploading || recording} aria-label="Write a message" />
       <button type="submit" className="office-chat-send" disabled={disabled || uploading || (!body.trim() && pending.length === 0)}><Send size={16} /><span>Send</span></button>
     </form>
-    <p className="office-chat-footnote">{uploading ? 'Uploading securely to Bunny cloud…' : 'Files up to 25 MiB · workspace quota applies · encrypted upload integrity checks · ' + (live ? 'Realtime connected' : '15-second fallback refresh')}</p>
+    <p className="office-chat-footnote">{uploading ? 'Uploading securely to Bunny cloud…' : 'Files up to 25 MiB · workspace quota applies · secure Bunny uploads with checksum verification · ' + (live ? 'Realtime connected' : '15-second fallback refresh')}</p>
   </section>;
 }
