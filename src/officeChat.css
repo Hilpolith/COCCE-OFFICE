@@ -1,0 +1,29 @@
+.office-chat-panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.office-chat-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid rgba(128,154,188,.18);border-radius:18px;background:linear-gradient(135deg,rgba(255,255,255,.72),rgba(226,237,250,.48));box-shadow:inset 0 1px 0 rgba(255,255,255,.82),0 8px 24px rgba(62,88,122,.06)}
+.office-chat-toolbar>div{display:grid;gap:3px}.office-chat-kicker{font-size:9px;letter-spacing:.14em;font-weight:800;color:#71839b}.office-chat-toolbar strong{font-size:14px;color:#23334b}
+.office-chat-connection{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:rgba(123,145,170,.12);color:#75859a;font-size:9px;font-weight:800;letter-spacing:.08em}.office-chat-connection.is-live{background:rgba(61,171,130,.12);color:#21825f}
+.office-chat-error{padding:10px 12px;border-radius:12px;background:rgba(220,76,82,.08);border:1px solid rgba(220,76,82,.18);color:#a53b43;font-size:12px}
+.office-chat-messages{display:flex;flex-direction:column;gap:10px;min-height:210px;max-height:560px;overflow:auto;padding:12px;border-radius:18px;background:linear-gradient(180deg,rgba(239,245,253,.7),rgba(248,250,254,.58));border:1px solid rgba(136,158,190,.16)}
+.office-chat-empty{margin:auto;color:#8795a8;font-size:12px;text-align:center;padding:28px 12px}
+.office-chat-message{align-self:flex-start;max-width:min(88%,620px);min-width:180px;padding:11px 12px;border-radius:15px 15px 15px 5px;background:rgba(255,255,255,.86);border:1px solid rgba(138,158,188,.2);box-shadow:0 5px 16px rgba(55,79,112,.05)}
+.office-chat-message.is-own{align-self:flex-end;border-radius:15px 15px 5px 15px;background:linear-gradient(145deg,rgba(231,242,255,.96),rgba(244,248,255,.92));border-color:rgba(99,145,204,.24)}
+.office-chat-message.is-deleted{opacity:.72}
+.office-chat-message-head{display:flex;justify-content:space-between;align-items:center;gap:12px;color:#30435d;font-size:11px}.office-chat-message-head time{font-size:9px;color:#91a0b2}
+.office-chat-message-body{margin:7px 0 2px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5;color:#33445c}
+.office-chat-deleted{font-size:11px;color:#8996a8;font-style:italic}
+.office-chat-reply-preview{display:flex;gap:6px;align-items:flex-start;padding:6px 8px;margin-top:7px;border-left:2px solid #7ba5d9;border-radius:5px;background:rgba(122,161,210,.09);color:#657b98;font-size:10px}
+.office-chat-attachment{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;padding:8px 9px;border:1px solid rgba(126,151,185,.2);border-radius:11px;background:rgba(255,255,255,.65)}
+.office-chat-attachment>span{display:flex;align-items:center;gap:8px;min-width:0;color:#7188a5}.office-chat-attachment>span>span{display:grid;min-width:0;gap:2px}.office-chat-attachment strong{font-size:11px;color:#3b506d;overflow-wrap:anywhere}.office-chat-attachment small{font-size:9px;color:#91a0b2}
+.office-chat-attachment button,.office-chat-composer>button,.office-chat-composer-context button{display:grid;place-items:center;border:0;background:rgba(117,148,190,.1);color:#58769e;border-radius:10px;min-width:32px;height:32px;cursor:pointer}
+.office-chat-message-actions{display:flex;gap:6px;margin-top:7px;opacity:.8}.office-chat-message-actions button{display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:#75879e;font-size:9px;padding:3px 5px;cursor:pointer}
+.office-chat-seen{display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:5px;color:#8296b0;font-size:9px}
+.office-chat-composer-context{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:rgba(108,149,203,.1);color:#5f789a;font-size:11px}.office-chat-composer-context span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.office-chat-pending{display:flex;flex-wrap:wrap;gap:6px}.office-chat-pending>span{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:999px;background:rgba(105,148,203,.1);color:#526e92;font-size:10px}.office-chat-pending button{display:grid;place-items:center;border:0;background:transparent;color:#6b85a7}
+.office-chat-composer{display:flex;align-items:flex-end;gap:7px;padding:8px;border:1px solid rgba(126,151,185,.2);border-radius:18px;background:rgba(255,255,255,.78);box-shadow:inset 0 1px 0 #fff,0 7px 22px rgba(55,79,112,.05)}
+.office-chat-composer>textarea{flex:1;min-width:0;max-height:110px;min-height:38px;resize:vertical;border:0!important;outline:0;background:transparent!important;box-shadow:none!important;padding:9px 5px!important;color:#30435d;font:inherit;font-size:12px}
+.office-chat-composer>button.is-recording{background:rgba(221,75,82,.13);color:#bd3d47}
+.office-chat-send{display:flex!important;align-items:center;justify-content:center;gap:6px;padding:0 12px!important;width:auto!important;height:36px!important;border-radius:12px!important;background:linear-gradient(135deg,#6f9ed6,#88b3e4)!important;color:#fff!important;font-size:11px;font-weight:700}
+.office-chat-send:disabled,.office-chat-composer>button:disabled{opacity:.42;cursor:not-allowed}
+.office-chat-footnote{margin:0 3px;color:#8c9bad;font-size:9px;line-height:1.5}
+.office-chat-edit{display:grid;gap:6px;margin-top:8px}.office-chat-edit textarea{min-height:60px;border-radius:9px;padding:8px;border:1px solid rgba(126,151,185,.25)}.office-chat-edit button{justify-self:start;border:0;border-radius:8px;padding:6px 10px;background:rgba(103,147,203,.14);color:#476b99;font-size:10px}
+@media(max-width:640px){.office-chat-messages{max-height:50vh}.office-chat-message{max-width:95%}.office-chat-send span{display:none}.office-chat-send{min-width:38px;padding:0!important}.office-chat-composer{gap:5px}}
