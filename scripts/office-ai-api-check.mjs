@@ -30,6 +30,7 @@ function makeHarness({
   returnedModel = FREE_MODEL_ID,
   reportedCost = 0,
   workspaceAiEnabled = true,
+  workspaceAiStatus = 200,
   workspaceRows = [{ workspace_id: TEST_WORKSPACE_ID, name: 'Synthetic workspace' }],
   maxRequests = 12,
   windowMs = 600_000,
@@ -53,7 +54,7 @@ function makeHarness({
       return { ok: true, status: 200, json: async () => workspaceRows };
     }
     if (String(input) === `${COCCE_URL}/rest/v1/rpc/office_get_workspace_ai_enabled`) {
-      return { ok: true, status: 200, json: async () => workspaceAiEnabled };
+      return { ok: workspaceAiStatus >= 200 && workspaceAiStatus < 300, status: workspaceAiStatus, json: async () => workspaceAiEnabled };
     }
     if (String(input) === OPENROUTER_URL) {
       return {
@@ -121,6 +122,14 @@ test('workspace AI controls block disabled workspaces and non-members before pro
   assert.equal(deniedResponse.statusCode, 403);
   assert.equal(deniedResponse.body.error, 'WORKSPACE_ACCESS_DENIED');
   assert.equal(providerCallFrom(nonMember.calls), undefined);
+});
+
+test('fails closed when the workspace AI control RPC cannot be checked', async () => {
+  const { handler, calls } = makeHarness({ workspaceAiStatus: 503 });
+  const res = await invoke(handler, { body: { action: 'summarize', selectedText: 'Excerpt.' } });
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body.error, 'WORKSPACE_AI_CONTROL_UNAVAILABLE');
+  assert.equal(providerCallFrom(calls), undefined);
 });
 
 test('POST sends only an explicitly selected excerpt to the fixed free OpenRouter model', async () => {
