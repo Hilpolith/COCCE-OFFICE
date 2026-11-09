@@ -1,3 +1,4 @@
+import OfficeSuiteAiAction from './OfficeSuiteAiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import {
@@ -579,6 +580,7 @@ export default function GovernmentCorrespondenceWorkspace({
     {status === 'profile-conflict' && <div className="industry-shared-state is-alert" role="alert"><CircleAlert size={17} /><div><strong>This team is set up for a different industry</strong><span>The existing profile is “{space?.industry_id}”. It has not been changed, and Government correspondence is not shown.</span></div></div>}
 
     {status === 'ready' && <>
+      <div className="office-suite-ai-toolbar"><OfficeSuiteAiAction workspaceId={workspaceId} suiteLabel="Government" tabLabel={activeTab.replaceAll("_", " ")} /></div>
       <nav className="government-module-tabs government-workspace-tabs" role="tablist" aria-label="Government workspace modules">
         <button type="button" role="tab" tabIndex={activeTab === 'register' ? 0 : -1} aria-selected={activeTab === 'register'} className={activeTab === 'register' ? 'is-active' : ''} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveModuleTab(1); } if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveModuleTab(-1); } }} onClick={() => setModuleTab('register')}><FileText size={14} /> Register</button>
         {(canManageRecords || canAudit) && <button type="button" role="tab" tabIndex={activeTab === 'records' ? 0 : -1} aria-selected={activeTab === 'records'} className={activeTab === 'records' ? 'is-active' : ''} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); moveModuleTab(1); } if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); moveModuleTab(-1); } }} onClick={() => setModuleTab('records')}><Archive size={14} /> Records Management</button>}
