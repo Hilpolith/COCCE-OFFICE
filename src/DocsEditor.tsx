@@ -709,11 +709,21 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Heading 3" icon={<Heading3 size={16} />} active={editorState.heading3} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
+      <span className="docs-format-group docs-format-controls" aria-label="Font controls">
+        <label className="docs-format-select"><span>Font</span><select aria-label="Font family" value={fontFamily} onChange={(event) => { const value = event.target.value; setFontFamily(value); editor?.chain().focus().setMark('docsTextStyle', { fontFamily: value }).run(); }}><option>Arial</option><option>Aptos</option><option>Calibri</option><option>Cambria</option><option>Georgia</option><option>Times New Roman</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Courier New</option><option>Consolas</option><option>Inter</option></select></label>
+        <label className="docs-format-select docs-format-size"><span>Size</span><select aria-label="Font size" value={fontSize} onChange={(event) => { const value = event.target.value; setFontSize(value); editor?.chain().focus().setMark('docsTextStyle', { fontSize: value }).run(); }}>{['8pt','9pt','10pt','11pt','12pt','14pt','16pt','18pt','20pt','24pt','28pt','32pt','36pt','48pt','72pt'].map((size) => <option key={size}>{size}</option>)}</select></label>
+      </span>
+      <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Text style">
         <FormattingButton label="Bold" icon={<Bold size={16} />} active={editorState.bold} onClick={() => editor?.chain().focus().toggleBold().run()} />
         <FormattingButton label="Italic" icon={<Italic size={16} />} active={editorState.italic} onClick={() => editor?.chain().focus().toggleItalic().run()} />
         <FormattingButton label="Underline" icon={<UnderlineIcon size={16} />} active={editorState.underline} onClick={() => editor?.chain().focus().toggleUnderline().run()} />
         <FormattingButton label="Strikethrough" icon={<Strikethrough size={16} />} active={editorState.strike} onClick={() => editor?.chain().focus().toggleStrike().run()} />
+      </span>
+      <span className="docs-format-divider" aria-hidden="true" />
+      <span className="docs-format-group docs-format-color-group" aria-label="Text colour and highlighting">
+        <label className="docs-format-color-control" title="Text colour"><Palette size={15}/><input aria-label="Text colour" type="color" value={textColor} onChange={(event) => { setTextColor(event.target.value); editor?.chain().focus().setMark('docsTextStyle', { color: event.target.value }).run(); }} /></label>
+        <label className="docs-format-color-control" title="Highlight colour"><Highlighter size={15}/><input aria-label="Highlight colour" type="color" value={highlightColor} onChange={(event) => { setHighlightColor(event.target.value); editor?.chain().focus().setMark('docsHighlight', { color: event.target.value }).run(); }} /></label>
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Lists and quotes">
@@ -722,12 +732,24 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Quote" icon={<Quote size={16} />} active={editorState.blockquote} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleBlockquote().run()} />
         <FormattingButton label="Inline code" icon={<Code size={16} />} onClick={() => editor?.chain().focus().toggleCode().run()} />
         <FormattingButton label="Code block" icon={<Code size={16} />} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleCodeBlock().run()} />
-        <FormattingButton label="Clear formatting" icon={<Eraser size={16} />} onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()} />
+        <FormattingButton label="Clear formatting" icon={<Eraser size={16} />} onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().updateAttributes('paragraph', { textAlign: null }).updateAttributes('heading', { textAlign: null }).run()} />
+      </span>
+      <span className="docs-format-divider" aria-hidden="true" />
+      <span className="docs-format-group" aria-label="Paragraph alignment">
+        <FormattingButton label="Align left" icon={<AlignLeft size={16}/>} onClick={() => applyTextAlign('left')} />
+        <FormattingButton label="Center" icon={<AlignCenter size={16}/>} onClick={() => applyTextAlign('center')} />
+        <FormattingButton label="Align right" icon={<AlignRight size={16}/>} onClick={() => applyTextAlign('right')} />
+        <FormattingButton label="Justify" icon={<AlignJustify size={16}/>} onClick={() => applyTextAlign('justify')} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Edit history">
         <FormattingButton label="Undo" icon={<Undo2 size={16} />} disabled={!editorState.canUndo} onClick={() => editor?.chain().focus().undo().run()} />
         <FormattingButton label="Redo" icon={<Redo2 size={16} />} disabled={!editorState.canRedo} onClick={() => editor?.chain().focus().redo().run()} />
+      </span>
+      <span className="docs-format-divider" aria-hidden="true" />
+      <span className="docs-format-group" aria-label="Insert">
+        <FormattingButton label="Insert link" icon={<Link2 size={16}/>} onClick={insertLink} />
+        <FormattingButton label="Horizontal rule" icon={<Minus size={16}/>} onClick={() => editor?.chain().focus().setHorizontalRule().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Review comments">
