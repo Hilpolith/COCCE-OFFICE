@@ -65,7 +65,7 @@ describe('Cloud Drive workspace', () => {
   it('lists membership-scoped cloud files and previews downloaded text', async () => {
     render(<CloudDriveWorkspace query="" />);
     expect(await screen.findByText('brief.txt')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /brief.txt/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^brief\\.txt/ }));
     expect(await screen.findByText('hello')).toBeTruthy();
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(cloudFile);
   });
@@ -74,6 +74,7 @@ describe('Cloud Drive workspace', () => {
     render(<CloudDriveWorkspace query="" />);
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();
+    await waitFor(() => expect(mocks.cloudApi.list).toHaveBeenCalledWith('workspace-1', false));
     fireEvent.change(fileInput, { target: { files: [new File(['draft'], 'new.txt', { type: 'text/plain' })] } });
     await waitFor(() => expect(mocks.confirm).toHaveBeenCalled());
     await waitFor(() => expect(mocks.cloudApi.reserve).toHaveBeenCalledWith('workspace-1', 'new.txt', expect.any(Uint8Array), expect.any(String)));
