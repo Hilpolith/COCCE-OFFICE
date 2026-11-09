@@ -5,7 +5,7 @@ type RpcClient = SupabaseClient;
 
 export type OfficeWorkspace = { workspace_id: string; name: string; role: 'owner' | 'admin' | 'member'; created_at: string };
 export type OfficeUser = { user_id: string; username: string | null; display_name: string | null; avatar_url: string | null; is_vip: boolean | null; vip_expires_at: OfficeLocalTimestamp | null };
-export type OfficeMember = OfficeUser & { role: 'owner' | 'admin' | 'member'; status: 'active' | 'suspended'; joined_at: string };
+export type OfficeMember = OfficeUser & { role: 'owner' | 'admin' | 'member'; status: 'active' | 'suspended'; joined_at: string; job_title?: string };
 export type OfficeSearchResult = OfficeUser & { membership_status: 'active' | 'suspended' | null; invitation_status: 'pending' | null; presence_status: OfficePresenceStatus; last_seen_at: string | null };
 export type OfficeInvitation = { invitation_id: string; workspace_id: string; workspace_name: string; inviter_id: string; inviter_name: string; inviter_avatar_url: string | null; inviter_is_vip: boolean | null; inviter_vip_expires_at: OfficeLocalTimestamp | null; inviter_presence_status: OfficePresenceStatus | null; inviter_last_seen_at: string | null; role: 'admin' | 'member'; created_at: string; expires_at: string };
 export type OfficeWorkspaceInvitation = { invitation_id: string; invitee_id: string; username: string | null; display_name: string | null; avatar_url: string | null; is_vip: boolean | null; vip_expires_at: OfficeLocalTimestamp | null; presence_status: OfficePresenceStatus | null; last_seen_at: string | null; role: 'admin' | 'member'; created_at: string; expires_at: string };
@@ -25,7 +25,15 @@ export const officeTeamApi = {
   createWorkspace: (client: RpcClient, name: string, description = '') => rpc<string>(client, 'office_create_workspace', { p_name: name, p_description: description }),
   listMyInvitations: (client: RpcClient) => rpc<OfficeInvitation[]>(client, 'office_list_my_invitations'),
   respondInvitation: (client: RpcClient, invitationId: string, accept: boolean) => rpc<void>(client, 'office_respond_invitation', { p_invitation_id: invitationId, p_accept: accept }),
-  listMembers: (client: RpcClient, workspaceId: string) => rpc<OfficeMember[]>(client, 'office_list_members', { p_workspace_id: workspaceId }),
+  listMembers: async (client: RpcClient, workspaceId: string) => {
+    const [members, titles] = await Promise.all([
+      rpc<OfficeMember[]>(client, 'office_list_members', { p_workspace_id: workspaceId }),
+      rpc<Array<{ user_id: string; job_title: string }>>(client, 'office_list_member_titles', { p_workspace_id: workspaceId }),
+    ]);
+    const titleByUser = new Map(titles.map((item) => [item.user_id, item.job_title]));
+    return members.map((member) => ({ ...member, job_title: titleByUser.get(member.user_id) ?? '' }));
+  },
+  setMemberTitle: (client: RpcClient, workspaceId: string, userId: string, jobTitle: string) => rpc<void>(client, 'office_set_member_title', { p_workspace_id: workspaceId, p_user_id: userId, p_job_title: jobTitle }),
   searchUsers: (client: RpcClient, workspaceId: string, query: string) => rpc<OfficeSearchResult[]>(client, 'office_search_users', { p_workspace_id: workspaceId, p_query: query }),
   createInvitation: (client: RpcClient, workspaceId: string, userId: string, role: 'admin' | 'member') => rpc<string>(client, 'office_create_invitation', { p_workspace_id: workspaceId, p_invitee_id: userId, p_role: role }),
   listWorkspaceInvitations: (client: RpcClient, workspaceId: string) => rpc<OfficeWorkspaceInvitation[]>(client, 'office_list_workspace_invitations', { p_workspace_id: workspaceId }),
