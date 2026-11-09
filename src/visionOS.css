@@ -50,9 +50,18 @@ button { color:inherit; }
     transparent !important;
 }
 .app-frame:before {
-  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.22;
-  background:radial-gradient(rgba(255,255,255,.22) .55px,transparent .7px);
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.16;
+  background:radial-gradient(rgba(255,255,255,.2) .55px,transparent .7px);
   background-size:5px 5px; mask-image:linear-gradient(#000,transparent 80%);
+}
+.app-frame:after {
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.095;
+  background-image:url('/brand/cocce-light-frosted-ambient.webp');
+  background-position:center; background-size:cover; background-repeat:no-repeat;
+  mix-blend-mode:screen; filter:saturate(.72) contrast(1.08);
+}
+@media(max-width:720px) {
+  .app-frame:after { background-position:center top; background-size:auto 100%; opacity:.07; }
 }
 .sidebar {
   position:sticky !important; top:16px !important; align-self:start !important;
