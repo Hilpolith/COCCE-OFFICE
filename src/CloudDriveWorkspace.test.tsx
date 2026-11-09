@@ -51,6 +51,7 @@ beforeEach(() => {
   mocks.auth.getUser.mockResolvedValue({ data: { user: { id: 'member-1' } }, error: null });
   mocks.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
   mocks.listWorkspaces.mockResolvedValue([workspace]);
+  mocks.importDocxFile.mockResolvedValue({ richText: '<p>Imported brief</p>', warnings: [] });
   mocks.cloudApi.list.mockResolvedValue([cloudFile]);
   mocks.cloudApi.usage.mockResolvedValue(usage);
   mocks.cloudApi.download.mockResolvedValue(new TextEncoder().encode('hello'));
