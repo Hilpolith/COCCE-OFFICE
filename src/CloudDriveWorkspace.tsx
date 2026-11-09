@@ -302,7 +302,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   };
 
   const toggleStorageAutoRenew = async (subscription: CloudStorageSubscription) => {
-    if (!api || !canManageStorage || storageBusy) return;
+    if (!storageSubscriptionsReady || !api || !canManageStorage || storageBusy) return;
     const next = !subscription.autoRenew;
     const message = next
       ? 'Enable automatic monthly renewal for ' + subscription.displayName + ' at ' + subscription.monthlyCoins.toLocaleString() + ' COCCE Coins per month? The account of the administrator enabling it will be charged. A failed payment has a three-day grace period.'
