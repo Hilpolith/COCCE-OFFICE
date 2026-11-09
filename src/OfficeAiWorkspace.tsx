@@ -116,9 +116,14 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setDriveFilesLoading(true);
     setDriveFilesError('');
     try {
+      if (!config.schemaReady) throw new Error('Private Cloud Drive is not enabled for this Office deployment.');
       const api = createOfficeCloudApi(client, config.anonKey, userId);
       const scope = workspaceId === '*' ? workspaces.slice(0, 20) : workspaces.filter((space) => space.workspace_id === workspaceId);
-      const results = await Promise.all(scope.map(async (space) => {
+      const enabledScope = (await Promise.all(scope.map(async (space) => {
+        try { return await officeTeamApi.getWorkspaceAiEnabled(client, space.workspace_id) ? space : null; }
+        catch { return null; }
+      }))).filter((space): space is OfficeWorkspace => Boolean(space));
+      const results = await Promise.all(enabledScope.map(async (space) => {
         try { return (await api.list(space.workspace_id, false)).slice(0, workspaceId === '*' ? 5 : 50); }
         catch { return []; }
       }));
