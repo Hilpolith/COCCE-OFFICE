@@ -242,7 +242,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFiles(files);
       setDriveFileOffsets(Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])));
       setDriveFileHasMore(results.some((result) => result.hasMore) && files.length < 100);
-      if (!files.length) setDriveFilesError('No supported text files were found in this workspace scope. Only .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files up to 512 KiB can be attached.');
+      if (!files.length) setDriveFilesError('No supported files were found. COCCE Docs and Sheets cloud copies plus .txt, .md, .csv, .tsv, .json, .xml, .yaml and .log files up to 512 KiB are supported.');
     } catch (reason) {
       if (generation === driveLoadGeneration.current) setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
     } finally {
@@ -338,7 +338,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         <div className="office-ai-context"><label>Workspace<select value={workspaceId} disabled={driveFilesLoading || busy || status !== 'ready'} onChange={event => void changeWorkspace(event.target.value)}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label><label className="office-ai-context-toggle"><span>Team conversation context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · no team history'}</small></span></label></div>
         {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before using workspace-aware AI.</div>}
         <section className="office-ai-drive-context" aria-label="Selected Drive file context">
-          <div className="office-ai-drive-heading"><div><strong>Drive file context</strong><small>Attach up to 3 private text files. All-workspace mode shows the latest 5 per workspace; a single workspace starts with 50 and can load more. Contents are fetched server-side only after you ask.</small></div><button type="button" className="button-secondary" onClick={() => void openDriveFiles()} disabled={!workspaceId || !userId || busy}>{driveFilesOpen ? 'Hide files' : 'Browse Drive'}</button></div>
+          <div className="office-ai-drive-heading"><div><strong>Drive file context</strong><small>Attach up to 3 private text files or COCCE Docs/Sheets copies. All-workspace mode shows the latest 5 per workspace; a single workspace starts with 50 and can load more. Contents are fetched server-side only after you ask.</small></div><button type="button" className="button-secondary" onClick={() => void openDriveFiles()} disabled={!workspaceId || !userId || busy}>{driveFilesOpen ? 'Hide files' : 'Browse Drive'}</button></div>
           {selectedFileIds.length > 0 && <div className="office-ai-drive-selected">{selectedFileIds.length} of 3 files attached until you deselect them</div>}
           {driveFilesOpen && <div className="office-ai-drive-list">
             {driveFilesLoading ? <div className="office-ai-state"><LoaderCircle className="spin" size={15}/> Loading private Drive files…</div> : driveFiles.map((file) => <label className="office-ai-drive-file" key={file.fileId}><input type="checkbox" checked={selectedFileIds.includes(file.fileId)} disabled={!selectedFileIds.includes(file.fileId) && selectedFileIds.length >= 3} onChange={(event) => toggleDriveFile(file.fileId, event.target.checked)} /><span><strong>{file.displayName}</strong><small>{workspaces.find((space) => space.workspace_id === file.workspaceId)?.name ?? 'Office workspace'} · {file.sizeBytes.toLocaleString()} bytes</small></span></label>)}
@@ -363,7 +363,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
             </div>
           </section>
         </div>}
-        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {selectedFileIds.length ? 'Selected text files are read server-side from their enabled workspace and limited to 3 files, 512 KiB and 8,000 characters each (20,000 total).' : 'Drive files are never read unless you explicitly select them.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
+        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {selectedFileIds.length ? 'Selected text files and native Docs/Sheets cloud copies are read server-side from enabled workspaces, limited to 3 files, 512 KiB and 8,000 extracted characters each (20,000 total).' : 'Drive files are never read unless you explicitly select them.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
       </>}
       {error && status === 'ready' && <div className="office-ai-error" role="alert"><AlertCircle size={14} /> {error}</div>}
     </section>
