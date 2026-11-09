@@ -127,6 +127,22 @@ describe('Docs AI writing studio', () => {
     );
   });
 
+  it('lets the writer target one authorised workspace and carries that scope to the server', async () => {
+    const fetcher = mockFetch();
+    const { editor } = makeEditor();
+    render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI writing studio/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    const scope = screen.getByLabelText('AI workspace scope') as HTMLSelectElement;
+    fireEvent.change(scope, { target: { value: '11111111-1111-4111-8111-111111111111' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
+    await screen.findByText('A preview edit.');
+    const postCall = fetcher.mock.calls.map(([url, init]) => ({ url, init })).find(({ init }) => init?.method === 'POST');
+    expect(JSON.parse(String(postCall?.init?.body))).toMatchObject({
+      action: 'summarize', workspaceId: '11111111-1111-4111-8111-111111111111',
+    });
+  });
+
   it('sends a prompt-only draft even if text is selected in the document', async () => {
     const fetcher = mockFetch();
     const { editor } = makeEditor();
