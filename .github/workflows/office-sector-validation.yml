@@ -53,5 +53,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run unit, integration, and sector acceptance suites
         run: pnpm test
+        env:
+          PG_BINDIR: /usr/lib/postgresql/16/bin
       - name: Verify production TypeScript and Vite build
         run: pnpm build
