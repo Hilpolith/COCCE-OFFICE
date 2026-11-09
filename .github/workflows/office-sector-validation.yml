@@ -8,7 +8,7 @@ on:
       - "supabase/**"
       - "scripts/**"
       - "package.json"
-      - "package-lock.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/office-sector-validation.yml"
   pull_request:
     branches: [main]
@@ -17,7 +17,7 @@ on:
       - "supabase/**"
       - "scripts/**"
       - "package.json"
-      - "package-lock.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/office-sector-validation.yml"
   workflow_dispatch:
 
@@ -39,15 +39,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
       - name: Install PostgreSQL 16 for isolated schema suites
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-16
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Install locked dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       - name: Run unit, integration, and sector acceptance suites
-        run: npm test
+        run: pnpm test
       - name: Verify production TypeScript and Vite build
-        run: npm run build
+        run: pnpm build
