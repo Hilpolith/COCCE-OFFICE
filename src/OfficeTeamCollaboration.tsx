@@ -111,10 +111,10 @@ export default function OfficeTeamCollaboration({
   const resetAccountScopedState = useCallback(() => {
     setWorkspaces([]); setWorkspaceScope(''); setInvitations([]); setNotifications([]);
     setMembers([]); setLoadedWorkspaceId(''); setWorkspaceInvitations([]); setWorkspaceAiEnabled(true); setPresence([]);
-    setSearchResults([]); setConversations([]); setConversationScope(''); setWorkspaceName(''); setSearch(''); setInviteRole('member'); setInviteJobTitle('');
+    setSearchResults([]); setConversations([]); setConversationScope(''); setWorkspaceName(initialWorkspaceName ?? ''); setSearch(''); setInviteRole('member'); setInviteJobTitle('');
     setGroupTitle(''); setGroupMemberIds([]);
     setBusy(false);
-  }, [setConversationScope, setWorkspaceScope]);
+  }, [initialWorkspaceName, setConversationScope, setWorkspaceScope]);
   const adoptUser = useCallback((nextUser: User | null) => {
     const nextUserId = nextUser?.id ?? null;
     if (userIdRef.current !== nextUserId) {
