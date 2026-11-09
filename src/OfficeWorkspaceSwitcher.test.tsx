@@ -142,12 +142,14 @@ describe('global Office workspace selection', () => {
     await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceA.workspace_id)).toBe(true));
 
     const previousEventCount = events.length;
-    emitAuthState?.('SIGNED_IN', { user: userB });
+    const notifyAuthState = emitAuthState as ((event: string, session: { user: typeof userA } | null) => void) | null;
+    if (notifyAuthState) notifyAuthState('SIGNED_IN', { user: userB });
     await waitFor(() => expect(events.slice(previousEventCount).some((item) => item.type === 'cleared')).toBe(true));
     expect(events.slice(previousEventCount).some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceA.workspace_id)).toBe(false);
 
     await waitFor(() => expect(loadCount).toBe(2));
-    pendingWorkspaceLoad.resolve?.([workspaceB]);
+    const resolveWorkspaceLoad = pendingWorkspaceLoad.resolve as ((value: Array<typeof workspaceB>) => void) | undefined;
+    if (resolveWorkspaceLoad) resolveWorkspaceLoad([workspaceB]);
     mocks.listWorkspaceSuites.mockResolvedValue([{ workspace_id: workspaceB.workspace_id, suite_id: 'business', created_at: workspaceB.created_at }]);
     await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceB.workspace_id)).toBe(true));
   });
