@@ -244,7 +244,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     setPreviewTarget(null);
     const sourceDoc = editor.state.doc;
     try {
-      const payload = buildOfficeAiDocumentSummaryRequest(extractOfficeAiDocumentText(sourceDoc));
+      const payload = buildOfficeAiDocumentSummaryRequest(extractOfficeAiDocumentText(sourceDoc), workspaceId);
       setDocumentSummaryConfirmation({
         payload,
         title: documentTitle.trim() || 'Untitled document',
