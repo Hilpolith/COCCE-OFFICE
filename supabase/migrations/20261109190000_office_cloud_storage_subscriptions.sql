@@ -348,7 +348,29 @@ begin
     coalesce(p_auto_renew, false), false, p_idempotency_key,
     v_period_start, v_period_end,
     case when coalesce(p_auto_renew, false) then v_period_end else null end
-  ) returning subscription_id into v_subscription_id;
+  ) on conflict (billing_user_id, purchase_idempotency_key) do nothing
+  returning subscription_id into v_subscription_id;
+  if v_subscription_id is null then
+    select * into v_existing from public.office_cloud_storage_subscriptions s
+    where s.billing_user_id = p_actor_id and s.purchase_idempotency_key = p_idempotency_key
+    for update;
+    if not found or v_existing.workspace_id <> p_workspace_id
+       or v_existing.plan_code <> p_plan_code
+       or v_existing.auto_renew <> coalesce(p_auto_renew, false) then
+      raise exception 'Storage purchase idempotency key payload mismatch' using errcode = '22023';
+    end if;
+    return jsonb_build_object(
+      'subscription_id', v_existing.subscription_id,
+      'plan_code', v_existing.plan_code,
+      'quota_bytes', v_existing.quota_bytes,
+      'monthly_coins', v_existing.monthly_coins,
+      'status', v_existing.status,
+      'auto_renew', v_existing.auto_renew,
+      'current_period_end', v_existing.current_period_end,
+      'balance', v_balance,
+      'replayed', true
+    );
+  end if;
 
   perform set_config('wallet.atomic_writer', 'v2', true);
   insert into public.wallet_transactions (user_id, type, amount, description, related_id)
@@ -486,6 +508,7 @@ begin
 
   update public.office_cloud_storage_subscriptions
   set status = 'active',
+      billing_user_id = p_actor_id,
       auto_renew = auto_renew,
       cancel_at_period_end = false,
       current_period_start = v_period_start,
@@ -559,7 +582,8 @@ begin
 
   v_event := case when p_auto_renew then 'auto_renew_enabled' else 'auto_renew_disabled' end;
   update public.office_cloud_storage_subscriptions
-  set auto_renew = p_auto_renew,
+  set billing_user_id = case when p_auto_renew then p_actor_id else billing_user_id end,
+      auto_renew = p_auto_renew,
       cancel_at_period_end = not p_auto_renew,
       next_billing_at = case
         when p_auto_renew and status = 'past_due' then now()
@@ -720,9 +744,9 @@ begin
         null
       )
       returning id, balance into v_wallet_transaction_id, v_new_balance;
-      v_period_end := v_sub.current_period_end + interval '1 month';
+      v_period_end := greatest(v_sub.current_period_end, now()) + interval '1 month';
       update public.office_cloud_storage_subscriptions
-      set status = 'active', current_period_start = v_sub.current_period_end,
+      set status = 'active', current_period_start = greatest(v_sub.current_period_end, now()),
           current_period_end = v_period_end, next_billing_at = v_period_end,
           grace_until = null, last_billed_at = now(), updated_at = now()
       where subscription_id = v_sub.subscription_id;
@@ -732,7 +756,7 @@ begin
       ) values (
         v_sub.subscription_id, v_sub.workspace_id, v_sub.billing_user_id, 'renewed',
         v_sub.plan_code, v_sub.monthly_coins, v_sub.quota_bytes,
-        v_sub.current_period_end, v_period_end, v_wallet_transaction_id
+        greatest(v_sub.current_period_end, now()), v_period_end, v_wallet_transaction_id
       );
       v_renewed := v_renewed + 1;
     else
