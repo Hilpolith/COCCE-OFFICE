@@ -78,7 +78,7 @@ export async function loadSelectedDriveFiles(
     if (link?.fileId !== fileId || !isUuid(link?.workspaceId) || !enabledById.has(link.workspaceId)) {
       throw { status: 403, code: 'DRIVE_FILE_SCOPE_DENIED', message: 'A selected Drive file is outside the enabled workspace scope.' } satisfies DriveContextError;
     }
-    if (typeof link.displayName !== 'string' || !Number.isSafeInteger(link.sizeBytes) || link.sizeBytes < 1 || typeof link.url !== 'string') {
+    if (typeof link.displayName !== 'string' || !Number.isSafeInteger(link.sizeBytes) || link.sizeBytes < 1 || typeof link.sha256Hex !== 'string' || !/^[0-9a-f]{64}$/i.test(link.sha256Hex) || typeof link.url !== 'string') {
       throw { status: 502, code: 'DRIVE_FILE_METADATA_INVALID', message: 'A selected Drive file returned invalid verified metadata.' } satisfies DriveContextError;
     }
     if (link.sizeBytes > MAX_DRIVE_FILE_BYTES) {
@@ -103,6 +103,9 @@ export async function loadSelectedDriveFiles(
     if (!fileResponse.ok) throw { status: 502, code: 'DRIVE_FILE_UNAVAILABLE', message: 'A selected Drive file could not be downloaded for this AI request.' } satisfies DriveContextError;
     const bytes = await readBoundedBytes(fileResponse, MAX_DRIVE_FILE_BYTES);
     if (bytes.byteLength !== link.sizeBytes) throw { status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH', message: 'A selected Drive file failed its stored-size check.' } satisfies DriveContextError;
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+    const actualSha256 = Array.from(digest, (value) => value.toString(16).padStart(2, '0')).join('');
+    if (actualSha256 !== link.sha256Hex.toLowerCase()) throw { status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH', message: 'A selected Drive file failed its SHA-256 integrity check.' } satisfies DriveContextError;
     let text: string;
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
     catch { throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file is not valid UTF-8 text.' } satisfies DriveContextError; }
