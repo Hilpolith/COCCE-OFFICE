@@ -58,3 +58,45 @@
 @keyframes office-account-spin{to{transform:rotate(360deg)}}
 @media(max-width:620px){.office-account-trigger{width:37px;justify-content:center;padding:0}.office-account-trigger span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.office-auth-content{padding:23px 20px 20px}.office-auth-panel{max-height:calc(100dvh - 24px)}.office-auth-scrim{padding:12px}}
 @media(prefers-reduced-motion:reduce){.office-account-trigger,.office-auth-spinner{transition:none;animation:none}}
+
+
+/* COCCE Office auth — integrated pearl/graphite liquid-glass treatment */
+.office-auth-scrim{background:rgba(5,8,12,.68);backdrop-filter:blur(18px) saturate(135%);-webkit-backdrop-filter:blur(18px) saturate(135%)}
+.office-auth-panel{width:min(460px,100%);border:1px solid rgba(255,255,255,.24)!important;border-radius:28px!important;background:linear-gradient(145deg,rgba(255,255,255,.17),rgba(255,255,255,.065) 52%,rgba(255,255,255,.09)),rgba(19,22,25,.84)!important;color:#f7f7f5!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 34px 100px rgba(0,0,0,.48)!important;backdrop-filter:blur(36px) saturate(165%)!important;-webkit-backdrop-filter:blur(36px) saturate(165%)!important}
+.office-auth-brand{padding:22px 25px;background:linear-gradient(115deg,rgba(255,255,255,.1),rgba(255,255,255,.025));border-bottom:1px solid rgba(255,255,255,.13);color:#fff}
+.office-auth-symbol{width:48px;height:48px;border-radius:16px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 8px 22px rgba(0,0,0,.2);overflow:hidden}
+.office-auth-symbol img{width:100%;height:100%;object-fit:cover;display:block}
+.office-auth-brand b{font-size:12px;letter-spacing:.12em}
+.office-auth-brand small{color:rgba(255,255,255,.62);font-size:10px}
+.office-auth-close{border-radius:50%;background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18);color:#fff}
+.office-auth-content{padding:27px 30px 26px}
+.office-auth-eyebrow{color:#d6c5a9}
+.office-auth-content h2{color:#fff;font-size:29px;letter-spacing:-.05em}
+.office-auth-intro{color:rgba(255,255,255,.68);font-size:12px;line-height:1.65}
+.office-auth-form{gap:14px}
+.office-auth-form label{color:rgba(255,255,255,.82);font-size:11px}
+.office-auth-form input,.office-auth-form textarea,.office-auth-input-wrap{border:1px solid rgba(255,255,255,.18);border-radius:13px;background:rgba(255,255,255,.075);color:#fff}
+.office-auth-form input::placeholder,.office-auth-form textarea::placeholder{color:rgba(255,255,255,.4)}
+.office-auth-form input:focus,.office-auth-form textarea:focus,.office-auth-input-wrap:focus-within{border-color:rgba(222,207,180,.72);box-shadow:0 0 0 3px rgba(222,207,180,.12)}
+.office-auth-input-wrap{color:rgba(255,255,255,.55)}
+.office-auth-input-wrap input{background:transparent!important;color:#fff}
+.office-auth-eye{color:rgba(255,255,255,.7)}
+.office-auth-submit{min-height:48px;border:1px solid rgba(255,255,255,.22);border-radius:15px;background:linear-gradient(135deg,#f1eee8,#cfc9be);color:#17191b;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 10px 25px rgba(0,0,0,.2);font-weight:800}
+.office-auth-submit:hover:not(:disabled){background:linear-gradient(135deg,#fff,#d9d3c8);color:#111}
+.office-auth-google{min-height:46px;border:1px solid rgba(255,255,255,.2);border-radius:14px;background:rgba(255,255,255,.075);color:#fff}
+.office-auth-google:hover:not(:disabled){background:rgba(255,255,255,.13)}
+.office-auth-divider{color:rgba(255,255,255,.42)}
+.office-auth-divider:before,.office-auth-divider:after{background:rgba(255,255,255,.14)}
+.office-auth-switch{color:rgba(255,255,255,.62)}
+.office-auth-switch button,.office-auth-text-link{color:#e6d7bb}
+.office-auth-legal{color:rgba(255,255,255,.43)}
+.office-auth-legal svg{color:#d9c8aa}
+.office-auth-account strong{color:#fff}
+.office-auth-account small,.office-auth-workspaces>span small{color:rgba(255,255,255,.56)}
+.office-auth-workspaces{border:1px solid rgba(255,255,255,.16);border-radius:15px;background:rgba(255,255,255,.06)}
+.office-auth-workspaces>b{color:rgba(255,255,255,.56)}
+.office-auth-workspaces>span{color:#fff}
+.office-auth-signout{border:1px solid rgba(255,255,255,.16);border-radius:13px;background:rgba(255,255,255,.055);color:#fff}
+.office-auth-message{border-radius:12px}
+.office-auth-config-error{border-radius:13px}
+@media(max-width:620px){.office-auth-panel{width:min(460px,100%);border-radius:24px!important}.office-auth-content{padding:22px 20px 21px}.office-auth-brand{padding:18px 20px}}
