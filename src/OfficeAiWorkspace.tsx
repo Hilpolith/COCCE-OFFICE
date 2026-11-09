@@ -20,45 +20,68 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
 
   useEffect(() => {
     let active = true;
+    const initialize = async () => {
+      if (!client || config.status !== 'ready') {
+        setStatus('misconfigured');
+        return;
+      }
+      setStatus('loading');
+      try {
+        const { data: sessionData, error: sessionError } = await client.auth.getSession();
+        if (!active) return;
+        if (sessionError || !sessionData.session) {
+          setWorkspaces([]);
+          setWorkspaceId('');
+          setStatus('signed-out');
+          return;
+        }
+        const { data: availability, error: availabilityError } = await client.functions.invoke('office-ai-chat', { body: { action: 'status' } });
+        if (!active) return;
+        if (availabilityError || availability?.configured !== true) {
+          setError(availabilityError ? 'The COCCE AI service could not be reached.' : 'The free COCCE AI model is not configured.');
+          setStatus('not-configured');
+          return;
+        }
+        const spaces = await officeTeamApi.listWorkspaces(client);
+        if (!active) return;
+        setWorkspaces(spaces);
+        if (!spaces.length) {
+          setWorkspaceId('');
+          setStatus('ready');
+          return;
+        }
+        setWorkspaceId(initialWorkspaceId && spaces.some((space) => space.workspace_id === initialWorkspaceId) ? initialWorkspaceId : '*');
+        setStatus('ready');
+      } catch (reason) {
+        if (active) {
+          setError(reason instanceof Error ? reason.message : 'COCCE Office AI could not initialize.');
+          setStatus('not-configured');
+        }
+      }
+    };
     if (!client || config.status !== 'ready') {
       setStatus('misconfigured');
-      return;
+      return () => { active = false; };
     }
-    void (async () => {
-      const { data: sessionData, error: sessionError } = await client.auth.getSession();
-      if (!active) return;
-      if (sessionError || !sessionData.session) {
+    const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        setWorkspaces([]);
+        setWorkspaceId('');
+        setAnswer('');
         setStatus('signed-out');
-        return;
-      }
-      const { data: availability, error: availabilityError } = await client.functions.invoke('office-ai-chat', { body: { action: 'status' } });
-      if (!active) return;
-      if (availabilityError) {
-        setError('The COCCE AI service could not be reached.');
-        setStatus('not-configured');
-        return;
-      }
-      if (availability?.configured !== true) {
-        setStatus('not-configured');
-        return;
-      }
-      const spaces = await officeTeamApi.listWorkspaces(client);
-      if (!active) return;
-      setWorkspaces(spaces);
-      if (!spaces.length) {
-        setStatus('ready');
-        return;
-      }
-      setWorkspaceId(initialWorkspaceId && spaces.some((space) => space.workspace_id === initialWorkspaceId) ? initialWorkspaceId : '*');
-      setStatus('ready');
-    })().catch((reason: unknown) => {
-      if (active) {
-        setError(reason instanceof Error ? reason.message : 'COCCE Office AI could not initialize.');
-        setStatus('not-configured');
+      } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        window.setTimeout(() => { if (active) void initialize(); }, 0);
       }
     });
-    return () => { active = false; };
-  }, [client, config.status]);
+    void initialize();
+    return () => { active = false; subscription.unsubscribe(); };
+  }, [client, config.status, initialWorkspaceId]);
+
+  useEffect(() => {
+    setPrompt(initialPrompt ?? '');
+    setAnswer('');
+    setError('');
+  }, [initialPrompt]);
 
   const changeWorkspace = async (nextId: string) => {
     setWorkspaceId(nextId);
