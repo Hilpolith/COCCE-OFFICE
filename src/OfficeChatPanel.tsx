@@ -78,13 +78,13 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
 
   useEffect(() => {
     let alive = true;
-    let fallback: number | null = null;
+    let fallback: ReturnType<typeof setInterval> | null = null;
     const poll = () => {
       if (fallback) return;
-      fallback = window.setInterval(() => { void refresh().catch((cause) => { if (alive) setError(cause instanceof Error ? cause.message : 'Could not refresh chat.'); }); }, 15000) as unknown as number;
+      fallback = setInterval(() => { void refresh().catch((cause) => { if (alive) setError(cause instanceof Error ? cause.message : 'Could not refresh chat.'); }); }, 15000);
     };
     const stopPoll = () => {
-      if (fallback) window.clearInterval(fallback);
+      if (fallback) clearInterval(fallback);
       fallback = null;
     };
     setLoading(true);
