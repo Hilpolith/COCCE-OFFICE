@@ -140,4 +140,21 @@ describe('global Office workspace selection', () => {
     await waitFor(() => expect(events.some((item) => item.type === 'cleared')).toBe(true));
     expect(events.some((item) => item.type === 'changed')).toBe(false);
   });
+  it('ignores a stale initial session lookup after a newer COCCE auth event', async () => {
+    let resolveInitialSession: ((value: { data: { session: { user: typeof userA } }; error: null }) => void) | null = null;
+    mocks.auth.getSession.mockImplementation(() => new Promise((resolve) => { resolveInitialSession = resolve; }));
+    mocks.listWorkspaces.mockResolvedValue([workspaceB]);
+    mocks.listWorkspaceSuites.mockResolvedValue([{ workspace_id: workspaceB.workspace_id, suite_id: 'business', created_at: workspaceB.created_at }]);
+
+    render(<OfficeWorkspaceSwitcher />);
+    emitAuthState?.('SIGNED_IN', { user: userB });
+
+    await waitFor(() => expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceB.workspace_id)).toBe(true));
+    resolveInitialSession?.({ data: { session: { user: userA } }, error: null });
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+
+    expect(events.some((item) => item.type === 'changed' && item.detail?.workspaceId === workspaceA.workspace_id)).toBe(false);
+    expect(events.at(-1)?.detail?.workspaceId).toBe(workspaceB.workspace_id);
+  });
+
 });
