@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   onAuthStateChange: vi.fn(),
   invoke: vi.fn(),
   listWorkspaces: vi.fn(),
+  getWorkspaceAiEnabled: vi.fn(),
+  createOfficeCloudApi: vi.fn(),
 }));
 
 vi.mock('./lib/officeTeamSupabase', () => ({
@@ -21,8 +23,9 @@ vi.mock('./lib/officeTeamSupabase', () => ({
   }),
 }));
 vi.mock('./lib/officeTeamApi', () => ({
-  officeTeamApi: { listWorkspaces: mocks.listWorkspaces },
+  officeTeamApi: { listWorkspaces: mocks.listWorkspaces, getWorkspaceAiEnabled: mocks.getWorkspaceAiEnabled },
 }));
+vi.mock('./lib/officeCloudFiles', () => ({ createOfficeCloudApi: mocks.createOfficeCloudApi }));
 
 const workspaces = [
   { workspace_id: 'workspace-one', name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' },
@@ -39,6 +42,8 @@ beforeEach(() => {
       : { data: { text: 'A tested workspace summary.' }, error: null }
   ));
   mocks.listWorkspaces.mockResolvedValue(workspaces);
+  mocks.getWorkspaceAiEnabled.mockResolvedValue(true);
+  mocks.createOfficeCloudApi.mockReturnValue({ list: vi.fn().mockResolvedValue([{ fileId: '33333333-3333-4333-8333-333333333333', workspaceId: '11111111-1111-4111-8111-111111111111', displayName: 'policy.md', sizeBytes: 123, createdAt: '2026-11-09T00:00:00Z', sha256Hex: '0'.repeat(64) }]) });
 });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -53,6 +58,23 @@ describe('COCCE AI workspace context', () => {
     ]);
     fireEvent.change(selector, { target: { value: 'workspace-two' } });
     expect(selector.value).toBe('workspace-two');
+  });
+
+  it('attaches only selected Drive file IDs for server-side retrieval', async () => {
+    mocks.listWorkspaces.mockResolvedValue([{ workspace_id: '11111111-1111-4111-8111-111111111111', name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
+    render(<OfficeAiWorkspace />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    fireEvent.click(screen.getByRole('button', { name: 'Browse Drive' }));
+    await screen.findByText('policy.md');
+    fireEvent.click(screen.getByLabelText(/policy\.md/));
+    fireEvent.change(screen.getByPlaceholderText('Ask across your workspace…'), { target: { value: 'Summarise the policy.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenLastCalledWith('office-ai-chat', {
+      body: {
+        action: 'chat', workspaceId: '*', prompt: 'Summarise the policy.',
+        includeConversations: true, fileIds: ['33333333-3333-4333-8333-333333333333'],
+      },
+    }));
   });
 
   it('sends only the prompt when workspace context is switched off', async () => {
