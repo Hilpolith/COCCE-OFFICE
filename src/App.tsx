@@ -436,7 +436,7 @@ function App() {
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
           {page === 'slides' && <SlidesWorkspace workspaceId={activeWorkspace?.id ?? null} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
           {page === 'vault' && <VaultWorkspace />}
-          {page === 'industry' && <IndustrySuitesWorkspace key={`${serverWorkspace?.workspaceId ?? 'local'}-${industryFocus ?? 'all'}`} preferredIndustryId={industryFocus} activeWorkspace={serverWorkspace} onCreateTeam={openIndustryTeam} />}
+          {page === 'industry' && <IndustrySuitesWorkspace key={`${serverWorkspace?.workspaceId ?? 'local'}-${serverWorkspace?.suiteId ?? 'none'}-${industryFocus ?? 'all'}`} preferredIndustryId={industryFocus} activeWorkspace={serverWorkspace} onCreateTeam={openIndustryTeam} />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
           {page === 'chats' && <ChatsWorkspace />}
           {page === 'ai' && <OfficeAiWorkspace initialWorkspaceId={aiContext?.workspaceId ?? serverWorkspace?.workspaceId} initialPrompt={aiContext?.prompt} />}
