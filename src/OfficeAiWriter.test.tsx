@@ -128,6 +128,7 @@ describe('Docs AI writing studio', () => {
   });
 
   it('keeps every Docs AI action disabled when the account has no Office workspace', async () => {
+    mockFetch();
     mocks.listWorkspaces.mockResolvedValue([]);
     const { editor } = makeEditor();
     render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
