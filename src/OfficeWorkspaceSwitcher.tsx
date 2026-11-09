@@ -40,7 +40,7 @@ export default function OfficeWorkspaceSwitcher() {
       clearWorkspaceContext();
       setLoading(false);
     };
-    const load = async () => {
+    const load = async (preferredId = '') => {
       const version = authVersion;
       setLoading(true);
       setError('');
@@ -70,6 +70,14 @@ export default function OfficeWorkspaceSwitcher() {
         if (alive && version === authVersion) setLoading(false);
       }
     };
+
+    const handleWorkspaceCreated = (event: Event) => {
+      const preferredId = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId ?? '';
+      if (!preferredId) return;
+      authVersion += 1;
+      void load(preferredId);
+    };
+    window.addEventListener('cocce-office:workspace-created', handleWorkspaceCreated);
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       authVersion += 1;
@@ -105,6 +113,7 @@ export default function OfficeWorkspaceSwitcher() {
     return () => {
       alive = false;
       subscription.unsubscribe();
+      window.removeEventListener('cocce-office:workspace-created', handleWorkspaceCreated);
     };
   }, [client, schemaReady]);
 
