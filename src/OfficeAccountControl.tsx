@@ -188,7 +188,15 @@ export default function OfficeAccountControl() {
     if (!client) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const { error: oauthError } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+      const officeOrigin = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.vercel.app') && window.location.hostname !== 'cocce-office.vercel.app'
+        ? window.location.origin
+        : 'https://cocce-office.vercel.app';
+      const officeCallback = new URL('/', officeOrigin);
+      officeCallback.searchParams.set('cocce_office_oauth', '1');
+      const { error: oauthError } = await client.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: officeCallback.toString(), queryParams: { prompt: 'select_account' } },
+      });
       if (oauthError) throw oauthError;
     } catch (cause) { setError(friendlyError(cause)); setBusy(false); }
   };
@@ -228,7 +236,7 @@ export default function OfficeAccountControl() {
     </button>
     {open && <div className="office-auth-scrim">
       <section className="office-account-popover office-auth-panel" id="office-account-popover" aria-label="COCCE account">
-        <div className="office-auth-brand"><span className="office-auth-symbol"><Building2 size={22}/></span><span><b>COCCE OFFICE</b><small>One workspace for the way you work.</small></span><button className="office-auth-close" type="button" aria-label="Close account panel" onClick={closePanel}><X size={18}/></button></div>
+        <div className="office-auth-brand"><span className="office-auth-symbol"><img src="/brand/cocce-office-squircle-icon-256.png" alt="" /></span><span><b>COCCE OFFICE</b><small>One workspace for the way you work.</small></span><button className="office-auth-close" type="button" aria-label="Close account panel" onClick={closePanel}><X size={18}/></button></div>
         <div className="office-auth-content">
           <span className="office-auth-eyebrow">{user ? 'ACCOUNT & WORKSPACE' : 'YOUR WORKSPACE STARTS HERE'}</span>
           <h2>{user ? (needsWorkspace ? 'Set up your organisation' : 'Your account') : formTitle}</h2>
