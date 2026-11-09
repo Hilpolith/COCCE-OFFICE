@@ -120,12 +120,22 @@ async function loadSelectedDriveFiles(
       redirect: 'error',
       signal: AbortSignal.timeout(10_000),
     });
-    if (!linkResponse.ok) throw { status: linkResponse.status === 403 ? 403 : 404, code: 'DRIVE_FILE_ACCESS_DENIED', message: 'A selected Drive file is unavailable to your account.' } satisfies DriveContextError;
+    if (!linkResponse.ok) {
+      const status = linkResponse.status === 403 ? 403 : linkResponse.status === 404 ? 404 : 503;
+      throw { status, code: status === 403 ? 'DRIVE_FILE_ACCESS_DENIED' : status === 404 ? 'DRIVE_FILE_NOT_FOUND' : 'DRIVE_FILE_SERVICE_UNAVAILABLE', message: 'A selected Drive file could not be authorised or retrieved.' } satisfies DriveContextError;
+    }
     const link = await linkResponse.json();
-    if (link?.fileId !== fileId || !isUuid(link?.workspaceId) || !enabledById.has(link.workspaceId)
-      || typeof link.displayName !== 'string' || !Number.isSafeInteger(link.sizeBytes) || link.sizeBytes < 1 || link.sizeBytes > MAX_DRIVE_FILE_BYTES
-      || !supportedDriveTextFile(link.displayName) || typeof link.url !== 'string') {
-      throw { status: 403, code: 'DRIVE_FILE_SCOPE_OR_TYPE_DENIED', message: 'A selected Drive file is outside the enabled workspace scope, unsupported, or too large. Only small text-based files can be attached.' } satisfies DriveContextError;
+    if (link?.fileId !== fileId || !isUuid(link?.workspaceId) || !enabledById.has(link.workspaceId)) {
+      throw { status: 403, code: 'DRIVE_FILE_SCOPE_DENIED', message: 'A selected Drive file is outside the enabled workspace scope.' } satisfies DriveContextError;
+    }
+    if (typeof link.displayName !== 'string' || !Number.isSafeInteger(link.sizeBytes) || link.sizeBytes < 1 || typeof link.url !== 'string') {
+      throw { status: 502, code: 'DRIVE_FILE_METADATA_INVALID', message: 'A selected Drive file returned invalid verified metadata.' } satisfies DriveContextError;
+    }
+    if (link.sizeBytes > MAX_DRIVE_FILE_BYTES) {
+      throw { status: 413, code: 'DRIVE_FILE_TOO_LARGE', message: 'A selected Drive file exceeds the 512 KiB AI context limit.' } satisfies DriveContextError;
+    }
+    if (!supportedDriveTextFile(link.displayName)) {
+      throw { status: 415, code: 'DRIVE_FILE_UNSUPPORTED_TYPE', message: 'Only UTF-8 text files with supported extensions can be attached to COCCE AI.' } satisfies DriveContextError;
     }
     const signed = new URL(link.url);
     const expectedPath = new RegExp('^/cocce-kyc/office/v1/workspaces/' + link.workspaceId + '/files/' + fileId + '/revisions/[0-9a-f-]{36}/payload$', 'i');
