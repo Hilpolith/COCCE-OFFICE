@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import {
   ArrowLeft, ArrowRight, Building2, CalendarDays, Check,
