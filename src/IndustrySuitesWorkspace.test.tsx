@@ -222,4 +222,43 @@ describe('industry office workbench', () => {
     expect(screen.getByRole('button', { name: 'Ask COCCE AI' })).toBeTruthy();
     window.removeEventListener('cocce-office:navigate', listener);
   });
+  it('opens the globally selected server-backed Office suite without exposing device-local preview records', async () => {
+    const localOffice = createIndustryOffice(emptyIndustryState(), {
+      industryId: 'school', name: 'Old Local School', country: 'Tanzania',
+    }).office!;
+    const localWork = addIndustryWorkItem({ version: 1, offices: [localOffice] }, localOffice.id, {
+      title: 'Private device-only preview item', notes: 'This must never appear in the server workspace.',
+    });
+    writeIndustryState(window.localStorage, localWork.state);
+    const workspaceId = '22222222-2222-4222-8222-222222222222';
+
+    render(<IndustrySuitesWorkspace
+      preferredIndustryId={null}
+      activeWorkspace={{ workspaceId, name: 'Server-backed Academy', suiteId: 'school' }}
+      onCreateTeam={vi.fn()}
+    />);
+
+    expect(await screen.findByTestId('school-management-preview')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Server-backed Academy' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'School Management' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Ask COCCE AI' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Private device-only preview item' })).toBeNull();
+    const persisted = JSON.parse(window.localStorage.getItem(INDUSTRY_STORAGE_KEY)!);
+    expect(persisted.offices[0].items[0].title).toBe('Private device-only preview item');
+    expect(persisted.offices[0].teamWorkspaceId).toBeUndefined();
+  });
+
+  it('does not guess a specialist suite for an existing server workspace with no suite metadata', () => {
+    render(<IndustrySuitesWorkspace
+      preferredIndustryId={null}
+      activeWorkspace={{ workspaceId: '33333333-3333-4333-8333-333333333333', name: 'Unassigned Office', suiteId: null }}
+      onCreateTeam={vi.fn()}
+    />);
+
+    expect(screen.getByRole('heading', { name: 'Unassigned Office' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Choose an Office suite' })).toBeTruthy();
+    expect(screen.queryByTestId('business-management-preview')).toBeNull();
+    expect(screen.queryByTestId('school-management-preview')).toBeNull();
+  });
+
 });
