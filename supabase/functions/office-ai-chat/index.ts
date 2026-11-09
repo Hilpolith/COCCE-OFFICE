@@ -117,12 +117,16 @@ Deno.serve(async (req) => {
     return json(origin, 403, { error: "WORKSPACE_ACCESS_DENIED", message: "This workspace is not available to your account." });
   }
   const selectedWorkspaces = body.workspaceId === "*" ? workspaces : workspaces.filter((item) => item?.workspace_id === body.workspaceId);
-  const enabledWorkspaces: Array<Record<string, unknown>> = [];
-  for (const workspace of selectedWorkspaces.slice(0, 20)) {
-    const { data: aiEnabled, error: aiSettingError } = await client.rpc("office_get_workspace_ai_enabled", { p_workspace_id: workspace.workspace_id });
-    if (!aiSettingError && aiEnabled === true) enabledWorkspaces.push(workspace);
-  }
+  const boundedWorkspaces = selectedWorkspaces.slice(0, 20);
+  const aiSettings = await Promise.all(boundedWorkspaces.map(async (workspace) => {
+    const { data, error } = await client.rpc("office_get_workspace_ai_enabled", { p_workspace_id: workspace.workspace_id });
+    return error ? null : data === true;
+  }));
+  const enabledWorkspaces = boundedWorkspaces.filter((_workspace, index) => aiSettings[index] === true);
   if (enabledWorkspaces.length === 0) {
+    if (aiSettings.some((setting) => setting === null)) {
+      return json(origin, 503, { error: "WORKSPACE_AI_CONTROL_UNAVAILABLE", message: "Workspace AI permissions could not be checked. Try again later." });
+    }
     return json(origin, 403, { error: "WORKSPACE_AI_DISABLED", message: "COCCE AI is disabled for the selected workspace scope. Ask a workspace owner or administrator to enable it." });
   }
   const history: Array<{ role: "user"; content: string }> = [];
