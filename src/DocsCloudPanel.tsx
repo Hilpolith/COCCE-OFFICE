@@ -9,6 +9,7 @@ import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import { officeTeamApi } from './lib/officeTeamApi';
 import type { OfficeWorkspace } from './lib/officeTeamApi';
 import { createOfficeCloudApi, hashBytes } from './lib/officeCloudFiles';
+import { OFFICE_CLOUD_SCOPE_NOTE, officeCloudTierLabel } from './lib/officeCloudLabels';
 import type { CloudFile, CloudUsage } from './lib/officeCloudFiles';
 import {
   createDocsCloudSnapshot,
@@ -573,7 +574,7 @@ export default function DocsCloudPanel({
                   aria-label="Cloud storage usage"
                 >
                   <strong>
-                    {usage.tierCode.replaceAll('_', ' ')} ·{' '}
+                    {officeCloudTierLabel(usage.tierCode)} ·{' '}
                     {bytesLabel(usage.totalConsumedBytes)} /{' '}
                     {bytesLabel(usage.quotaBytes)}
                   </strong>
@@ -596,6 +597,7 @@ export default function DocsCloudPanel({
                   )}
                 </div>
               )}
+              <p className="docs-cloud-scope-note">{OFFICE_CLOUD_SCOPE_NOTE}</p>
               <div className="docs-cloud-actions">
                 <button
                   className="button-primary small-button"

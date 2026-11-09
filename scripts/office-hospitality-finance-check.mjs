@@ -52,12 +52,13 @@ test('void preserves immutable charge row and rejects refund overage', async () 
 });
 
 test('close day computes method totals and duplicate close is rejected', async () => {
-  const closed = await action('hotel_admin', 'close_day', { property_id: ids.property, close_on: '2026-11-08', cash_actual: '100.00', bank_actual: '0.00', mobile_actual: '0.00', card_actual: '0.00', reference: 'CLOSE-1' });
+  const closeOn = (await q("select to_char(now() at time zone 'Africa/Dar_es_Salaam', 'YYYY-MM-DD') as close_on")).rows[0].close_on;
+  const closed = await action('hotel_admin', 'close_day', { property_id: ids.property, close_on: closeOn, cash_actual: '100.00', bank_actual: '0.00', mobile_actual: '0.00', card_actual: '0.00', reference: 'CLOSE-1' });
   assert.equal(closed.status, 'closed');
   const row = (await q("select data->>'cash_expected' cash_expected,data->>'cash_actual' cash_actual from public.office_hospitality_daily_closes where id=$1", [closed.id])).rows[0];
   assert.equal(row.cash_expected, '100.00');
   assert.equal(row.cash_actual, '100.00');
-  await fails(() => action('hotel_admin', 'close_day', { property_id: ids.property, close_on: '2026-11-08', cash_actual: '0.00', bank_actual: '0.00', mobile_actual: '0.00', card_actual: '0.00', reference: 'CLOSE-DUP' }));
+  await fails(() => action('hotel_admin', 'close_day', { property_id: ids.property, close_on: closeOn, cash_actual: '0.00', bank_actual: '0.00', mobile_actual: '0.00', card_actual: '0.00', reference: 'CLOSE-DUP' }));
 });
 
 test('report snapshot excludes private fields and compliance export audits purpose', async () => {

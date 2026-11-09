@@ -8,6 +8,7 @@ import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import { officeTeamApi } from './lib/officeTeamApi';
 import type { OfficeWorkspace } from './lib/officeTeamApi';
 import { createOfficeCloudApi, hashBytes } from './lib/officeCloudFiles';
+import { OFFICE_CLOUD_SCOPE_NOTE, officeCloudTierLabel } from './lib/officeCloudLabels';
 import type { CloudFile, CloudUsage } from './lib/officeCloudFiles';
 import {
   createSheetsCloudSnapshot,
@@ -411,11 +412,12 @@ export default function SheetsCloudPanel({
           {workspaces.length === 0 && <p>Join or create an Office workspace in Team. Browser-local workspace names are not cloud authorization.</p>}
           {workspaceId && <>
             {usage && <div className="docs-cloud-usage" aria-label="Cloud storage usage">
-              <strong>{usage.tierCode.replaceAll('_', ' ')} · {bytesLabel(usage.totalConsumedBytes)} / {bytesLabel(usage.quotaBytes)}</strong>
+              <strong>{officeCloudTierLabel(usage.tierCode)} · {bytesLabel(usage.totalConsumedBytes)} / {bytesLabel(usage.quotaBytes)}</strong>
               <meter min={0} max={usage.quotaBytes} value={Math.min(usage.totalConsumedBytes, usage.quotaBytes)} aria-label="Cloud quota used" />
               <span>Active {bytesLabel(usage.activeStoredBytes)} · Trash {bytesLabel(usage.trashBytes)} · Pending {bytesLabel(usage.reservedBytes)}</span>
               {usage.warningAtPercent > 0 && <p role="alert">Storage is at {usage.warningAtPercent}% capacity or above. Existing cloud files are never deleted to enforce quota.</p>}
             </div>}
+            <p className="docs-cloud-scope-note">{OFFICE_CLOUD_SCOPE_NOTE}</p>
             <div className="docs-cloud-actions">
               <button className="button-primary small-button" disabled={busy || hasUnsavedChanges || pending.length > 0 || !usage} onClick={() => { void saveCopy(); }}>Save new cloud copy</button>
               <button className="button-secondary small-button" disabled={busy} onClick={() => { void run(load); }}>Refresh cloud list</button>
