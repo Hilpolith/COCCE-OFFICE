@@ -142,7 +142,7 @@ function readBody(req) {
   }
   const allowed = value.action === 'government_review'
     ? new Set(['action', 'workspaceId', 'correspondenceId', 'selectedText', 'reviewAction', 'nonSensitiveConfirmed'])
-    : new Set(['action', 'selectedText', 'prompt', 'documentText']);
+    : new Set(['action', 'workspaceId', 'selectedText', 'prompt', 'documentText']);
   if (Object.keys(value).some((key) => !allowed.has(key))) return { error: 'UNSUPPORTED_FIELDS' };
   return { body: value };
 }
@@ -156,6 +156,10 @@ function declaredBodyTooLarge(req) {
 
 function validateBody(body) {
   const action = body.action;
+  if (typeof body.workspaceId !== 'string'
+    || (body.workspaceId !== '*' && !GOVERNMENT_UUID_PATTERN.test(body.workspaceId))) {
+    return { error: 'WORKSPACE_REQUIRED' };
+  }
   if (action === 'government_review') {
     if (typeof body.workspaceId !== 'string' || !body.workspaceId.trim() || typeof body.correspondenceId !== 'string' || !body.correspondenceId.trim()) return { error: 'GOVERNMENT_CONTEXT_REQUIRED' };
     if (!GOVERNMENT_UUID_PATTERN.test(body.workspaceId) || !GOVERNMENT_UUID_PATTERN.test(body.correspondenceId)) return { error: 'GOVERNMENT_CONTEXT_INVALID' };
@@ -173,7 +177,7 @@ function validateBody(body) {
     if (Object.hasOwn(body, 'selectedText') || Object.hasOwn(body, 'prompt')) return { error: 'DOCUMENT_SUMMARY_FIELDS' };
     if (typeof body.documentText !== 'string' || !body.documentText.trim()) return { error: 'DOCUMENT_TEXT_REQUIRED' };
     if (body.documentText.length > MAX_DOCUMENT_SUMMARY_CHARS) return { error: 'DOCUMENT_TOO_LARGE' };
-    return { action, prompt: ACTION_INSTRUCTIONS.document_summary, selectedText: '', documentText: body.documentText };
+    return { action, workspaceId: body.workspaceId, prompt: ACTION_INSTRUCTIONS.document_summary, selectedText: '', documentText: body.documentText };
   }
   if (Object.hasOwn(body, 'documentText')) return { error: 'UNEXPECTED_DOCUMENT_TEXT' };
 
@@ -195,6 +199,37 @@ function validateBody(body) {
 
   if (Object.hasOwn(body, 'prompt')) return { error: 'UNEXPECTED_PROMPT' };
   return { action, prompt: ACTION_INSTRUCTIONS[action], selectedText: body.selectedText };
+}
+
+async function readWorkspaceAiControl({ workspaceId, token, anonKey, fetchImpl }) {
+  if (!publicSupabaseKey(anonKey)) return { kind: 'configuration-error' };
+  const headers = { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  try {
+    const listResponse = await fetchImpl(`${COCCE_SUPABASE_URL}/rest/v1/rpc/office_list_workspaces`, {
+      method: 'POST', headers, body: '{}', cache: 'no-store', signal: AbortSignal.timeout(8_000),
+    });
+    if (!listResponse.ok) return { kind: 'unavailable' };
+    const rows = await listResponse.json();
+    if (!Array.isArray(rows)) return { kind: 'unavailable' };
+    const selected = workspaceId === '*'
+      ? rows.filter((row) => typeof row?.workspace_id === 'string' && GOVERNMENT_UUID_PATTERN.test(row.workspace_id)).slice(0, 20)
+      : rows.filter((row) => row?.workspace_id === workspaceId);
+    if (selected.length === 0) return { kind: 'denied' };
+    for (const workspace of selected) {
+      const response = await fetchImpl(`${COCCE_SUPABASE_URL}/rest/v1/rpc/office_get_workspace_ai_enabled`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ p_workspace_id: workspace.workspace_id }),
+        cache: 'no-store',
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!response.ok) continue;
+      if (await response.json() === true) return { kind: 'ok' };
+    }
+    return { kind: 'disabled' };
+  } catch {
+    return { kind: 'unavailable' };
+  }
 }
 
 async function readGovernmentControl({ workspaceId, correspondenceId, token, anonKey, fetchImpl }) {
@@ -355,6 +390,24 @@ export function createOfficeAiHandler({
         message: tooLarge
           ? 'This document exceeds the full-document summary limit. Shorten it or use selected-text summaries instead; no content was processed.'
           : 'Select a shorter excerpt or review the prompt and try again.',
+      });
+    }
+
+    const workspaceControl = await readWorkspaceAiControl({
+      workspaceId: validated.workspaceId,
+      token,
+      anonKey: env.VITE_COCCE_SUPABASE_ANON_KEY,
+      fetchImpl,
+    });
+    if (workspaceControl.kind !== 'ok') {
+      const denied = workspaceControl.kind === 'denied' || workspaceControl.kind === 'disabled';
+      return response(res, denied ? 403 : 503, {
+        error: workspaceControl.kind === 'disabled' ? 'WORKSPACE_AI_DISABLED' : workspaceControl.kind === 'denied' ? 'WORKSPACE_ACCESS_DENIED' : 'WORKSPACE_AI_CONTROL_UNAVAILABLE',
+        message: workspaceControl.kind === 'disabled'
+          ? 'COCCE AI is disabled for the selected workspace scope. Ask a workspace owner or administrator to enable it.'
+          : workspaceControl.kind === 'denied'
+            ? 'This workspace is not available to your account.'
+            : 'Workspace AI permissions could not be checked. Try again later.',
       });
     }
 
