@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
   }
   const selectedWorkspaces = body.workspaceId === "*" ? workspaces : workspaces.filter((item) => item?.workspace_id === body.workspaceId);
   const enabledWorkspaces: Array<Record<string, unknown>> = [];
-  for (const workspace of selectedWorkspaces) {
+  for (const workspace of selectedWorkspaces.slice(0, 20)) {
     const { data: aiEnabled, error: aiSettingError } = await client.rpc("office_get_workspace_ai_enabled", { p_workspace_id: workspace.workspace_id });
     if (!aiSettingError && aiEnabled === true) enabledWorkspaces.push(workspace);
   }
