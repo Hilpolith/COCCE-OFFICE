@@ -65,7 +65,7 @@ describe('Cloud Drive workspace', () => {
   it('lists membership-scoped cloud files and previews downloaded text', async () => {
     render(<CloudDriveWorkspace query="" />);
     expect(await screen.findByText('brief.txt')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /^brief\\.txt/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^TXT brief\\.txt/ }));
     expect(await screen.findByText('hello')).toBeTruthy();
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(cloudFile);
   });
