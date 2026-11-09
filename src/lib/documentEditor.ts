@@ -268,6 +268,9 @@ function markdownInline(node: Node): string {
   if (tag === 'EM' || tag === 'I') return `*${inner}*`;
   if (tag === 'DEL' || tag === 'S') return `~~${inner}~~`;
   if (tag === 'U') return `<u>${inner}</u>`;
+  if (tag === 'A') { const href = safeDocsHref(element.getAttribute('href') ?? ''); return href ? `[${inner}](${href})` : inner; }
+  if (tag === 'SUB') return `<sub>${inner}</sub>`;
+  if (tag === 'SUP') return `<sup>${inner}</sup>`;
   return inner;
 }
 
