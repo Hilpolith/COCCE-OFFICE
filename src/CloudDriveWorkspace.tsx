@@ -26,7 +26,7 @@ function mimeOf(file: CloudFile) {
   if (name.endsWith('.aac')) return 'audio/aac';
   if (name.endsWith('.flac')) return 'audio/flac';
   if (name.endsWith('.pdf')) return 'application/pdf';
-  if (/\.(txt|md|markdown|csv|json|xml|yaml|yml|log)$/.test(name)) return 'text/plain';
+  if (/\.(txt|md|markdown|csv|tsv|json|xml|yaml|yml|log)$/.test(name)) return 'text/plain';
   return 'application/octet-stream';
 }
 function categoryOf(file: CloudFile): Exclude<Category, 'all'> {
