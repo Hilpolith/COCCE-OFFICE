@@ -2,13 +2,13 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 import {
   Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness, Building2,
-  Check, ChevronDown, ChevronLeft, CircleHelp, CloudOff, Command,
-  FileSpreadsheet, FileText, FolderOpen, Grid2X2, LayoutDashboard,
-  LockKeyhole, Menu, MessageCircle, MoreHorizontal, Plus, Search, Settings2,
+  Check, ChevronLeft, CircleHelp, CloudOff, Command,
+  FileSpreadsheet, FileText, FolderOpen, Grid2X2,
+  LockKeyhole, Menu, MessageCircle, MoreHorizontal, Plus, Search,
   ShieldCheck, Sparkles, Sun, X,
 } from 'lucide-react';
 import {
-  addDocument, addWorkspace, readPreviewState, removeDocument, selectWorkspace,
+  addDocument, addWorkspace, readPreviewState, removeDocument,
   updateDocument, writePreviewState,
 } from './lib/localStore';
 import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib/localStore';
@@ -27,7 +27,7 @@ import OfficeEditorChrome from './OfficeEditorChrome';
 import { readSurfaceStyle, writeSurfaceStyle } from './lib/appearancePreferences';
 import type { SurfaceStyle } from './lib/appearancePreferences';
 import IndustrySuitesWorkspace from './IndustrySuitesWorkspace';
-import { getIndustryDefinition, industryCatalog } from './lib/industryWorkspaces';
+import { getIndustryDefinition } from './lib/industryWorkspaces';
 import type { IndustryId, IndustryTeamSetup } from './lib/industryWorkspaces';
 import './officeNavigation.css';
 
@@ -85,10 +85,7 @@ function App() {
   const [page, setPage] = useState<PageId>('home');
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogMode>(null);
-  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [documentsExpanded, setDocumentsExpanded] = useState(false);
-  const [officeSuitesExpanded, setOfficeSuitesExpanded] = useState(true);
   const [industryFocus, setIndustryFocus] = useState<IndustryId | null>(null);
   const [industryTeamSetup, setIndustryTeamSetup] = useState<IndustryTeamSetup | null>(null);
   const [query, setQuery] = useState('');
@@ -188,26 +185,9 @@ function App() {
 
   const goTo = (nextPage: PageId) => {
     setPage(nextPage);
-    if (documentPageIds.includes(nextPage)) { setDocumentsExpanded(true); setOfficeSuitesExpanded(false); }
-    if (nextPage === 'industry') { setOfficeSuitesExpanded(true); setDocumentsExpanded(false); }
     setSelectedDocumentId(null);
     setMobileMenuOpen(false);
     setQuery('');
-  };
-
-  const toggleDocuments = () => {
-    if (!documentPageIds.includes(page)) { goTo('docs'); return; }
-    setDocumentsExpanded((open) => !open);
-  };
-
-  const toggleOfficeSuites = () => {
-    if (page !== 'industry') { setIndustryFocus(null); goTo('industry'); return; }
-    setOfficeSuitesExpanded((open) => !open);
-  };
-
-  const selectIndustry = (industryId: IndustryId) => {
-    setIndustryFocus(industryId);
-    goTo('industry');
   };
 
   const openIndustryTeam = (setup: IndustryTeamSetup) => {
@@ -221,8 +201,7 @@ function App() {
     if (!setup) return;
     setIndustryFocus(setup.industryId);
     setPage('industry');
-    setOfficeSuitesExpanded(true);
-    setDocumentsExpanded(false);
+
     setSelectedDocumentId(null);
     setMobileMenuOpen(false);
     setQuery('');
@@ -232,7 +211,7 @@ function App() {
     const result = addDocument(state);
     if (!persist(result.state)) return;
     setPage('docs');
-    setDocumentsExpanded(true);
+
     setSelectedDocumentId(result.document.id);
     setFeedback('New document created on this device.');
     window.setTimeout(() => setFeedback(''), 2800);
@@ -240,7 +219,7 @@ function App() {
 
   const openDocument = (document: OfficeDocument) => {
     setPage('docs');
-    setDocumentsExpanded(true);
+
     setSelectedDocumentId(document.id);
   };
 
@@ -308,7 +287,7 @@ function App() {
         setUnsavedDocuments((current) => ({ ...current, [draft.id]: draft }));
       }
       setPage('docs');
-      setDocumentsExpanded(true);
+
       setSelectedDocumentId(draft.id);
       const warning = imported.warnings.length ? ` ${imported.warnings.join(' ')}` : '';
       setFeedback(saved
@@ -333,7 +312,7 @@ function App() {
     });
     if (!persist(next)) return false;
     setPage('docs');
-    setDocumentsExpanded(true);
+
     setSelectedDocumentId(created.document.id);
     setFeedback('Cloud copy restored as a new document on this device. Existing local drafts were not changed.');
     return true;
@@ -365,13 +344,6 @@ function App() {
     setDialog(null);
     setFeedback('Local workspace created on this device.');
     window.setTimeout(() => setFeedback(''), 2800);
-  };
-
-  const chooseWorkspace = (workspaceId: string | null) => {
-    if (!persist(selectWorkspace(state, workspaceId))) return;
-    setWorkspaceMenuOpen(false);
-    setSelectedDocumentId(null);
-    setPage('home');
   };
 
   return (
@@ -448,10 +420,6 @@ function pageTitle(page: PageId, editing: boolean, industryFocus: IndustryId | n
   if (page === 'settings') return 'Preferences';
   if (page === 'industry') return industryFocus ? getIndustryDefinition(industryFocus).shortLabel : 'Office suites';
   return documentNav.find((item) => item.id === page)?.label ?? toolkitNav.find((item) => item.id === page)?.label ?? 'Overview';
-}
-
-function NavButton({ active, icon, label, onClick, className = '' }: { active: boolean; icon: ReactNode; label: string; onClick: () => void; className?: string }) {
-  return <button type="button" className={`nav-button ${className} ${active ? 'active' : ''}`} onClick={onClick} aria-current={active ? 'page' : undefined}>{icon}<span>{label}</span>{active && <span className="nav-active-marker" />}</button>;
 }
 
 function Dashboard({
