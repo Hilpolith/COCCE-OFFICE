@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { loadSelectedDriveFiles, type DriveContextError } from "./drive-context.ts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const FREE_MODEL = "google/gemma-4-31b-it:free";
@@ -20,12 +21,6 @@ const MAX_PROMPT = 1600;
 const MAX_HISTORY = 24;
 const MAX_BODY_BYTES = 8_000;
 const MAX_DRIVE_FILES = 3;
-const MAX_DRIVE_FILE_BYTES = 512 * 1024;
-const MAX_DRIVE_FILE_CHARS = 8_000;
-const MAX_DRIVE_CONTEXT_CHARS = 20_000;
-const DRIVE_TEXT_EXTENSIONS = new Set(['txt', 'md', 'csv', 'tsv', 'json', 'xml', 'yaml', 'yml', 'log']);
-const OFFICE_CLOUD_FUNCTION = '/functions/v1/office-cloud-files';
-const BUNNY_DOWNLOAD_ORIGIN = 'https://de-s3.storage.bunnycdn.com';
 const FREE_FAILURES = new Set([404, 408, 424, 429, 500, 502, 503, 504]);
 const requests = new Map<string, { startedAt: number; count: number }>();
 
@@ -62,111 +57,6 @@ function rateAllowed(userId: string) {
   return true;
 }
 
-
-type DriveContextError = { status: number; code: string; message: string };
-
-function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function supportedDriveTextFile(name: string): boolean {
-  const extension = name.split('.').pop()?.toLowerCase() ?? '';
-  return DRIVE_TEXT_EXTENSIONS.has(extension);
-}
-
-async function readBoundedBytes(response: Response, limit: number): Promise<Uint8Array> {
-  const declared = Number(response.headers.get('content-length') ?? '0');
-  if (Number.isFinite(declared) && declared > limit) throw { status: 413, code: 'DRIVE_FILE_TOO_LARGE', message: 'A selected Drive file exceeds the 512 KiB AI context limit.' } satisfies DriveContextError;
-  if (!response.body) throw { status: 502, code: 'DRIVE_FILE_UNAVAILABLE', message: 'A selected Drive file could not be read.' } satisfies DriveContextError;
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
-      total += part.value.byteLength;
-      if (total > limit) {
-        await reader.cancel().catch(() => undefined);
-        throw { status: 413, code: 'DRIVE_FILE_TOO_LARGE', message: 'A selected Drive file exceeds the 512 KiB AI context limit.' } satisfies DriveContextError;
-      }
-      chunks.push(part.value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return bytes;
-}
-
-async function loadSelectedDriveFiles(
-  fileIds: string[],
-  enabledWorkspaces: Array<Record<string, unknown>>,
-  supabaseUrl: string,
-  anonKey: string,
-  token: string,
-): Promise<Array<{ workspaceName: string; displayName: string; text: string }>> {
-  if (fileIds.length === 0) return [];
-  const enabledById = new Map(enabledWorkspaces.map((workspace) => [String(workspace.workspace_id), String(workspace.name ?? 'Office workspace')]));
-  const endpoint = new URL(OFFICE_CLOUD_FUNCTION, supabaseUrl).toString();
-  const files = await Promise.all(fileIds.map(async (fileId) => {
-    const linkResponse = await fetch(endpoint, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, apikey: anonKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'get_link', fileId, purpose: 'preview' }),
-      cache: 'no-store',
-      redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!linkResponse.ok) {
-      const status = linkResponse.status === 403 ? 403 : linkResponse.status === 404 ? 404 : 503;
-      throw { status, code: status === 403 ? 'DRIVE_FILE_ACCESS_DENIED' : status === 404 ? 'DRIVE_FILE_NOT_FOUND' : 'DRIVE_FILE_SERVICE_UNAVAILABLE', message: 'A selected Drive file could not be authorised or retrieved.' } satisfies DriveContextError;
-    }
-    const link = await linkResponse.json();
-    if (link?.fileId !== fileId || !isUuid(link?.workspaceId) || !enabledById.has(link.workspaceId)) {
-      throw { status: 403, code: 'DRIVE_FILE_SCOPE_DENIED', message: 'A selected Drive file is outside the enabled workspace scope.' } satisfies DriveContextError;
-    }
-    if (typeof link.displayName !== 'string' || !Number.isSafeInteger(link.sizeBytes) || link.sizeBytes < 1 || typeof link.url !== 'string') {
-      throw { status: 502, code: 'DRIVE_FILE_METADATA_INVALID', message: 'A selected Drive file returned invalid verified metadata.' } satisfies DriveContextError;
-    }
-    if (link.sizeBytes > MAX_DRIVE_FILE_BYTES) {
-      throw { status: 413, code: 'DRIVE_FILE_TOO_LARGE', message: 'A selected Drive file exceeds the 512 KiB AI context limit.' } satisfies DriveContextError;
-    }
-    if (!supportedDriveTextFile(link.displayName)) {
-      throw { status: 415, code: 'DRIVE_FILE_UNSUPPORTED_TYPE', message: 'Only UTF-8 text files with supported extensions can be attached to COCCE AI.' } satisfies DriveContextError;
-    }
-    const signed = new URL(link.url);
-    const expectedPath = new RegExp('^/cocce-kyc/office/v1/workspaces/' + link.workspaceId + '/files/' + fileId + '/revisions/[0-9a-f-]{36}/payload$', 'i');
-    if (signed.origin !== BUNNY_DOWNLOAD_ORIGIN || !expectedPath.test(signed.pathname) || !signed.search) {
-      throw { status: 502, code: 'DRIVE_FILE_LINK_INVALID', message: 'A selected Drive file returned an invalid private download link.' } satisfies DriveContextError;
-    }
-    const fileResponse = await fetch(signed.toString(), {
-      method: 'GET',
-      cache: 'no-store',
-      redirect: 'error',
-      credentials: 'omit',
-      referrerPolicy: 'no-referrer',
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!fileResponse.ok) throw { status: 502, code: 'DRIVE_FILE_UNAVAILABLE', message: 'A selected Drive file could not be downloaded for this AI request.' } satisfies DriveContextError;
-    const bytes = await readBoundedBytes(fileResponse, MAX_DRIVE_FILE_BYTES);
-    if (bytes.byteLength !== link.sizeBytes) throw { status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH', message: 'A selected Drive file failed its stored-size check.' } satisfies DriveContextError;
-    let text: string;
-    try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
-    catch { throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file is not valid UTF-8 text.' } satisfies DriveContextError; }
-    if (text.includes('\u0000')) throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file contains binary data and cannot be attached as text.' } satisfies DriveContextError;
-    text = text.replace(/\r\n?/g, '\n').replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').slice(0, MAX_DRIVE_FILE_CHARS);
-    return { workspaceName: enabledById.get(link.workspaceId) ?? 'Office workspace', displayName: link.displayName.slice(0, 120), text };
-  }));
-  let remaining = MAX_DRIVE_CONTEXT_CHARS;
-  return files.map((file) => {
-    const excerpt = file.text.slice(0, remaining);
-    remaining = Math.max(0, remaining - excerpt.length);
-    return { ...file, text: excerpt };
-  }).filter((file) => file.text.trim());
-}
 
 function freeError(status: number, code?: string) {
   return FREE_FAILURES.has(status) || ["model_not_found", "no_endpoints_found", "no_available_provider", "free_model_unavailable"].includes(code ?? "");
