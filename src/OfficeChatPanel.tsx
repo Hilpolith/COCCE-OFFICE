@@ -21,6 +21,17 @@ type Props = {
 const MAX_CHAT_FILE_BYTES = 25 * 1024 * 1024;
 
 const formatBytes = (value: number) => value < 1024 * 1024 ? Math.max(1, Math.round(value / 1024)) + ' KB' : (value / (1024 * 1024)).toFixed(1) + ' MB';
+
+function createChatUploadUuid() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+}
+
 function previewMimeType(attachment: OfficeChatAttachment) {
   const supplied = attachment.mimeType.split(';')[0].trim().toLowerCase();
   if (supplied && supplied !== 'application/octet-stream') return supplied;
@@ -165,8 +176,10 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     try {
       for (const file of files) {
         if (!file.size || file.size > MAX_CHAT_FILE_BYTES) throw new Error(file.name + ' exceeds the 25 MiB attachment limit.');
+        const normalizedName = file.name.normalize('NFC').trim().replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 180);
+        if (!normalizedName) throw new Error('Choose a file with a valid name.');
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const reservation = await cloud.reserve(workspaceId, file.name, bytes, crypto.randomUUID());
+        const reservation = await cloud.reserve(workspaceId, normalizedName, bytes, createChatUploadUuid());
         let fileId: string;
         if (reservation.status === 'upload_pending') {
           await cloud.upload(reservation, bytes);
@@ -178,7 +191,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
           if (typeof reservation.fileId !== 'string' || !reservation.fileId) throw new Error('Cloud upload reservation did not return a file ID.');
           fileId = reservation.fileId;
         }
-        const attachment = { fileId, name: file.name, sizeBytes: file.size, mimeType: file.type || 'application/octet-stream' };
+        const attachment = { fileId, name: normalizedName, sizeBytes: file.size, mimeType: file.type || 'application/octet-stream' };
         if (scopeRef.current === scope) setPending((current) => [...current, attachment]);
       }
     } catch (cause) {
