@@ -275,7 +275,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
 
   const purchaseStorage = async () => {
     if (!storageSubscriptionsReady || !api || !workspaceId || !selectedStoragePlan || !canManageStorage || storageBusy) return;
-    if (!/^\\d{4}$/.test(walletPin)) { setError('Enter your four-digit COCCE Wallet PIN to confirm this purchase.'); return; }
+    if (!/^\d{4}$/.test(walletPin)) { setError('Enter your four-digit COCCE Wallet PIN to confirm this purchase.'); return; }
     setStorageBusy(true); setError(''); setNotice('');
     try {
       await api.purchaseStorage(workspaceId, selectedStoragePlan.planCode, crypto.randomUUID(), walletPin, autoRenewChoice);
@@ -310,7 +310,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   };
 
   const submitStoragePinAction = async () => {
-    if (!storagePinAction || !api || !/^\\d{4}$/.test(walletPin) || storageBusy) return;
+    if (!storagePinAction || !api || !/^\d{4}$/.test(walletPin) || storageBusy) return;
     const { kind, subscription } = storagePinAction;
     setStorageBusy(true); setError(''); setNotice('');
     try {
@@ -396,10 +396,10 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
           <p>{storagePinAction.kind === 'renew'
             ? 'Renew ' + storagePinAction.subscription.displayName + ' for ' + storagePinAction.subscription.monthlyCoins.toLocaleString() + ' Coins. This adds one month to the current subscription period.'
             : 'Enable monthly automatic renewal for ' + storagePinAction.subscription.displayName + ' at ' + storagePinAction.subscription.monthlyCoins.toLocaleString() + ' Coins per month. This administrator account will be charged. A failed payment has a three-day grace period.'}</p>
-          <label className="drive-storage-pin-field"><span>Enter your four-digit Wallet PIN</span><input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={walletPin} onChange={(event) => setWalletPin(event.target.value.replace(/\\D/g, '').slice(0, 4))} placeholder="4-digit PIN" aria-label="COCCE Wallet PIN"/></label>
+          <label className="drive-storage-pin-field"><span>Enter your four-digit Wallet PIN</span><input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={walletPin} onChange={(event) => setWalletPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit PIN" aria-label="COCCE Wallet PIN"/></label>
           <div className="drive-storage-dialog-actions">
             <button type="button" className="button-secondary" onClick={() => { setStoragePinAction(null); setWalletPin(''); }} disabled={storageBusy}>Cancel</button>
-            <button type="button" className="button-primary" onClick={() => void submitStoragePinAction()} disabled={storageBusy || !/^\\d{4}$/.test(walletPin)}>{storageBusy ? 'Verifying…' : 'Confirm with Wallet PIN'}</button>
+            <button type="button" className="button-primary" onClick={() => void submitStoragePinAction()} disabled={storageBusy || !/^\d{4}$/.test(walletPin)}>{storageBusy ? 'Verifying…' : 'Confirm with Wallet PIN'}</button>
           </div>
         </section>
       </div>}
@@ -410,7 +410,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
           <p>This adds {formatFileSize(selectedStoragePlan.quotaBytes)} to the current workspace quota for one month.</p>
           <div className="drive-storage-purchase-price"><strong>{selectedStoragePlan.monthlyCoins.toLocaleString()} Coins</strong><span>TSh {selectedStoragePlan.monthlyCoins.toLocaleString()} / month</span></div>
           <label className="drive-storage-auto-renew-choice"><input type="checkbox" checked={autoRenewChoice} onChange={(event) => setAutoRenewChoice(event.target.checked)}/><span><strong>Automatically renew monthly</strong><small>Off by default. If selected, the administrator purchasing this plan will be charged each month. A failed payment has a three-day grace period.</small></span></label>
-          <label className="drive-storage-pin-field"><span>COCCE Wallet PIN</span><input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={walletPin} onChange={(event) => setWalletPin(event.target.value.replace(/\\D/g, '').slice(0, 4))} placeholder="4-digit PIN" aria-label="COCCE Wallet PIN"/></label>
+          <label className="drive-storage-pin-field"><span>COCCE Wallet PIN</span><input type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={walletPin} onChange={(event) => setWalletPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit PIN" aria-label="COCCE Wallet PIN"/></label>
           <p className="drive-storage-dialog-note">After the subscription expires, its add-on quota is removed. Existing files are not deleted; new uploads may pause until usage is below the remaining quota.</p>
           <div className="drive-storage-dialog-actions">
             <button type="button" className="button-secondary" onClick={() => setSelectedStoragePlan(null)} disabled={storageBusy}>Cancel</button>
