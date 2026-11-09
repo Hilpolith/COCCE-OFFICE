@@ -22,7 +22,7 @@ afterEach(() => {
   delete document.documentElement.dataset.theme;
   document.documentElement.style.removeProperty('--accent');
 });
-const openPreferences = () => fireEvent.click(screen.getByRole('button', { name: 'Preferences' }));
+const openPreferences = () => fireEvent.click(screen.getByRole('button', { name: 'Profile and preferences' }));
 
 describe('working appearance preferences', () => {
   it('defaults to glass without writing preferences or document data', () => {
@@ -98,7 +98,7 @@ describe('working appearance preferences', () => {
   it('makes Control/Command K focus search, ignores modified variants, and removes its listener on unmount', () => {
     const app = render(<App />);
     const search = screen.getByRole('textbox', { name: 'Search local documents' });
-    const preferences = screen.getByRole('button', { name: 'Preferences' });
+    const preferences = screen.getByRole('button', { name: 'Profile and preferences' });
     preferences.focus();
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     expect(document.activeElement).toBe(search);
@@ -152,13 +152,13 @@ describe('working appearance preferences', () => {
 
   it('opens and closes the existing mobile navigation without changing appearance or drafts', () => {
     render(<App />);
-    const sidebar = screen.getByRole('complementary', { name: 'Main navigation' });
+    const sidebar = screen.getByRole('complementary', { name: 'COCCE Office navigation' });
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
     expect(sidebar.classList.contains('sidebar-open')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Close navigation overlay' }));
     expect(sidebar.classList.contains('sidebar-open')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Preferences' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Profile and preferences' }));
     expect(sidebar.classList.contains('sidebar-open')).toBe(false);
     expect(window.localStorage.getItem(STORAGE_KEY)).toBe(initial);
   });
