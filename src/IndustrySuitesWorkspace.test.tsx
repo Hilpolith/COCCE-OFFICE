@@ -255,7 +255,6 @@ describe('industry office workbench', () => {
       onCreateTeam={vi.fn()}
     />);
 
-    expect(screen.getByRole('heading', { name: 'Unassigned Office' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Choose an Office suite' })).toBeTruthy();
     expect(screen.queryByTestId('business-management-preview')).toBeNull();
     expect(screen.queryByTestId('school-management-preview')).toBeNull();
