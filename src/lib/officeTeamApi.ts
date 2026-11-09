@@ -3,7 +3,9 @@ import type { OfficeLocalTimestamp, OfficePresenceStatus } from './officePersonS
 
 type RpcClient = SupabaseClient;
 
+export type OfficeSuiteId = 'government' | 'school' | 'university' | 'business' | 'accounting' | 'manufacturing' | 'healthcare-admin' | 'ngo' | 'hospitality' | 'church';
 export type OfficeWorkspace = { workspace_id: string; name: string; role: 'owner' | 'admin' | 'member'; created_at: string };
+export type OfficeWorkspaceSuite = { workspace_id: string; suite_id: OfficeSuiteId | null; created_at: string };
 export type OfficeUser = { user_id: string; username: string | null; display_name: string | null; avatar_url: string | null; is_vip: boolean | null; vip_expires_at: OfficeLocalTimestamp | null };
 export type OfficeMember = OfficeUser & { role: 'owner' | 'admin' | 'member'; status: 'active' | 'suspended'; joined_at: string; job_title?: string };
 export type OfficeSearchResult = OfficeUser & { membership_status: 'active' | 'suspended' | null; invitation_status: 'pending' | null; presence_status: OfficePresenceStatus; last_seen_at: string | null };
@@ -26,6 +28,8 @@ async function rpc<T>(client: RpcClient, name: string, params?: Record<string, u
 export const officeTeamApi = {
   listWorkspaces: (client: RpcClient) => rpc<OfficeWorkspace[]>(client, 'office_list_workspaces'),
   createWorkspace: (client: RpcClient, name: string, description = '') => rpc<string>(client, 'office_create_workspace', { p_name: name, p_description: description }),
+  createWorkspaceWithSuite: (client: RpcClient, name: string, description: string, suiteId: OfficeSuiteId) => rpc<string>(client, 'office_create_workspace_with_suite', { p_name: name, p_description: description, p_suite_id: suiteId }),
+  listWorkspaceSuites: (client: RpcClient) => rpc<OfficeWorkspaceSuite[]>(client, 'office_list_workspace_suites'),
   listMyInvitations: (client: RpcClient) => rpc<OfficeInvitation[]>(client, 'office_list_my_invitations'),
   respondInvitation: (client: RpcClient, invitationId: string, accept: boolean) => rpc<void>(client, 'office_respond_invitation', { p_invitation_id: invitationId, p_accept: accept }),
   listMembers: async (client: RpcClient, workspaceId: string) => {
