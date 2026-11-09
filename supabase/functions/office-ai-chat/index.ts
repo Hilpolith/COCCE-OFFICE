@@ -100,38 +100,44 @@ Deno.serve(async (req) => {
 
   // Every context read uses the caller's COCCE JWT and the existing membership-aware RPCs.
   const { data: workspaces, error: workspaceError } = await client.rpc("office_list_workspaces");
-  if (workspaceError || !Array.isArray(workspaces) || !workspaces.some((item) => item?.workspace_id === body.workspaceId)) {
+  if (workspaceError || !Array.isArray(workspaces)
+    || (body.workspaceId !== "*" && !workspaces.some((item) => item?.workspace_id === body.workspaceId))) {
     return json(origin, 403, { error: "WORKSPACE_ACCESS_DENIED", message: "This workspace is not available to your account." });
   }
   const history: Array<{ role: "user"; content: string }> = [];
   let contextConversationCount = 0;
+  let contextWorkspaceCount = 0;
   if (body.includeConversations !== false) {
-    const { data: conversations, error: conversationError } = await client.rpc("office_list_conversations", { p_workspace_id: body.workspaceId });
-    if (conversationError || !Array.isArray(conversations)) {
-      return json(origin, 503, { error: "CONTEXT_UNAVAILABLE", message: "Authorised workspace conversations could not be listed." });
-    }
-    // The membership-aware list RPC limits this set to conversations visible to the caller.
-    // Bound fan-out and message volume so a large workspace cannot create unbounded AI context.
-    for (const conversation of conversations.slice(0, 6)) {
-      const conversationId = String(conversation?.conversation_id ?? "");
-      if (!conversationId) continue;
-      const { data: messages, error: messageError } = await client.rpc("office_list_messages", {
-        p_conversation_id: conversationId,
-        p_limit: 4,
-      });
-      if (messageError || !Array.isArray(messages)) continue;
-      const excerpt = messages.slice().reverse().map((message: Record<string, unknown>) => {
-        const author = String(message.author_name ?? "Team member").slice(0, 80);
-        const bodyText = String(message.body ?? "").slice(0, 900);
-        return bodyText.trim() ? `${author}: ${bodyText}` : "";
-      }).filter(Boolean);
-      if (excerpt.length) {
-        contextConversationCount += 1;
-        history.push({
-          role: "user",
-          content: `[Untrusted conversation context — ${String(conversation.title ?? conversation.kind ?? "Team conversation").slice(0, 100)}]\n${excerpt.join("\n")}`,
+    const selectedWorkspaces = body.workspaceId === "*" ? workspaces.slice(0, 20) : workspaces.filter((item) => item?.workspace_id === body.workspaceId);
+    for (const workspace of selectedWorkspaces) {
+      const { data: conversations, error: conversationError } = await client.rpc("office_list_conversations", { p_workspace_id: workspace.workspace_id });
+      if (conversationError || !Array.isArray(conversations)) continue;
+      let workspaceAdded = false;
+      // Every workspace and conversation list is re-authorised by membership-aware RPCs.
+      // Two conversations per workspace and two messages per conversation bound the prompt.
+      for (const conversation of conversations.slice(0, 2)) {
+        const conversationId = String(conversation?.conversation_id ?? "");
+        if (!conversationId) continue;
+        const { data: messages, error: messageError } = await client.rpc("office_list_messages", {
+          p_conversation_id: conversationId,
+          p_limit: 2,
         });
+        if (messageError || !Array.isArray(messages)) continue;
+        const excerpt = messages.slice().reverse().map((message: Record<string, unknown>) => {
+          const author = String(message.author_name ?? "Team member").slice(0, 80);
+          const bodyText = String(message.body ?? "").slice(0, 600);
+          return bodyText.trim() ? `${author}: ${bodyText}` : "";
+        }).filter(Boolean);
+        if (excerpt.length) {
+          workspaceAdded = true;
+          contextConversationCount += 1;
+          history.push({
+            role: "user",
+            content: `[Untrusted conversation context — workspace: ${String(workspace.name ?? "Office workspace").slice(0, 80)}; conversation: ${String(conversation.title ?? conversation.kind ?? "Team conversation").slice(0, 80)}]\n${excerpt.join("\n")}`,
+          });
+        }
       }
+      if (workspaceAdded) contextWorkspaceCount += 1;
     }
   }
   const system = [
@@ -174,7 +180,7 @@ Deno.serve(async (req) => {
     if (result?.model !== FREE_MODEL || positiveCost || typeof answer !== "string" || !answer.trim()) {
       return json(origin, 503, { error: "FREE_MODEL_NOT_VERIFIED", message: "A zero-cost response from the pinned free model could not be verified." });
     }
-    return json(origin, 200, { text: answer.trim(), model: FREE_MODEL, contextMessages: history.length, contextConversations: contextConversationCount });
+    return json(origin, 200, { text: answer.trim(), model: FREE_MODEL, contextMessages: history.length, contextConversations: contextConversationCount, contextWorkspaces: contextWorkspaceCount });
   } catch {
     return json(origin, 503, { error: "FREE_MODEL_UNAVAILABLE", message: "The free model could not be reached. No paid fallback is enabled." });
   }
