@@ -104,12 +104,20 @@ Deno.serve(async (req) => {
     || (body.workspaceId !== "*" && !workspaces.some((item) => item?.workspace_id === body.workspaceId))) {
     return json(origin, 403, { error: "WORKSPACE_ACCESS_DENIED", message: "This workspace is not available to your account." });
   }
+  const selectedWorkspaces = body.workspaceId === "*" ? workspaces : workspaces.filter((item) => item?.workspace_id === body.workspaceId);
+  const enabledWorkspaces: Array<Record<string, unknown>> = [];
+  for (const workspace of selectedWorkspaces) {
+    const { data: aiEnabled, error: aiSettingError } = await client.rpc("office_get_workspace_ai_enabled", { p_workspace_id: workspace.workspace_id });
+    if (!aiSettingError && aiEnabled === true) enabledWorkspaces.push(workspace);
+  }
+  if (enabledWorkspaces.length === 0) {
+    return json(origin, 403, { error: "WORKSPACE_AI_DISABLED", message: "COCCE AI is disabled for the selected workspace scope. Ask a workspace owner or administrator to enable it." });
+  }
   const history: Array<{ role: "user"; content: string }> = [];
   let contextConversationCount = 0;
   let contextWorkspaceCount = 0;
   if (body.includeConversations !== false) {
-    const selectedWorkspaces = body.workspaceId === "*" ? workspaces.slice(0, 20) : workspaces.filter((item) => item?.workspace_id === body.workspaceId);
-    for (const workspace of selectedWorkspaces) {
+    for (const workspace of enabledWorkspaces.slice(0, 20)) {
       const { data: conversations, error: conversationError } = await client.rpc("office_list_conversations", { p_workspace_id: workspace.workspace_id });
       if (conversationError || !Array.isArray(conversations)) continue;
       let workspaceAdded = false;
