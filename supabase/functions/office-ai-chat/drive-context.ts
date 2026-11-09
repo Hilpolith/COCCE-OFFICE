@@ -12,6 +12,103 @@ export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function decodeHtmlEntities(value: string): string {
+  const named: Record<string, string> = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+    copy: '©', reg: '®', euro: '€', pound: '£', yen: '¥',
+    mdash: '—', ndash: '–', hellip: '…', lsquo: '‘', rsquo: '’',
+    ldquo: '“', rdquo: '”', bull: '•', middot: '·',
+  };
+  return value.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (entity, code: string) => {
+    if (code[0] === '#') {
+      const hex = code[1]?.toLowerCase() === 'x';
+      const point = Number.parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
+      if (!Number.isFinite(point) || point <= 0 || point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) return '';
+      return String.fromCodePoint(point);
+    }
+    return named[code.toLowerCase()] ?? entity;
+  });
+}
+
+function extractDocsCopy(value: unknown): string {
+  if (!isRecord(value) || Object.keys(value).length !== 4
+    || value.format !== 'cocce-office-docs-copy' || value.version !== 1
+    || typeof value.title !== 'string' || value.title.length > 200
+    || typeof value.html !== 'string' || value.html.length > 2 * 1024 * 1024) {
+    throw { status: 415, code: 'DRIVE_DOCS_COPY_INVALID', message: 'The selected COCCE Docs copy is not a supported version.' } satisfies DriveContextError;
+  }
+  if (/<\/?(?:script|style|iframe|object|svg|math|template|img|video|audio|form|input|textarea|select)\b/i.test(value.html)) {
+    throw { status: 415, code: 'DRIVE_DOCS_COPY_UNSAFE', message: 'The selected COCCE Docs copy contains unsupported embedded content.' } satisfies DriveContextError;
+  }
+  const plain = decodeHtmlEntities(
+    value.html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(?:p|h[1-3]|li|blockquote|pre|tr|table)>/gi, '\n')
+      .replace(/<\/(?:td|th)>/gi, '\t')
+      .replace(/<[^>]*>/g, ' '),
+  ).replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return 'Document: ' + value.title.normalize('NFC').slice(0, 200) + '\n' + plain;
+}
+
+function columnNumber(letters: string): number {
+  let value = 0;
+  for (const letter of letters) value = value * 26 + letter.charCodeAt(0) - 64;
+  return value;
+}
+
+function extractSheetsCopy(value: unknown): string {
+  if (!isRecord(value) || Object.keys(value).length !== 5
+    || value.format !== 'cocce-office-sheets-copy' || value.version !== 1
+    || typeof value.title !== 'string' || value.title.length > 200
+    || !Number.isInteger(value.activeWorksheetIndex)
+    || !Array.isArray(value.worksheets) || value.worksheets.length < 1 || value.worksheets.length > 100
+    || (value.activeWorksheetIndex as number) < 0 || (value.activeWorksheetIndex as number) >= value.worksheets.length) {
+    throw { status: 415, code: 'DRIVE_SHEETS_COPY_INVALID', message: 'The selected COCCE Sheets copy is not a supported version.' } satisfies DriveContextError;
+  }
+  let totalChars = 0;
+  let totalCells = 0;
+  const output = ['Workbook: ' + value.title.normalize('NFC').slice(0, 200)];
+  for (const sheet of value.worksheets) {
+    if (!isRecord(sheet) || Object.keys(sheet).length !== 2 || typeof sheet.name !== 'string'
+      || sheet.name.length < 1 || sheet.name.length > 31 || !isRecord(sheet.cells)) {
+      throw { status: 415, code: 'DRIVE_SHEETS_COPY_INVALID', message: 'A worksheet in the selected COCCE Sheets copy is invalid.' } satisfies DriveContextError;
+    }
+    output.push('\nSheet: ' + sheet.name.normalize('NFC'));
+    const cells = Object.entries(sheet.cells);
+    totalCells += cells.length;
+    if (totalCells > 10_000) throw { status: 413, code: 'DRIVE_SHEETS_COPY_TOO_LARGE', message: 'The selected COCCE Sheets copy contains too many cells for AI context.' } satisfies DriveContextError;
+    cells.sort(([left], [right]) => {
+      const a = /^([A-Z]{1,3})([1-9]\d*)$/.exec(left);
+      const b = /^([A-Z]{1,3})([1-9]\d*)$/.exec(right);
+      if (!a || !b) return left.localeCompare(right);
+      return Number(a[2]) - Number(b[2]) || columnNumber(a[1]!) - columnNumber(b[1]!);
+    });
+    for (const [address, raw] of cells) {
+      const match = /^([A-Z]{1,3})([1-9]\d*)$/.exec(address);
+      if (!match || Number(match[2]) > 24 || columnNumber(match[1]!) > 12 || typeof raw !== 'string' || raw.length > 16_384) {
+        throw { status: 415, code: 'DRIVE_SHEETS_COPY_INVALID', message: 'The selected COCCE Sheets copy contains an unsupported cell.' } satisfies DriveContextError;
+      }
+      totalChars += raw.length;
+      if (totalChars > 200_000) throw { status: 413, code: 'DRIVE_SHEETS_COPY_TOO_LARGE', message: 'The selected COCCE Sheets copy exceeds the supported text limit.' } satisfies DriveContextError;
+      if (raw !== '') output.push(address + ': ' + raw);
+    }
+  }
+  return output.join('\n');
+}
+
+function extractOfficeSnapshot(name: string, text: string): string {
+  if (!name.toLowerCase().endsWith('.cocce-docs.json') && !name.toLowerCase().endsWith('.cocce-sheets.json')) return text;
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); }
+  catch { throw { status: 415, code: 'DRIVE_OFFICE_COPY_INVALID', message: 'The selected COCCE Office copy is not valid JSON.' } satisfies DriveContextError; }
+  return name.toLowerCase().endsWith('.cocce-docs.json') ? extractDocsCopy(parsed) : extractSheetsCopy(parsed);
+}
+
 function supportedDriveTextFile(name: string): boolean {
   const extension = name.split('.').pop()?.toLowerCase() ?? '';
   return DRIVE_TEXT_EXTENSIONS.has(extension);
@@ -110,7 +207,7 @@ export async function loadSelectedDriveFiles(
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
     catch { throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file is not valid UTF-8 text.' } satisfies DriveContextError; }
     if (text.includes('\u0000')) throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file contains binary data and cannot be attached as text.' } satisfies DriveContextError;
-    text = text.replace(/\r\n?/g, '\n').replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').slice(0, MAX_DRIVE_FILE_CHARS);
+    text = extractOfficeSnapshot(link.displayName, text).replace(/\r\n?/g, '\n').replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').slice(0, MAX_DRIVE_FILE_CHARS);
     return { workspaceName: enabledById.get(link.workspaceId) ?? 'Office workspace', displayName: link.displayName.slice(0, 120), text };
   }));
   let remaining = MAX_DRIVE_CONTEXT_CHARS;
