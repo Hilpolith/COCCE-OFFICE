@@ -78,6 +78,7 @@ test('seeds the six approved monthly plans and exposes them only through the mem
 });
 
 test('requires workspace owner/admin and purchase is idempotent, atomic, and additive',async()=>{
+ await enableBilling();
  await expectError(()=>purchase(member,workspace,'storage_5gb_monthly','66666666-6666-4666-8666-666666666666'),'42501');
  await expectError(()=>rpc('office_cloud_list_storage_subscriptions',[member,workspace]),'42501');
  await db.query('INSERT INTO public.office_cloud_workspace_quotas(workspace_id,tier_code,base_quota_bytes,purchased_quota_bytes) VALUES ($1,$2,$3,$4)',[workspace,'small_office',5_000_000_000,1234]);
