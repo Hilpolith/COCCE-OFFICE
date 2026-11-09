@@ -115,6 +115,10 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
     const allocatedUrls: string[] = [];
     if (!activeDeckId || !imageAssetSignature) return () => { cancelled = true; };
     const assetIds = [...new Set(imageAssetSignature.split('|'))];
+    const revokeAllocatedUrls = () => {
+      const urls = allocatedUrls.splice(0);
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
     void Promise.all(assetIds.map(async (assetId) => {
       try {
         const result = await localSlidesAssetRepository.readImage(assetId, activeDeckId);
@@ -126,7 +130,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
       }
     })).then((entries) => {
       if (cancelled) {
-        allocatedUrls.forEach((url) => URL.revokeObjectURL(url));
+        revokeAllocatedUrls();
         return;
       }
       const urls: Record<string, string> = {};
@@ -142,7 +146,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
     });
     return () => {
       cancelled = true;
-      allocatedUrls.forEach((url) => URL.revokeObjectURL(url));
+      revokeAllocatedUrls();
     };
   }, [activeDeckId, imageAssetSignature, imageContextRevision]);
 
