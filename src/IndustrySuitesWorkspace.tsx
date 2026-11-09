@@ -196,7 +196,7 @@ export default function IndustrySuitesWorkspace({
     <div className="industry-page-heading">
       <div>
         <span className="eyebrow industry-eyebrow"><Sparkles size={13} /> OFFICE SUITES · {activeOffice?.teamWorkspaceId && dataMode === 'shared' ? 'SHARED OFFICE TEAM' : dataMode === 'shared' ? 'TEAM SETUP REQUIRED' : 'DEVICE-LOCAL PREVIEW'}</span>
-        <h1>{activeWorkspace?.name ?? 'Work for your industry'}</h1>
+        <h1>{definition?.label ?? 'Work for your industry'}</h1>
         <p className="page-lede">{activeWorkspace && definition ? `${definition.summary} Your team, suite data and AI controls are scoped to this Office workspace.` : 'Choose a sector, link an Office Team, and open its specialist workspace. Device-local previews stay separate and are never copied automatically.'}</p>
       </div>
       <button className="button-primary" onClick={() => { if (activeWorkspace) window.dispatchEvent(new CustomEvent('cocce-office:navigate', { detail: { page: 'team' } })); else { setIndustryId(preferredIndustryId ?? 'business'); setDataMode('shared'); setCreateOpen(true); } }}><Plus size={16} /> {activeWorkspace ? 'New workspace' : 'New office'}</button>
