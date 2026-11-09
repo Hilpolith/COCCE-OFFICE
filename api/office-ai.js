@@ -215,17 +215,23 @@ async function readWorkspaceAiControl({ workspaceId, token, anonKey, fetchImpl }
       ? rows.filter((row) => typeof row?.workspace_id === 'string' && GOVERNMENT_UUID_PATTERN.test(row.workspace_id)).slice(0, 20)
       : rows.filter((row) => row?.workspace_id === workspaceId);
     if (selected.length === 0) return { kind: 'denied' };
-    for (const workspace of selected) {
-      const response = await fetchImpl(`${COCCE_SUPABASE_URL}/rest/v1/rpc/office_get_workspace_ai_enabled`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ p_workspace_id: workspace.workspace_id }),
-        cache: 'no-store',
-        signal: AbortSignal.timeout(8_000),
-      });
-      if (!response.ok) continue;
-      if (await response.json() === true) return { kind: 'ok' };
-    }
+    const settings = await Promise.all(selected.map(async (workspace) => {
+      try {
+        const response = await fetchImpl(`${COCCE_SUPABASE_URL}/rest/v1/rpc/office_get_workspace_ai_enabled`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ p_workspace_id: workspace.workspace_id }),
+          cache: 'no-store',
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!response.ok) return null;
+        return await response.json() === true;
+      } catch {
+        return null;
+      }
+    }));
+    if (settings.some((enabled) => enabled === true)) return { kind: 'ok' };
+    if (settings.some((enabled) => enabled === null)) return { kind: 'unavailable' };
     return { kind: 'disabled' };
   } catch {
     return { kind: 'unavailable' };
