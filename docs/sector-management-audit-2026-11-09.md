@@ -89,6 +89,8 @@ The passing suite now covers authenticated workspace selection, suite assignment
 - Latest Vite output: main application chunk approximately 949.92 kB (267.21 kB gzip). Compared with the earlier 1,711.81 kB / 451.92 kB gzip baseline, the main chunk remains approximately 44.5% smaller raw and 40.9% smaller gzipped. Specialist sector workspaces remain lazy-loaded; separate Docs/PDF chunks still produce a Vite size warning, not a failed build.
 
 ### Production database and billing safety
+The connected Supabase Edge Functions are also active: `office-ai-chat` version 19, `office-cloud-files` version 8, and `office-government-connectors` version 2; all three report JWT verification enabled.
+
 
 - Read-only production catalog review found 257 `office_*` tables; all 257 have RLS enabled.
 - No `anon` SELECT or write grants were found on those tables.
