@@ -60,6 +60,26 @@ describe('COCCE AI workspace context', () => {
     expect(selector.value).toBe('workspace-two');
   });
 
+  it('does not offer Drive files from workspaces with AI disabled', async () => {
+    const enabledId = '11111111-1111-4111-8111-111111111111';
+    const disabledId = '22222222-2222-4222-8222-222222222222';
+    mocks.listWorkspaces.mockResolvedValue([
+      { workspace_id: enabledId, name: 'Enabled', role: 'owner', created_at: '2026-11-09T00:00:00Z' },
+      { workspace_id: disabledId, name: 'Disabled', role: 'member', created_at: '2026-11-09T00:00:00Z' },
+    ]);
+    mocks.getWorkspaceAiEnabled.mockImplementation(async (_client: unknown, id: string) => id === enabledId);
+    mocks.createOfficeCloudApi.mockReturnValue({ list: vi.fn(async (id: string) => [{
+      fileId: id === enabledId ? '33333333-3333-4333-8333-333333333333' : '44444444-4444-4444-8444-444444444444',
+      workspaceId: id, displayName: id === enabledId ? 'enabled.md' : 'disabled.md',
+      sizeBytes: 123, createdAt: '2026-11-09T00:00:00Z', sha256Hex: '0'.repeat(64),
+    }]) });
+    render(<OfficeAiWorkspace />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    fireEvent.click(screen.getByRole('button', { name: 'Browse Drive' }));
+    expect(await screen.findByText('enabled.md')).toBeTruthy();
+    expect(screen.queryByText('disabled.md')).toBeNull();
+  });
+
   it('attaches only selected Drive file IDs for server-side retrieval', async () => {
     mocks.listWorkspaces.mockResolvedValue([{ workspace_id: '11111111-1111-4111-8111-111111111111', name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
     render(<OfficeAiWorkspace />);
