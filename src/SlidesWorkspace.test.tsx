@@ -464,10 +464,13 @@ describe('Slides workspace', () => {
     await waitFor(() => expect(read).toHaveBeenCalledWith(assetId, savedDeck.id));
     expect((screen.getByRole('button', { name: 'Present' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'All presentations' }));
+    const create = URL.createObjectURL as unknown as ReturnType<typeof vi.fn>;
     const revoke = URL.revokeObjectURL as unknown as ReturnType<typeof vi.fn>;
+    const createCount = create.mock.calls.length;
     const revokeCount = revoke.mock.calls.length;
     releaseRead();
-    await waitFor(() => expect(revoke.mock.calls.length).toBe(revokeCount + 1));
+    await waitFor(() => expect(create.mock.calls.length).toBeGreaterThan(createCount));
+    await waitFor(() => expect(revoke.mock.calls.length - revokeCount).toBe(create.mock.calls.length - createCount));
     expect(document.querySelector('.slides-workbench .slide-local-image')).toBeNull();
   });
 
