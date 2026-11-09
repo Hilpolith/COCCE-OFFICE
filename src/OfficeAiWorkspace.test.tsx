@@ -34,7 +34,7 @@ const workspaces = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } }, error: null });
+  mocks.getSession.mockResolvedValue({ data: { session: { access_token: 'test-token', user: { id: 'test-user' } } }, error: null });
   mocks.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
   mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
     args.body.action === 'status'
