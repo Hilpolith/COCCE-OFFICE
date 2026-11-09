@@ -42,6 +42,19 @@ describe('Office collaboration RPC client', () => {
     });
   });
 
+  it('reads and updates workspace AI availability through the membership and administrator RPCs', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    const client = mockClient(rpc);
+    await expect(officeTeamApi.getWorkspaceAiEnabled(client, 'workspace-id')).resolves.toBe(true);
+    await officeTeamApi.setWorkspaceAiEnabled(client, 'workspace-id', false);
+    expect(rpc.mock.calls).toEqual([
+      ['office_get_workspace_ai_enabled', { p_workspace_id: 'workspace-id' }],
+      ['office_set_workspace_ai_enabled', { p_workspace_id: 'workspace-id', p_enabled: false }],
+    ]);
+  });
+
   it('surfaces RLS/RPC denials without pretending the operation succeeded', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: 'Workspace administrator access required' } });
     await expect(officeTeamApi.searchUsers(mockClient(rpc), 'workspace-id', 'ab')).rejects.toThrow('Workspace administrator access required');
