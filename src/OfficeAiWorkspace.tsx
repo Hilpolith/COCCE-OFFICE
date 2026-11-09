@@ -107,7 +107,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     // Workspace selection and every selected file are revalidated by the Edge Function.
   };
 
-  const supportedDriveFile = (file: CloudFile) => /\\.(txt|md|csv|tsv|json|xml|yaml|yml|log)$/i.test(file.displayName);
+  const supportedDriveFile = (file: CloudFile) => /\.(txt|md|csv|tsv|json|xml|yaml|yml|log)$/i.test(file.displayName);
 
   const openDriveFiles = async () => {
     if (driveFilesOpen) { setDriveFilesOpen(false); return; }
