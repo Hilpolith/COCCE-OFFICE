@@ -31,6 +31,7 @@ export default function OfficeWorkspaceSwitcher() {
       setSuites([]);
       setSelectedId('');
       setLoading(false);
+      window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
     };
     const load = async () => {
       const version = authVersion;
@@ -105,6 +106,8 @@ export default function OfficeWorkspaceSwitcher() {
   if (!client || !schemaReady || !userId) return null;
 
   if (loading) return <span className="office-workspace-switcher-state" role="status"><LoaderCircle size={14} className="office-workspace-switcher-spin" /> Loading workspaces</span>;
+
+  if (error) return <span className="office-workspace-switcher-state" role="status" title={error}>Workspace unavailable</span>;
 
   if (workspaces.length === 0) return <button type="button" className="office-workspace-switcher-create" onClick={() => window.dispatchEvent(new CustomEvent('cocce-office:navigate', { detail: { page: 'team' } }))}><Plus size={14} /> Create workspace</button>;
 
