@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, ChevronDown, LoaderCircle, Plus } from 'lucide-react';
-import { officeTeamApi, type OfficeWorkspace, type OfficeWorkspaceSuite } from './lib/officeTeamApi';
+import { Building2, Check, ChevronDown, LoaderCircle, Plus } from 'lucide-react';
+import { officeTeamApi, type OfficeWorkspace, type OfficeWorkspaceSuite, type OfficeSuiteId } from './lib/officeTeamApi';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import { industryCatalog, type IndustryId } from './lib/industryWorkspaces';
@@ -18,6 +18,10 @@ export default function OfficeWorkspaceSwitcher() {
   const selectedIdRef = useRef('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [suiteDraft, setSuiteDraft] = useState<OfficeSuiteId>('business');
+  const [suiteAssignmentOpen, setSuiteAssignmentOpen] = useState(false);
+  const [savingSuite, setSavingSuite] = useState(false);
+  const [assignmentError, setAssignmentError] = useState('');
 
   useEffect(() => {
     if (!client || !schemaReady) {
@@ -51,9 +55,9 @@ export default function OfficeWorkspaceSwitcher() {
         ]);
         if (!alive || version !== authVersion) return;
         const currentSelectedId = selectedIdRef.current;
-        const nextSelectedId = nextWorkspaces.some((item) => item.workspace_id === currentSelectedId)
-          ? currentSelectedId
-          : nextWorkspaces[0]?.workspace_id ?? '';
+        const nextSelectedId = preferredId && nextWorkspaces.some((item) => item.workspace_id === preferredId)
+          ? preferredId
+          : nextWorkspaces.some((item) => item.workspace_id === currentSelectedId) ? currentSelectedId : nextWorkspaces[0]?.workspace_id ?? '';
         if (nextSelectedId !== currentSelectedId) {
           selectedIdRef.current = nextSelectedId;
           if (currentSelectedId) window.dispatchEvent(new CustomEvent('cocce-office:workspace-cleared'));
@@ -128,6 +132,30 @@ export default function OfficeWorkspaceSwitcher() {
   const suiteLabel = (suiteId: string | null) => industryCatalog.find((item) => item.id === suiteId)?.shortLabel ?? 'Suite not assigned';
 
   useEffect(() => {
+    setSuiteDraft(selectedSuite ?? 'business');
+    setSuiteAssignmentOpen(false);
+    setAssignmentError('');
+  }, [selectedId, selectedSuite]);
+
+  const assignSuite = async () => {
+    if (!client || !selectedId || !selected || !['owner', 'admin'].includes(selected.role)) return;
+    setSavingSuite(true);
+    setAssignmentError('');
+    try {
+      await officeTeamApi.setWorkspaceSuite(client, selectedId, suiteDraft);
+      setSuites((current) => [
+        ...current.filter((item) => item.workspace_id !== selectedId),
+        { workspace_id: selectedId, suite_id: suiteDraft, created_at: selected.created_at },
+      ]);
+      setSuiteAssignmentOpen(false);
+    } catch (cause) {
+      setAssignmentError(cause instanceof Error ? cause.message : 'Suite assignment could not be saved.');
+    } finally {
+      setSavingSuite(false);
+    }
+  };
+
+  useEffect(() => {
     if (!selected) return;
     window.dispatchEvent(new CustomEvent('cocce-office:workspace-changed', {
       detail: {
@@ -147,14 +175,22 @@ export default function OfficeWorkspaceSwitcher() {
 
   if (workspaces.length === 0) return <button type="button" className="office-workspace-switcher-create" onClick={() => window.dispatchEvent(new CustomEvent('cocce-office:navigate', { detail: { page: 'team' } }))}><Plus size={14} /> Create workspace</button>;
 
-  return <label className="office-workspace-switcher" title={error || 'Switch your active Office workspace'}>
-    <Building2 size={15} aria-hidden="true" />
-    <select aria-label="Active Office workspace" value={selectedId} onChange={(event) => { selectedIdRef.current = event.target.value; setSelectedId(event.target.value); }}>
-      {workspaces.map((workspace) => {
-        const suiteId = suites.find((item) => item.workspace_id === workspace.workspace_id)?.suite_id ?? null;
-        return <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.name} · {suiteLabel(suiteId)}</option>;
-      })}
-    </select>
-    <ChevronDown size={14} aria-hidden="true" />
-  </label>;
+  return <div className="office-workspace-switcher-wrap">
+    <label className="office-workspace-switcher" title={error || 'Switch your active Office workspace'}>
+      <Building2 size={15} aria-hidden="true" />
+      <select aria-label="Active Office workspace" value={selectedId} onChange={(event) => { selectedIdRef.current = event.target.value; setSelectedId(event.target.value); }}>
+        {workspaces.map((workspace) => {
+          const suiteId = suites.find((item) => item.workspace_id === workspace.workspace_id)?.suite_id ?? null;
+          return <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.name} · {suiteLabel(suiteId)}</option>;
+        })}
+      </select>
+      <ChevronDown size={14} aria-hidden="true" />
+    </label>
+    {selected && !selectedSuite && ['owner', 'admin'].includes(selected.role) && <button type="button" className="office-workspace-switcher-assign" onClick={() => setSuiteAssignmentOpen((open) => !open)}>{suiteAssignmentOpen ? 'Close' : 'Assign suite'}</button>}
+    {suiteAssignmentOpen && selected && !selectedSuite && <div className="office-workspace-switcher-assignment">
+      <label>Assign this workspace<select aria-label="Assign workspace suite" value={suiteDraft} onChange={(event) => setSuiteDraft(event.target.value as OfficeSuiteId)}>{industryCatalog.map((industry) => <option key={industry.id} value={industry.id}>{industry.label}</option>)}</select></label>
+      {assignmentError && <p role="alert">{assignmentError}</p>}
+      <button type="button" disabled={savingSuite} onClick={() => void assignSuite()}><Check size={13}/>{savingSuite ? 'Saving…' : 'Save suite'}</button>
+    </div>}
+  </div>;
 }
