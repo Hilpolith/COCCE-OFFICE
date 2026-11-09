@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import OfficeAiWorkspace from './OfficeAiWorkspace';
 
 const mocks = vi.hoisted(() => ({
@@ -143,7 +143,7 @@ describe('COCCE AI workspace context', () => {
     mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
       args.body.action === 'status'
         ? { data: { configured: true }, error: null }
-        : new Promise((resolve) => { resolveChat = resolve; })
+        : new Promise<{ data: { text: string }; error: null }>((resolve) => { resolveChat = resolve; })
     ));
 
     render(<OfficeAiWorkspace initialWorkspaceId="workspace-one" initialPrompt="Summarise the confidential project." />);
@@ -156,8 +156,8 @@ describe('COCCE AI workspace context', () => {
     expect((screen.getByPlaceholderText('Ask across your workspace…') as HTMLTextAreaElement).value).toBe('');
     expect((screen.getByPlaceholderText('Ask across your workspace…') as HTMLTextAreaElement).disabled).toBe(true);
 
-    resolveChat?.({ data: { text: 'PRIVATE RESPONSE FROM THE PREVIOUS WORKSPACE' }, error: null });
-    await waitFor(() => expect(screen.queryByText('PRIVATE RESPONSE FROM THE PREVIOUS WORKSPACE')).toBeNull());
+    await act(async () => { resolveChat?.({ data: { text: 'PRIVATE RESPONSE FROM THE PREVIOUS WORKSPACE' }, error: null }); });
+    expect(screen.queryByText('PRIVATE RESPONSE FROM THE PREVIOUS WORKSPACE')).toBeNull();
   });
 
 });
