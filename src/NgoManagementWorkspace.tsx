@@ -8,7 +8,7 @@ import { downloadOfficeCsv } from './lib/officeCsvExport';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import { createOfficeRecordsKeyConfig, decryptOfficePrivateRecord, encryptOfficePrivateRecord, unlockOfficeRecordsKeyConfig } from './lib/officePrivateRecordsCrypto';
 import type { OfficeRecordsCiphertext } from './lib/officePrivateRecordsCrypto';
-import type { NgoAction, NgoBootstrap, NgoCapabilities, NgoDataResource, NgoFilter, NgoKeyConfigs, NgoMutationResult, NgoPrivateKind, NgoRow, NgoSaveResource } from './lib/officeNgoTypes';
+import type { NgoAction, NgoBootstrap, NgoCapabilities, NgoDataResource, NgoFilter, NgoKeyConfigs, NgoMutationResult, NgoPage, NgoPrivateKind, NgoRow, NgoSaveResource } from './lib/officeNgoTypes';
 import type { NgoWorkspaceContext } from './ngoWorkspaceTypes';
 import { NgoField, NgoPager, NgoRows, NgoSection, useNgoRows } from './NgoShared';
 import NgoProgrammePanels from './NgoProgrammePanels';
@@ -45,7 +45,7 @@ export default function NgoManagementWorkspace({ workspaceId, officeName, countr
       .filter(([, capability]) => Boolean(result.capabilities[capability]))
       .map(async ([resource]) => {
         try {
-          const page = await officeNgoManagementApi.read(client, workspaceId, resource, {}, 1, 0);
+          const page = await officeNgoManagementApi.read<NgoPage>(client, workspaceId, resource, {}, 1, 0);
           return { resource, count: page.total_count as number, failed: false };
         } catch {
           return { resource, count: 0, failed: true };

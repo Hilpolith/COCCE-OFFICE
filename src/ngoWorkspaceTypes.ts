@@ -8,7 +8,7 @@ export interface NgoWorkspaceContext {
   busy: boolean;
   revision: number;
   feedback: string;
-  summaryError: string;
+  summaryError?: string;
   keyConfigs: NgoKeyConfigs;
   unlocked: Record<NgoPrivateKind, boolean>;
   load: (resource: NgoDataResource, filter?: NgoFilter, offset?: number) => Promise<NgoPage>;
