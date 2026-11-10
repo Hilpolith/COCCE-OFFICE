@@ -123,8 +123,19 @@ describe('Office account control', () => {
     fireEvent.click(screen.getByRole('button', { name: /Continue with Google/ }));
     await waitFor(() => expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/?cocce_office_oauth=1`, queryParams: { prompt: 'select_account' } },
+      options: { redirectTo: `${window.location.origin}/auth/callback?cocce_office_oauth=1`, queryParams: { prompt: 'select_account' } },
     }));
+  });
+
+  it('returns the browser to the Office workspace after the PKCE callback is accepted', async () => {
+    window.history.replaceState({}, '', '/auth/callback?code=synthetic-pkce-code&cocce_office_oauth=1');
+    render(<OfficeAccountControl />);
+    await waitFor(() => expect(mocks.getUser).toHaveBeenCalled());
+    authCallback('SIGNED_IN', { user: existingUser });
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(window.location.search).toBe('');
+    fireEvent.click(await screen.findByRole('button', { name: /Account: synthetic@example.test/ }));
+    expect(await screen.findByText(/Sign-in successful/i)).toBeTruthy();
   });
 
   it('shares sign-in and sign-out changes with other Office surfaces without affecting other COCCE apps', async () => {
