@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 // Disposable in-memory PostgreSQL only. No network, credentials, real identities or files.
 const migration = await readFile(new URL('../docs/proposals/office-school-management-20261106.sql', import.meta.url), 'utf8');
 const paginationMigration = await readFile(new URL('../supabase/migrations/20261109152012_office_school_read_offset_pagination.sql', import.meta.url), 'utf8');
+const summaryMigration = await readFile(new URL('../supabase/migrations/20261110100000_office_school_server_kpis.sql', import.meta.url), 'utf8');
 const owner = '11111111-1111-4111-8111-111111111111';
 const teacher = '22222222-2222-4222-8222-222222222222';
 const registrar = '33333333-3333-4333-8333-333333333333';
@@ -51,6 +52,7 @@ before(async () => {
   `);
   await db.exec(migration);
   await db.exec(paginationMigration);
+  await db.exec(summaryMigration);
   await db.query('INSERT INTO auth.users(id) VALUES ($1),($2),($3),($4),($5),($6)', [owner,teacher,registrar,bursar,suspended,outsider]);
   await db.query('INSERT INTO public.office_workspaces(id) VALUES ($1),($2),($3)', [school,otherSchool,business]);
   await db.query(`INSERT INTO public.office_memberships(workspace_id,user_id,role,status) VALUES
@@ -92,6 +94,9 @@ async function read(resource, who = owner, filter = {}, limit = 100, offset = 0)
 async function command(action, payload, who = owner) {
   return as(who, async () => (await db.query('SELECT public.office_school_command($1,$2,$3) AS result',
     [school,action,payload])).rows[0].result);
+}
+async function summary(who = owner) {
+  return as(who, async () => (await db.query('SELECT public.office_school_summary($1) AS result', [school])).rows[0].result);
 }
 async function expectSqlState(operation, code) {
   await db.exec('SAVEPOINT expected_error');
@@ -153,6 +158,26 @@ test('owner can bootstrap, create term/class/subject, and assign an active teach
   const assigned = await command('assign_class_staff', { class_id:klass.class_id,subject_id:subject.subject_id,user_id:teacher,assignment_kind:'subject_teacher' });
   assert.ok(assigned.assignment_id);
   assert.equal((await read('classes',teacher)).length,1);
+});
+
+test('server KPI summary counts the full workspace while enforcing teacher class scope', async () => {
+  await command('save_term',{academic_year:'2026/2027',term_label:'Term 1',start_date:'2026-01-01',end_date:'2026-04-30'});
+  await command('save_term',{academic_year:'2026/2027',term_label:'Term 2',start_date:'2026-05-01',end_date:'2026-08-31'});
+  const assigned = await command('save_class',{class_label:'Form 1A'});
+  await command('save_class',{class_label:'Form 1B'});
+  await command('save_subject',{subject_code:'MATH',subject_label:'Mathematics'});
+  await command('assign_class_staff',{class_id:assigned.class_id,user_id:teacher,assignment_kind:'class_teacher'});
+  const ownerSummary = await summary(owner);
+  assert.equal(ownerSummary.terms_count,2);
+  assert.equal(ownerSummary.classes_count,2);
+  assert.equal(ownerSummary.subjects_count,1);
+  const teacherSummary = await summary(teacher);
+  assert.equal(teacherSummary.terms_count,2);
+  assert.equal(teacherSummary.classes_count,1);
+  assert.equal(teacherSummary.students_count,0);
+  assert.equal(teacherSummary.applications_count,0);
+  assert.equal(teacherSummary.fee_charges_count,0);
+  await expectSqlState(() => summary(outsider), '42501');
 });
 
 test('integrated timetable uses managed open terms/classes/subjects and preserves conflict, audit and membership rules', async () => {

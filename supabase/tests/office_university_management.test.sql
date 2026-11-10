@@ -50,16 +50,31 @@ BEGIN
  PERFORM public.office_university_command(w,'save_research',payload||jsonb_build_object('project_id',proj,'expected_version',1,'proposal_status','submitted','idempotency_key',gen_random_uuid()));
  payload:=jsonb_build_object('programme_id',p,'title','Synthetic curriculum review','status','draft','review_query','','evidence_reference','','due_date','2027-01-01','idempotency_key',gen_random_uuid());result:=public.office_university_command(w,'save_quality',payload);qa:=(result->>'case_id')::uuid;
  PERFORM public.office_university_command(w,'save_quality',payload||jsonb_build_object('case_id',qa,'expected_version',1,'status','submitted','idempotency_key',gen_random_uuid()));
+ result:=public.office_university_summary(w);
+ IF (result->>'terms_count')::integer<>1 OR (result->>'programmes_count')::integer<>1 OR (result->>'courses_count')::integer<>2
+   OR (result->>'admissions_count')::integer<>1 OR (result->>'students_count')::integer<>1
+   OR (result->>'assessments_count')::integer<>2 OR (result->>'draft_assessments_count')::integer<>1
+   OR (result->>'fees_count')::integer<>1 OR (result->>'unpaid_fee_charges_count')::integer<>1
+ THEN RAISE EXCEPTION 'Administrator server KPI summary is incorrect: %',result;END IF;
  IF jsonb_array_length(public.office_university_read(w,'terms','{}',1,0))<>1 OR jsonb_array_length(public.office_university_read(w,'terms','{}',1,1))<>0 THEN RAISE EXCEPTION 'Pagination failed';END IF;
  PERFORM set_config('request.jwt.claim.sub','22222222-2222-4222-8222-222222222222',false);
+ result:=public.office_university_summary(w);
+ IF (result->>'students_count')::integer<>1 OR (result->>'assessments_count')::integer<>1
+   OR (result->>'admissions_count')::integer<>0 OR (result->>'fees_count')::integer<>0
+ THEN RAISE EXCEPTION 'Lecturer server KPI scope is incorrect: %',result;END IF;
  IF jsonb_array_length(public.office_university_read(w,'assessments'))<>1 THEN RAISE EXCEPTION 'Lecturer assessment scope failed';END IF;
  BEGIN PERFORM public.office_university_command(w,'save_assessment',jsonb_build_object('course_id',c2,'term_id',t,'title','Unauthorized','max_score',100,'idempotency_key',gen_random_uuid()));RAISE EXCEPTION 'Unassigned lecturer wrote assessment';EXCEPTION WHEN SQLSTATE '42501' THEN NULL;END;
  BEGIN PERFORM public.office_university_read(w,'private_person',jsonb_build_object('person_id',gen_random_uuid()));RAISE EXCEPTION 'Lecturer accessed private identity';EXCEPTION WHEN SQLSTATE '42501' THEN NULL;END;
  PERFORM set_config('request.jwt.claim.sub','33333333-3333-4333-8333-333333333333',false);
+ result:=public.office_university_summary(w);
+ IF (result->>'fees_count')::integer<>1 OR (result->>'students_count')::integer<>1
+   OR (result->>'admissions_count')::integer<>0 OR (result->>'assessments_count')::integer<>0
+ THEN RAISE EXCEPTION 'Finance server KPI scope is incorrect: %',result;END IF;
  IF jsonb_array_length(public.office_university_read(w,'fees'))<>1 THEN RAISE EXCEPTION 'Finance read failed';END IF;
  BEGIN PERFORM public.office_university_read(w,'admissions');RAISE EXCEPTION 'Finance read admissions';EXCEPTION WHEN SQLSTATE '42501' THEN NULL;END;
  PERFORM set_config('request.jwt.claim.sub','44444444-4444-4444-8444-444444444444',false);
  BEGIN PERFORM public.office_university_read(w,'bootstrap');RAISE EXCEPTION 'Nonmember access accepted';EXCEPTION WHEN SQLSTATE '42501' THEN NULL;END;
+ BEGIN PERFORM public.office_university_summary(w);RAISE EXCEPTION 'Nonmember KPI summary access accepted';EXCEPTION WHEN SQLSTATE '42501' THEN NULL;END;
  PERFORM set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',false);
  BEGIN PERFORM public.office_university_read('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','bootstrap');RAISE EXCEPTION 'Wrong industry accepted';EXCEPTION WHEN SQLSTATE '42501' THEN NULL;END;
  BEGIN PERFORM 1 FROM public.office_university_students;RAISE EXCEPTION 'Direct table access accepted';EXCEPTION WHEN SQLSTATE '42501' THEN NULL;END;

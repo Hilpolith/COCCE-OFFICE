@@ -13,7 +13,7 @@ trap cleanup EXIT
 "$PG_BINDIR/initdb" -D "$TMP/data" -A trust --no-locale >/dev/null
 "$PG_BINDIR/pg_ctl" -D "$TMP/data" -l "$TMP/postgres.log" -o "-h 127.0.0.1 -p $PORT -k $TMP" -w start >/dev/null
 "$PG_BINDIR/createdb" -h 127.0.0.1 -p "$PORT" university_validation
-for sql in "$ROOT/supabase/tests/university-bootstrap.sql" "$ROOT/supabase/migrations/20261107121500_office_university_management.sql" "$ROOT/supabase/tests/office_university_management.test.sql"; do
+for sql in "$ROOT/supabase/tests/university-bootstrap.sql" "$ROOT/supabase/migrations/20261107121500_office_university_management.sql" "$ROOT/supabase/migrations/20261110100100_office_university_server_kpis.sql" "$ROOT/supabase/tests/office_university_management.test.sql"; do
   echo "Validating $(basename "$sql") in disposable PostgreSQL on loopback:$PORT"
   "$PG_BINDIR/psql" -X -h 127.0.0.1 -p "$PORT" -d university_validation -v ON_ERROR_STOP=1 -f "$sql" >/dev/null
 done
