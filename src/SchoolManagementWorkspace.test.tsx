@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import SchoolManagementWorkspace from './SchoolManagementWorkspace';
 
 const mocks = vi.hoisted(() => ({
-  read: vi.fn(), command: vi.fn(), listWorkspaces: vi.fn(), listMembers: vi.fn(), getSpace: vi.fn(),
+  read: vi.fn(), command: vi.fn(), summary: vi.fn(), listWorkspaces: vi.fn(), listMembers: vi.fn(), getSpace: vi.fn(),
   authGetUser: vi.fn(),
 }));
 
@@ -12,7 +12,7 @@ vi.mock('./lib/officeSchoolManagement', () => ({
   createSchoolKeyConfig: vi.fn(), unlockSchoolKey: vi.fn(),
   decryptSchoolNotice: vi.fn(), decryptSchoolPrivatePerson: vi.fn(),
   encryptSchoolNotice: vi.fn(), encryptSchoolPrivatePerson: vi.fn(),
-  officeSchoolManagementApi: { read: mocks.read, command: mocks.command },
+  officeSchoolManagementApi: { read: mocks.read, command: mocks.command, summary: mocks.summary },
 }));
 vi.mock('./lib/officeTeamApi', () => ({ officeTeamApi: { listWorkspaces: mocks.listWorkspaces, listMembers: mocks.listMembers } }));
 vi.mock('./lib/officeIndustryTasks', () => ({ officeIndustryTasksApi: { getSpace: mocks.getSpace, registerSpace: vi.fn() } }));
@@ -31,6 +31,14 @@ beforeEach(() => {
   mocks.listMembers.mockResolvedValue(members);
   mocks.getSpace.mockResolvedValue({ industry_id: 'school', office_name: 'Synthetic School', country: 'TZ' });
   mocks.command.mockResolvedValue({});
+  mocks.summary.mockResolvedValue({
+    terms_count: 0, classes_count: 0, subjects_count: 0, students_count: 0,
+    applications_count: 0, active_applications_count: 0, attendance_sessions_count: 0,
+    open_attendance_sessions_count: 0, attendance_present_count: 0, attendance_late_count: 0,
+    attendance_absent_count: 0, attendance_excused_count: 0, assessments_count: 0,
+    draft_assessments_count: 0, fee_charges_count: 0, unpaid_fee_charges_count: 0,
+    notices_count: 0, staff_roles_count: 0, class_staff_assignments_count: 0,
+  });
   mocks.read.mockImplementation(async (_client, _workspaceId, resource) => {
     if (resource === 'bootstrap') return { role: 'school_admin', terms: [], classes: [], subjects: [] };
     if (resource === 'key_config') return { configured: false };
@@ -44,7 +52,15 @@ function renderSchool() {
 }
 
 describe('School Management workspace', () => {
-  it('builds the overview from loaded operational state without exposing PII', async () => {
+  it('builds full-scope server KPIs without exposing PII', async () => {
+    mocks.summary.mockResolvedValue({
+      terms_count: 1, classes_count: 1, subjects_count: 0, students_count: 201,
+      applications_count: 1, active_applications_count: 1, attendance_sessions_count: 201,
+      open_attendance_sessions_count: 1, attendance_present_count: 201, attendance_late_count: 0,
+      attendance_absent_count: 0, attendance_excused_count: 0, assessments_count: 0,
+      draft_assessments_count: 0, fee_charges_count: 0, unpaid_fee_charges_count: 0,
+      notices_count: 0, staff_roles_count: 1, class_staff_assignments_count: 1,
+    });
     mocks.read.mockImplementation(async (_client, _workspaceId, resource) => {
       if (resource === 'bootstrap') return {
         role: 'school_admin',
@@ -60,6 +76,8 @@ describe('School Management workspace', () => {
     renderSchool();
 
     expect(await screen.findByText('Learner records')).toBeTruthy();
+    expect(screen.getAllByText('201').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Export server KPI CSV' })).toBeTruthy();
     expect(screen.getByText('Applications')).toBeTruthy();
     expect(screen.getByText('Marks by status')).toBeTruthy();
     expect(screen.getByText('Review admissions queue')).toBeTruthy();

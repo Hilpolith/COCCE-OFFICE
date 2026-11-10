@@ -4,9 +4,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import UniversityManagementWorkspace from './UniversityManagementWorkspace';
 import { FrostedConfirmProvider } from './FrostedConfirm';
 
-const { read, command, getUser } = vi.hoisted(() => ({ read: vi.fn(), command: vi.fn(), getUser: vi.fn() }));
+const { read, command, summary, getUser } = vi.hoisted(() => ({ read: vi.fn(), command: vi.fn(), summary: vi.fn(), getUser: vi.fn() }));
 vi.mock('./lib/officeUniversityManagement', () => ({
-  officeUniversityManagementApi: { read, command },
+  officeUniversityManagementApi: { read, command, summary },
   createUniversityKeyConfig: vi.fn(), unlockUniversityKey: vi.fn(), encryptUniversityPrivatePerson: vi.fn(), decryptUniversityPrivatePerson: vi.fn(),
 }));
 vi.mock('./lib/officeTeamSupabase', () => ({
@@ -29,11 +29,27 @@ beforeEach(() => {
   (officeIndustryTasksApi.getSpace as ReturnType<typeof vi.fn>).mockResolvedValue({ industry_id: 'university' });
   read.mockImplementation(async (_client: unknown, _workspace: string, resource: string) => resource === 'bootstrap' ? bootstrap() : resource === 'key_config' ? { configured: false } : []);
   command.mockResolvedValue({ entity_id: 'new-1', version: 1 });
+  summary.mockResolvedValue({
+    terms_count: 1, programmes_count: 1, courses_count: 1, admissions_count: 0,
+    active_admissions_count: 0, students_count: 0, registrations_count: 0,
+    assessments_count: 0, draft_assessments_count: 0, scores_count: 0, assignments_count: 0,
+    fees_count: 0, unpaid_fee_charges_count: 0, receipts_count: 0, funding_cases_count: 0,
+    transcript_requests_count: 0, pending_transcript_requests_count: 0,
+    research_projects_count: 0, quality_cases_count: 0, staff_roles_count: 0,
+  });
 });
 afterEach(() => cleanup());
 
 describe('University Management workflows', () => {
-  it('shows only role-authorized tabs and loaded bootstrap records', async () => {
+  it('shows only role-authorized tabs and server KPI totals', async () => {
+    summary.mockResolvedValue({
+      terms_count: 1, programmes_count: 1, courses_count: 1, admissions_count: 0,
+      active_admissions_count: 0, students_count: 201, registrations_count: 1,
+      assessments_count: 2, draft_assessments_count: 1, scores_count: 0, assignments_count: 1,
+      fees_count: 0, unpaid_fee_charges_count: 0, receipts_count: 0, funding_cases_count: 0,
+      transcript_requests_count: 0, pending_transcript_requests_count: 0,
+      research_projects_count: 0, quality_cases_count: 0, staff_roles_count: 0,
+    });
     read.mockImplementation(async (_client: unknown, _workspace: string, resource: string) => resource === 'bootstrap' ? bootstrap('lecturer') : []);
     render(<UniversityManagementWorkspace {...baseProps} />);
     expect(await screen.findByRole('heading', { name: 'University Management' })).toBeTruthy();
@@ -41,8 +57,26 @@ describe('University Management workflows', () => {
     expect(screen.getByRole('tab', { name: 'Students & results' })).toBeTruthy();
     expect(screen.queryByRole('tab', { name: 'Admissions' })).toBeNull();
     expect(screen.queryByRole('tab', { name: 'Finance & funding' })).toBeNull();
+    expect(screen.queryByText('Research cases')).toBeNull();
+    expect(screen.getByText('201')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Academics' }));
     expect(await screen.findByText('2026 Semester 1')).toBeTruthy();
+  });
+
+  it('uses full server counts instead of the currently loaded first page', async () => {
+    summary.mockResolvedValue({
+      terms_count: 250, programmes_count: 5, courses_count: 14, admissions_count: 12,
+      active_admissions_count: 3, students_count: 900, registrations_count: 1200,
+      assessments_count: 20, draft_assessments_count: 2, scores_count: 700, assignments_count: 8,
+      fees_count: 3, unpaid_fee_charges_count: 1, receipts_count: 2, funding_cases_count: 1,
+      transcript_requests_count: 4, pending_transcript_requests_count: 2,
+      research_projects_count: 4, quality_cases_count: 2, staff_roles_count: 6,
+    });
+    render(<UniversityManagementWorkspace {...baseProps} />);
+    expect(await screen.findByRole('heading', { name: 'University Management' })).toBeTruthy();
+    expect(screen.getByText('250')).toBeTruthy();
+    expect(screen.getByText('900')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Export server KPI CSV' })).toBeTruthy();
   });
 
   it('submits an academic form with idempotency and clears it only after success', async () => {
