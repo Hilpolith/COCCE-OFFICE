@@ -16,6 +16,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { useFrostedConfirm } from "./FrostedConfirm";
+import { downloadOfficeCsv } from "./lib/officeCsvExport";
 import { officeTeamApi } from "./lib/officeTeamApi";
 import { officeIndustryTasksApi } from "./lib/officeIndustryTasks";
 import {
@@ -857,17 +858,20 @@ function Overview({
     ["students", "Students"],
     ["research", "Research cases"],
   ];
+  const visibleCards = cards.filter(
+    ([k]) => k !== "admissions" || role === "university_admin" || role === "registrar",
+  );
+  const exportRows = [
+    ...visibleCards.map(([key, label]) => [label, (data[key] ?? []).length, "Loaded records"]),
+    ...(role === "university_admin" || role === "registrar"
+      ? [["Admissions in active decision states", (data.admissions ?? []).filter((item) => ["submitted", "reviewing", "offered", "waitlisted"].includes(text(item, "status", ""))).length, "Loaded records"]]
+      : []),
+    ["Draft assessments", (data.assessments ?? []).filter((item) => text(item, "status", "") === "draft").length, "Loaded records"],
+  ];
   return (
     <>
       <section className="university-metrics">
-        {cards
-          .filter(
-            ([k]) =>
-              k !== "admissions" ||
-              role === "university_admin" ||
-              role === "registrar",
-          )
-          .map(([k, l]) => (
+        {visibleCards.map(([k, l]) => (
             <div className="university-metric" key={k}>
               <span>{l}</span>
               <strong>{(data[k] ?? []).length}</strong>
@@ -875,6 +879,7 @@ function Overview({
             </div>
           ))}
       </section>
+      <button type="button" className="button-secondary" onClick={() => downloadOfficeCsv("university-overview-loaded.csv", ["Metric", "Value", "Scope"], exportRows)}>Export loaded academic overview CSV</button>
       <section className="university-grid">
         <Panel title="Operational snapshot">
           <p>

@@ -14,6 +14,7 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import BusinessWorkspacePanels from "./BusinessWorkspacePanels";
 import BusinessPrivateContacts from "./BusinessPrivateContacts";
+import { downloadOfficeCsv } from "./lib/officeCsvExport";
 import { officeTeamApi, type OfficeMember } from "./lib/officeTeamApi";
 import {
   getOfficeTeamClient,
@@ -742,6 +743,7 @@ export default function BusinessManagementWorkspace({
             deployment did not provide that aggregate. Operational invoices and
             payment records are internal workflow records, not fiscal receipts.
           </section>
+          <button type="button" className="button-secondary" onClick={() => { try { downloadOfficeCsv("business-server-summary.csv", ["Metric", "Value", "Scope"], SUMMARY_KEYS.map((key) => [key.replaceAll("_", " "), summaryValue(summary, key), "Server-provided summary"])); setFeedback("Business server summary exported. Private contacts and transaction details were not included."); } catch (error) { setFeedback(friendlyError(error)); } }} disabled={status !== "ready"}>Export server summary CSV</button>
           <div className="business-metric-dock" aria-label="Workspace summary">
             {SUMMARY_KEYS.map((key) => (
               <div className="business-metric" key={key}>

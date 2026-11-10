@@ -16,6 +16,7 @@ import {
   officeGovernmentCorrespondenceApi,
 } from './lib/officeGovernmentCorrespondence';
 import { officeGovernmentWorkspaceApi } from './lib/officeGovernmentWorkspace';
+import { downloadOfficeCsv } from './lib/officeCsvExport';
 import type {
   GovernmentCorrespondence, GovernmentCorrespondenceAction, GovernmentCorrespondenceCursor,
   GovernmentCorrespondenceDirection, GovernmentCorrespondenceEvent, GovernmentCorrespondenceInput,
@@ -610,6 +611,7 @@ export default function GovernmentCorrespondenceWorkspace({
           <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="all">All statuses</option>{statusOptions.map((item) => <option value={item} key={item}>{prettyStatus(item)}</option>)}</select></label>
           <label className="government-register-search">Search loaded records<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Subject, reference, unit…" /></label>
         </div>
+        <button type="button" className="button-secondary" onClick={() => { try { downloadOfficeCsv('government-correspondence-loaded.csv', ['Official reference', 'Direction', 'Record type', 'Status', 'Department', 'Due date', 'Received date', 'Version'], records.map((record) => [record.official_reference, record.direction, record.record_type, record.status, record.current_department, record.due_date, record.received_date, record.version])); setFeedback('Loaded non-sensitive register metadata exported. This file contains only the records currently loaded in this view.'); } catch (error) { setFeedback(friendlyError(error)); } }} disabled={records.length === 0}>Export loaded metadata CSV</button>
         <button type="button" className="button-primary" onClick={() => { setEditingId(null); setForm(emptyForm(directionFilter === 'outgoing' ? 'outgoing' : 'incoming')); setFormOpen(true); }}><Plus size={15} /> New correspondence</button>
       </div>
 
