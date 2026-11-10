@@ -70,17 +70,20 @@ export default function OfficeAccountControl() {
     }
   }, [client]);
 
+  const completeOfficeAuthCallback = useCallback(() => {
+    if (window.location.pathname !== '/auth/callback') return;
+    window.history.replaceState(window.history.state, '', '/');
+    setOpen(true);
+    setNotice('Sign-in successful. Preparing your COCCE Office workspace…');
+  }, []);
+
   useEffect(() => {
     if (!client) return undefined;
     let alive = true;
     const { data: subscription } = client.auth.onAuthStateChange((event, session) => {
       eventVersion.current += 1;
       if (event === 'PASSWORD_RECOVERY') { setMode('recovery'); setOpen(true); setNotice('Choose a new password for your COCCE account.'); }
-      if (event === 'SIGNED_IN' && window.location.pathname === '/auth/callback') {
-        setOpen(true);
-        setNotice('Sign-in successful. Preparing your COCCE Office workspace…');
-        window.history.replaceState(window.history.state, '', '/');
-      }
+      if (event === 'SIGNED_IN') completeOfficeAuthCallback();
       const nextUser = session?.user ?? null;
       setUser(nextUser);
       setPassword('');
@@ -101,7 +104,10 @@ export default function OfficeAccountControl() {
         if (userError) throw userError;
         setUser(verified.user);
         setAuthReady(true);
-        if (verified.user) void loadWorkspaces();
+        if (verified.user) {
+          completeOfficeAuthCallback();
+          void loadWorkspaces();
+        }
       } catch (cause) {
         if (alive && eventVersion.current === startingVersion) {
           setError(friendlyError(cause)); setUser(null); setAuthReady(true);
@@ -110,7 +116,7 @@ export default function OfficeAccountControl() {
     };
     void restoreSession();
     return () => { alive = false; subscription.subscription.unsubscribe(); };
-  }, [client, loadWorkspaces]);
+  }, [client, completeOfficeAuthCallback, loadWorkspaces]);
 
   useEffect(() => {
     if (!open) return undefined;
