@@ -202,6 +202,8 @@ export default function UniversityManagementWorkspace({
   const [profileBusy, setProfileBusy] = useState(false);
   const [data, setData] = useState<Record<string, Row[]>>({});
   const [offsets, setOffsets] = useState<Record<string, number>>({});
+  const [serverSummary, setServerSummary] = useState<Record<string, number> | null>(null);
+  const [summaryError, setSummaryError] = useState("");
   const generation = useRef(0);
   const workspaceRef = useRef(workspaceId);
   workspaceRef.current = workspaceId;
@@ -285,6 +287,8 @@ export default function UniversityManagementWorkspace({
     clearSecrets();
     setStatus("loading");
     setFeedback("");
+    setServerSummary(null);
+    setSummaryError("");
     try {
       if (config.status !== "ready" || !client) {
         setStatus("error");
@@ -325,6 +329,16 @@ export default function UniversityManagementWorkspace({
       if (token !== generation.current) return;
       const freshRole = roleValue(boot.role);
       setRole(freshRole);
+      if (freshRole !== "unassigned") {
+        try {
+          const summary = await officeUniversityManagementApi.summary(client, workspaceId);
+          if (token !== generation.current) return;
+          setServerSummary(summary);
+        } catch (summaryCause) {
+          if (token !== generation.current) return;
+          setSummaryError(errorText(summaryCause));
+        }
+      }
       const initial = {
         terms: rows(boot.terms),
         programmes: rows(boot.programmes),
@@ -780,7 +794,7 @@ export default function UniversityManagementWorkspace({
           </button>
         ))}
       </nav>
-      {currentTab === "overview" && <Overview data={data} role={role} />}{" "}
+      {currentTab === "overview" && <Overview data={data} role={role} summary={serverSummary} summaryError={summaryError} />}{" "}
       {currentTab === "academics" && (
         <Academics
           canAdmin={isAdmin}
@@ -846,57 +860,58 @@ export default function UniversityManagementWorkspace({
 function Overview({
   data,
   role,
+  summary,
+  summaryError,
 }: {
   data: Record<string, Row[]>;
   role: UniversityRole;
+  summary: Record<string, number> | null;
+  summaryError: string;
 }) {
-  const cards = [
-    ["terms", "Academic periods"],
-    ["programmes", "Programmes"],
-    ["courses", "Courses"],
-    ["admissions", "Applications"],
-    ["students", "Students"],
-    ["research", "Research cases"],
+  const isAdmin = role === "university_admin";
+  const canRegistrar = isAdmin || role === "registrar";
+  const canLecturer = isAdmin || role === "registrar" || role === "lecturer";
+  const canFinance = isAdmin || role === "finance_officer";
+  const canResearch = isAdmin || role === "research_coordinator";
+  const canQuality = isAdmin || role === "quality_officer";
+  const cards: Array<[string, string]> = [
+    ["terms_count", "Academic periods"],
+    ["programmes_count", "Programmes"],
+    ["courses_count", "Courses"],
+    ...(canRegistrar ? [["admissions_count", "Applications"] as [string, string]] : []),
+    ...(canRegistrar || role === "lecturer" || role === "finance_officer" ? [["students_count", "Students"] as [string, string]] : []),
+    ...(canResearch ? [["research_projects_count", "Research cases"] as [string, string]] : []),
+    ...(canLecturer ? [["assessments_count", "Assessments"] as [string, string]] : []),
+    ...(canFinance ? [["fees_count", "Fee charges"] as [string, string]] : []),
+    ...(canQuality ? [["quality_cases_count", "Quality cases"] as [string, string]] : []),
   ];
-  const visibleCards = cards.filter(
-    ([k]) => k !== "admissions" || role === "university_admin" || role === "registrar",
-  );
   const exportRows = [
-    ...visibleCards.map(([key, label]) => [label, (data[key] ?? []).length, "Loaded records"]),
-    ...(role === "university_admin" || role === "registrar"
-      ? [["Admissions in active decision states", (data.admissions ?? []).filter((item) => ["submitted", "reviewing", "offered", "waitlisted"].includes(text(item, "status", ""))).length, "Loaded records"]]
-      : []),
-    ["Draft assessments", (data.assessments ?? []).filter((item) => text(item, "status", "") === "draft").length, "Loaded records"],
+    ...cards.map(([key, label]) => [label, summary?.[key] ?? 0, "Full role-authorized workspace"]),
+    ...(canRegistrar ? [["Admissions in active decision states", summary?.active_admissions_count ?? 0, "Full role-authorized workspace"]] : []),
+    ...(canLecturer ? [["Draft assessments", summary?.draft_assessments_count ?? 0, "Full role-authorized workspace"]] : []),
+    ...(canFinance ? [["Unpaid fee charges", summary?.unpaid_fee_charges_count ?? 0, "Full role-authorized workspace"]] : []),
   ];
   return (
     <>
+      {summaryError && <p className="university-note" role="alert">Full-scope KPI summary unavailable: {summaryError}</p>}
+      {!summary && !summaryError && <p className="university-note" role="status">Loading full-scope University KPIs…</p>}
+      {summary && <>
       <section className="university-metrics">
-        {visibleCards.map(([k, l]) => (
-            <div className="university-metric" key={k}>
-              <span>{l}</span>
-              <strong>{(data[k] ?? []).length}</strong>
-              <small>Loaded records</small>
-            </div>
-          ))}
+        {cards.map(([key, label]) => (
+          <div className="university-metric" key={key}>
+            <span>{label}</span>
+            <strong>{summary[key] ?? 0}</strong>
+            <small>Server count · role scoped</small>
+          </div>
+        ))}
       </section>
-      <button type="button" className="button-secondary" onClick={() => downloadOfficeCsv("university-overview-loaded.csv", ["Metric", "Value", "Scope"], exportRows)}>Export loaded academic overview CSV</button>
+      <button type="button" className="button-secondary" onClick={() => downloadOfficeCsv("university-overview-server.csv", ["Metric", "Value", "Scope"], exportRows)}>Export server KPI CSV</button>
       <section className="university-grid">
         <Panel title="Operational snapshot">
           <p>
-            {
-              (data.admissions ?? []).filter((x) =>
-                ["submitted", "reviewing", "offered", "waitlisted"].includes(
-                  text(x, "status", ""),
-                ),
-              ).length
-            }{" "}
-            admissions in active decision states.{" "}
-            {
-              (data.assessments ?? []).filter(
-                (x) => text(x, "status", "") === "draft",
-              ).length
-            }{" "}
-            assessments remain draft.
+            {canRegistrar ? summary.active_admissions_count ?? 0 : "—"} admissions in active decision states.{" "}
+            {canLecturer ? summary.draft_assessments_count ?? 0 : "—"} assessments remain draft.{" "}
+            {canFinance ? summary.unpaid_fee_charges_count ?? 0 : "—"} fee charges remain unpaid.
           </p>
         </Panel>
         <Panel title="Official manual services">
@@ -917,6 +932,7 @@ function Overview({
           </p>
         </Panel>
       </section>
+      </>}
     </>
   );
 }

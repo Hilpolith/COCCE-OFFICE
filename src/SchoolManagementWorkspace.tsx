@@ -108,6 +108,8 @@ export default function SchoolManagementWorkspace({
   const [fees, setFees] = useState<Fee[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [pages, setPages] = useState<Record<string, { hasMore: boolean; loading: boolean }>>({});
+  const [serverSummary, setServerSummary] = useState<Record<string, number> | null>(null);
+  const [summaryError, setSummaryError] = useState('');
   const [keyConfig, setKeyConfig] = useState<NoticeKey>({ configured: false });
   const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
   const [privateKeyState, setPrivateKeyState] = useState<'unavailable' | 'locked' | 'unlocked'>('unavailable');
@@ -168,34 +170,43 @@ export default function SchoolManagementWorkspace({
     return false;
   }), [canBursar, canRegistrar, canTeacher, isAdmin]);
   const selectedTab: TabId = visibleTabs.some((item) => item.id === activeTab) ? activeTab : 'overview';
-  const loadedCounts = useMemo(() => [
-    { id: 'terms', label: 'Academic terms', value: terms.length, detail: 'Loaded records', icon: CalendarDays, tone: 'cyan' },
-    { id: 'classes', label: 'Classes & streams', value: classes.length, detail: 'Loaded records', icon: Users, tone: 'teal' },
-    ...(canRegistrar || canTeacher || canBursar ? [{ id: 'students', label: 'Learner records', value: students.length, detail: 'Loaded · max 200', icon: GraduationCap, tone: 'blue' }] : []),
-    ...(canRegistrar ? [{ id: 'admissions', label: 'Applications', value: applications.length, detail: pages.admissions?.hasMore ? 'Loaded · more available' : 'Loaded records', icon: ClipboardCheck, tone: 'orange' }] : []),
-    ...(canTeacher ? [{ id: 'attendance', label: 'Attendance sessions', value: attendance.length, detail: pages.attendance?.hasMore ? 'Loaded · more available' : 'Loaded records', icon: Check, tone: 'teal' }, { id: 'grades', label: 'Assessments', value: assessments.length, detail: pages.gradebook?.hasMore ? 'Loaded · more available' : 'Loaded records', icon: BookOpenCheck, tone: 'violet' }] : []),
-    ...(canBursar ? [{ id: 'fees', label: 'Fee charges', value: fees.length, detail: pages.fees?.hasMore ? 'Loaded · more available' : 'Loaded records', icon: WalletCards, tone: 'orange' }] : []),
-  ], [applications.length, assessments.length, attendance.length, canBursar, canRegistrar, canTeacher, classes.length, fees.length, pages, students.length, terms.length]);
+  const serverCounts = useMemo(() => {
+    if (!serverSummary) return [];
+    return [
+      { id: 'terms', label: 'Academic terms', value: serverSummary.terms_count ?? 0, detail: 'Full role-authorized total', icon: CalendarDays, tone: 'cyan' },
+      { id: 'classes', label: 'Classes & streams', value: serverSummary.classes_count ?? 0, detail: 'Full role-authorized total', icon: Users, tone: 'teal' },
+      { id: 'subjects', label: 'Subjects', value: serverSummary.subjects_count ?? 0, detail: 'Full workspace total', icon: BookOpenCheck, tone: 'violet' },
+      ...(canRegistrar || canTeacher || canBursar ? [{ id: 'students', label: 'Learner records', value: serverSummary.students_count ?? 0, detail: 'Full role-authorized total', icon: GraduationCap, tone: 'blue' }] : []),
+      ...(canRegistrar ? [{ id: 'admissions', label: 'Applications', value: serverSummary.applications_count ?? 0, detail: 'Full workspace total', icon: ClipboardCheck, tone: 'orange' }] : []),
+      ...(canTeacher ? [{ id: 'attendance', label: 'Attendance sessions', value: serverSummary.attendance_sessions_count ?? 0, detail: 'Full role-authorized total', icon: Check, tone: 'teal' }, { id: 'grades', label: 'Assessments', value: serverSummary.assessments_count ?? 0, detail: 'Full role-authorized total', icon: BookOpenCheck, tone: 'violet' }] : []),
+      ...(canBursar ? [{ id: 'fees', label: 'Fee charges', value: serverSummary.fee_charges_count ?? 0, detail: 'Full workspace total', icon: WalletCards, tone: 'orange' }] : []),
+    ];
+  }, [canBursar, canRegistrar, canTeacher, serverSummary]);
   const attendanceActivity = useMemo(() => {
-    const totals = attendance.reduce((acc, session) => {
-      session.marks.forEach((mark) => { acc[mark.attendance_status] = (acc[mark.attendance_status] ?? 0) + 1; });
-      return acc;
-    }, {} as Record<string, number>);
+    const totals = {
+      present: serverSummary?.attendance_present_count ?? 0,
+      late: serverSummary?.attendance_late_count ?? 0,
+      absent: serverSummary?.attendance_absent_count ?? 0,
+      excused: serverSummary?.attendance_excused_count ?? 0,
+    };
     const total = Object.values(totals).reduce((sum, value) => sum + value, 0);
-    return ['present', 'late', 'absent', 'excused'].map((label) => ({ label, value: totals[label] ?? 0, width: total ? Math.round(((totals[label] ?? 0) / total) * 100) : 0 }));
-  }, [attendance]);
+    return ['present', 'late', 'absent', 'excused'].map((label) => ({
+      label, value: totals[label as keyof typeof totals],
+      width: total ? Math.round((totals[label as keyof typeof totals] / total) * 100) : 0,
+    }));
+  }, [serverSummary]);
   const nextActions = useMemo(() => {
     const actions: { label: string; detail: string; tab: TabId }[] = [];
-    const pendingAdmissions = applications.filter((item) => ['submitted', 'reviewing', 'offered', 'waitlisted'].includes(item.status)).length;
-    const openAttendance = attendance.filter((item) => item.status === 'open').length;
-    const draftAssessments = assessments.filter((item) => item.status === 'draft').length;
-    const unpaidCharges = fees.filter((item) => Number(item.amount_tzs) > Number(item.paid_tzs)).length;
-    if (pendingAdmissions) actions.push({ label: 'Review admissions queue', detail: `${pendingAdmissions} active application${pendingAdmissions === 1 ? '' : 's'} loaded`, tab: 'admissions' });
-    if (openAttendance) actions.push({ label: 'Lock open attendance', detail: `${openAttendance} session${openAttendance === 1 ? '' : 's'} awaiting review`, tab: 'attendance' });
-    if (draftAssessments) actions.push({ label: 'Complete grade entry', detail: `${draftAssessments} draft assessment${draftAssessments === 1 ? '' : 's'} loaded`, tab: 'grades' });
-    if (unpaidCharges) actions.push({ label: 'Review fee balances', detail: `${unpaidCharges} charge${unpaidCharges === 1 ? '' : 's'} with a balance`, tab: 'fees' });
+    const pendingAdmissions = serverSummary?.active_applications_count ?? 0;
+    const openAttendance = serverSummary?.open_attendance_sessions_count ?? 0;
+    const draftAssessments = serverSummary?.draft_assessments_count ?? 0;
+    const unpaidCharges = serverSummary?.unpaid_fee_charges_count ?? 0;
+    if (canRegistrar && pendingAdmissions) actions.push({ label: 'Review admissions queue', detail: `${pendingAdmissions} active application${pendingAdmissions === 1 ? '' : 's'}`, tab: 'admissions' });
+    if (canTeacher && openAttendance) actions.push({ label: 'Lock open attendance', detail: `${openAttendance} session${openAttendance === 1 ? '' : 's'} awaiting review`, tab: 'attendance' });
+    if (canTeacher && draftAssessments) actions.push({ label: 'Complete grade entry', detail: `${draftAssessments} draft assessment${draftAssessments === 1 ? '' : 's'}`, tab: 'grades' });
+    if (canBursar && unpaidCharges) actions.push({ label: 'Review fee balances', detail: `${unpaidCharges} charge${unpaidCharges === 1 ? '' : 's'} with a balance`, tab: 'fees' });
     return actions.slice(0, 4);
-  }, [applications, assessments, attendance, fees]);
+  }, [canBursar, canRegistrar, canTeacher, serverSummary]);
   const selectTab = (tab: TabId) => setActiveTab(visibleTabs.some((item) => item.id === tab) ? tab : 'overview');
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
@@ -232,6 +243,8 @@ export default function SchoolManagementWorkspace({
     }
     setStatus((old) => old === 'ready' ? old : 'loading');
     setPages({});
+    setServerSummary(null);
+    setSummaryError('');
     try {
       const { data: authData, error: authError } = await client.auth.getUser();
       if (!current()) return;
@@ -255,6 +268,16 @@ export default function SchoolManagementWorkspace({
       const nextRole = roleValue(bootstrap.role);
       const nextIsAdmin = nextRole === 'school_admin';
       setRole(nextRole);
+      if (nextRole !== 'unassigned') {
+        try {
+          const summary = await officeSchoolManagementApi.summary(client, workspaceId);
+          if (!current()) return;
+          setServerSummary(summary);
+        } catch (summaryCause) {
+          if (!current()) return;
+          setSummaryError(errorText(summaryCause));
+        }
+      }
       const nextTerms = asRows<Term>(bootstrap.terms);
       const nextClasses = asRows<ClassRow>(bootstrap.classes);
       const nextSubjects = asRows<Subject>(bootstrap.subjects);
@@ -508,10 +531,10 @@ export default function SchoolManagementWorkspace({
       <div className="school-sms-module-tabs" role="tablist" aria-label="School Management modules">{visibleTabs.map(({ id, label, icon: Icon }, index) => <button type="button" role="tab" id={`school-tab-${id}`} aria-controls={`school-panel-${id}`} tabIndex={selectedTab === id ? 0 : -1} aria-selected={selectedTab === id} className={activeTab === id ? 'is-active' : ''} key={id} onClick={() => selectTab(id)} onKeyDown={(event) => handleTabKeyDown(event, index)}><Icon size={14} />{label}</button>)}</div>
       {role === 'unassigned' && <div className="school-sms-unassigned" role="note"><ShieldAlert size={15} />This account is an active Office Team member, but has no School role yet. Ask the Office Team owner/admin to assign Registrar, Teacher, Bursar or Viewer access.</div>}
       {selectedTab === 'overview' && <section id="school-panel-overview" role="tabpanel" className="school-sms-overview-grid">
-        <div className="school-sms-overview-intro"><div><span className="eyebrow">SCHOOL OPERATIONS</span><h1>{workspace?.name || officeName}</h1><p>Role-filtered workspace for the records currently loaded from Office Team.</p></div><span className="school-sms-role-badge"><ShieldCheck size={14} />{role.replace('_', ' ')}</span><button type="button" className="button-secondary" onClick={() => { try { downloadOfficeCsv('school-overview-loaded.csv', ['Metric', 'Value', 'Scope'], loadedCounts.map(({ label, value, detail }) => [label, value, detail])); setFeedback('School overview CSV exported. Values are role-filtered and limited to records currently loaded.'); } catch (error) { setFeedback(errorText(error)); } }}>Export loaded overview CSV</button></div>
-        <div className="school-sms-stat-grid">{loadedCounts.map(({ id, label, value, detail, icon: Icon, tone }) => <article className="school-sms-stat glass-card" key={id}><span className={`school-sms-icon is-${tone}`}><Icon size={17} /></span><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>)}</div>
-        {canTeacher && <section className="school-sms-panel glass-card school-sms-activity"><div className="school-sms-panel-heading"><span className="school-sms-icon is-teal"><Activity size={17} /></span><div><span className="eyebrow">LOADED ATTENDANCE ACTIVITY</span><h3>Marks by status</h3></div><span className="school-sms-badge">{attendance.length} sessions · max 100</span></div>{attendance.length === 0 ? <p className="school-sms-empty">No attendance sessions are loaded yet.</p> : <div className="school-sms-bars">{attendanceActivity.map((item) => <div className="school-sms-bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${item.width}%` }} /></div><strong>{item.value}</strong></div>)}</div>}<p className="school-sms-help">Counts are derived from attendance marks currently loaded for your role; they are not school-wide rates.</p></section>}
-        <section className="school-sms-panel glass-card school-sms-next"><div className="school-sms-panel-heading"><span className="school-sms-icon is-orange"><ClipboardCheck size={17} /></span><div><span className="eyebrow">NEXT ACTIONS</span><h3>Keep work moving</h3></div></div>{nextActions.length ? <div className="school-sms-action-queue">{nextActions.map((item) => <button type="button" className="school-sms-queue-item" key={item.label} onClick={() => selectTab(item.tab)}><span><strong>{item.label}</strong><small>{item.detail}</small></span><span aria-hidden="true">→</span></button>)}</div> : <p className="school-sms-empty">No follow-up items from the records currently loaded.</p>}</section>
+        <div className="school-sms-overview-intro"><div><span className="eyebrow">SCHOOL OPERATIONS</span><h1>{workspace?.name || officeName}</h1><p>Complete server-calculated totals for the records your School role is allowed to see.</p></div><span className="school-sms-role-badge"><ShieldCheck size={14} />{role.replace('_', ' ')}</span><button type="button" className="button-secondary" disabled={!serverSummary} onClick={() => { try { downloadOfficeCsv('school-overview-server.csv', ['Metric', 'Value', 'Scope'], serverCounts.map(({ label, value }) => [label, value, 'Full role-authorized workspace'])); setFeedback('Full-scope School KPI CSV exported.'); } catch (error) { setFeedback(errorText(error)); } }}>Export server KPI CSV</button></div>
+        <div className="school-sms-stat-grid">{serverCounts.map(({ id, label, value, detail, icon: Icon, tone }) => <article className="school-sms-stat glass-card" key={id}><span className={`school-sms-icon is-${tone}`}><Icon size={17} /></span><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>)}</div>
+        {canTeacher && <section className="school-sms-panel glass-card school-sms-activity"><div className="school-sms-panel-heading"><span className="school-sms-icon is-teal"><Activity size={17} /></span><div><span className="eyebrow">FULL-SCOPE ATTENDANCE ACTIVITY</span><h3>Marks by status</h3></div><span className="school-sms-badge">{serverSummary?.attendance_sessions_count ?? 0} sessions · role scoped</span></div>{attendance.length === 0 ? <p className="school-sms-empty">No attendance marks are recorded in this role-authorized scope yet.</p> : <div className="school-sms-bars">{attendanceActivity.map((item) => <div className="school-sms-bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${item.width}%` }} /></div><strong>{item.value}</strong></div>)}</div>}<p className="school-sms-help">Attendance status totals are calculated server-side across all sessions your School role is allowed to view.</p></section>}
+        <section className="school-sms-panel glass-card school-sms-next"><div className="school-sms-panel-heading"><span className="school-sms-icon is-orange"><ClipboardCheck size={17} /></span><div><span className="eyebrow">NEXT ACTIONS</span><h3>Keep work moving</h3></div></div>{summaryError ? <p className="school-sms-empty" role="alert">Full-scope KPI summary unavailable: {summaryError}</p> : !serverSummary ? <p className="school-sms-empty" role="status">Loading full-scope School KPIs…</p> : nextActions.length ? <div className="school-sms-action-queue">{nextActions.map((item) => <button type="button" className="school-sms-queue-item" key={item.label} onClick={() => selectTab(item.tab)}><span><strong>{item.label}</strong><small>{item.detail}</small></span><span aria-hidden="true">→</span></button>)}</div> : <p className="school-sms-empty">No follow-up items from the records currently loaded.</p>}</section>
         <section className="school-sms-panel glass-card school-sms-services"><div className="school-sms-panel-heading"><span className="school-sms-icon is-blue"><FileText size={17} /></span><div><span className="eyebrow">OFFICIAL MANUAL SERVICES</span><h3>Open government portals</h3></div></div><p className="school-sms-help">These links open official services for manual use. COCCE has no data synchronization or verified API connection to them.</p><div className="school-sms-service-links"><a href="https://esmis.moe.go.tz/" target="_blank" rel="noreferrer">ESMIS <small>Manual link · unconnected</small></a><a href="https://sqas.moe.go.tz/" target="_blank" rel="noreferrer">SQAS <small>Manual link · unconnected</small></a><a href="https://www.necta.go.tz/" target="_blank" rel="noreferrer">NECTA <small>Manual link · unconnected</small></a></div></section>
         <section className="school-sms-overview-note glass-card"><div className="school-sms-panel-heading"><span className="school-sms-icon is-violet"><LockKeyhole size={17} /></span><div><span className="eyebrow">PRIVACY BY DEFAULT</span><h3>Operational view only</h3></div></div><p>The overview shows aggregates and internal codes only. Student or guardian names, dates of birth, contact details and decrypted notice text stay out of this dashboard.</p><p>Your shared School workspace starts empty and does not import device-local records automatically.</p></section>
       </section>}
