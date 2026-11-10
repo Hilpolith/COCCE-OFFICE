@@ -45,7 +45,7 @@ export default function NgoManagementWorkspace({ workspaceId, officeName, countr
       .filter(([, capability]) => Boolean(result.capabilities[capability]))
       .map(async ([resource]) => {
         try {
-          const page = await officeNgoManagementApi.read<NgoPage>(client, workspaceId, resource, {}, 1, 0);
+          const page = await officeNgoManagementApi.read(client, workspaceId, resource, {}, 1, 0) as NgoPage;
           return { resource, count: page.total_count as number, failed: false };
         } catch {
           return { resource, count: 0, failed: true };
