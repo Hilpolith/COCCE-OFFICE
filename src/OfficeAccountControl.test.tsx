@@ -129,13 +129,13 @@ describe('Office account control', () => {
 
   it('returns the browser to the Office workspace after the PKCE callback is accepted', async () => {
     window.history.replaceState({}, '', '/auth/callback?code=synthetic-pkce-code&cocce_office_oauth=1');
+    mocks.getSession.mockResolvedValue({ data: { session: { user: existingUser } }, error: null });
     render(<OfficeAccountControl />);
     await waitFor(() => expect(mocks.getUser).toHaveBeenCalled());
-    authCallback('SIGNED_IN', { user: existingUser });
     await waitFor(() => expect(window.location.pathname).toBe('/'));
     expect(window.location.search).toBe('');
-    fireEvent.click(await screen.findByRole('button', { name: /Account: synthetic@example.test/ }));
     expect(await screen.findByText(/Sign-in successful/i)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Account: synthetic@example.test/ })).toBeTruthy();
   });
 
   it('shares sign-in and sign-out changes with other Office surfaces without affecting other COCCE apps', async () => {
