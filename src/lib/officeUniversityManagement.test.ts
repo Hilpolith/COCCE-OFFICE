@@ -52,7 +52,12 @@ describe("University Management adapter and crypto", () => {
       encryptUniversityPrivatePerson(key, { ...person, date_of_birth: "bad" }),
     ).rejects.toThrow(/YYYY-MM-DD/i);
   });
-  it("uses University RPC names and bounds/paginates reads", async () => {
+  it("reads full-scope role-authorized KPI counts through the dedicated summary RPC", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: { terms_count: 2, students_count: 7 }, error: null });
+    await expect(officeUniversityManagementApi.summary(mock(rpc), "ws-1")).resolves.toEqual({ terms_count: 2, students_count: 7 });
+    expect(rpc).toHaveBeenCalledWith("office_university_summary", { p_workspace_id: "ws-1" });
+  });
+    it("uses University RPC names and bounds/paginates reads", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
     const c = mock(rpc);
     await officeUniversityManagementApi.read(c, "ws-1", "students", {}, 999, 4);

@@ -227,6 +227,11 @@ async function rpc<T>(
   return data as T;
 }
 export const officeUniversityManagementApi = {
+  summary(client: UniversityRpcClient | SupabaseClient, workspaceId: string): Promise<Record<string, number>> {
+    return rpc<Record<string, number>>(client, "office_university_summary", {
+      p_workspace_id: workspaceId,
+    });
+  },
   read<T = unknown>(
     client: UniversityRpcClient | SupabaseClient,
     workspaceId: string,

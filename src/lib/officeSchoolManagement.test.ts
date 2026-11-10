@@ -49,6 +49,14 @@ describe('School Management client encryption and RPC adapter', () => {
     await expect(decryptSchoolNotice(key, tampered)).rejects.toThrow(/Could not decrypt/i);
   });
 
+  it('reads validated role-scoped server KPI summaries through the dedicated RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: { terms_count: 4, students_count: 12 }, error: null });
+    await expect(officeSchoolManagementApi.summary(mockClient(rpc), 'workspace-1')).resolves.toEqual({ terms_count: 4, students_count: 12 });
+    expect(rpc).toHaveBeenCalledWith('office_school_summary', { p_workspace_id: 'workspace-1' });
+    rpc.mockResolvedValueOnce({ data: { terms_count: -1 }, error: null });
+    await expect(officeSchoolManagementApi.summary(mockClient(rpc), 'workspace-1')).rejects.toThrow(/invalid KPI/i);
+  });
+
   it('uses the allowlisted RPC names and bounds list size without writing to browser storage', async () => {
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: { role: 'registrar' }, error: null })

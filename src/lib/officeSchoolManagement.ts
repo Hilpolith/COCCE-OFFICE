@@ -202,6 +202,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export const officeSchoolManagementApi = {
+  async summary(client: SchoolRpcClient | SupabaseClient, workspaceId: string): Promise<Record<string, number>> {
+    const result = await rpc<unknown>(client, 'office_school_summary', { p_workspace_id: workspaceId });
+    if (!isRecord(result) || Object.values(result).some((value) => !Number.isSafeInteger(value) || Number(value) < 0)) {
+      throw new Error('The School server returned an invalid KPI summary.');
+    }
+    return result as Record<string, number>;
+  },
   async read<T = unknown>(client: SchoolRpcClient | SupabaseClient, workspaceId: string, resource: string, filter: Record<string, unknown> = {}, limit = 100, offset = 0): Promise<T> {
     const boundedLimit = Math.max(1, Math.min(200, Math.trunc(limit)));
     const boundedOffset = Math.max(0, Math.min(100000, Math.trunc(offset)));
