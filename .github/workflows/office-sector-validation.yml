@@ -44,10 +44,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - name: Install PostgreSQL 16 for isolated schema suites
+      - name: Verify preinstalled PostgreSQL 16 for isolated schema suites
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-16 poppler-utils
+          test -x /usr/lib/postgresql/16/bin/initdb
+          /usr/lib/postgresql/16/bin/postgres --version
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
