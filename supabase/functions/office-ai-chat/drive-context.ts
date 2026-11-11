@@ -1,3 +1,4 @@
+import { unzipSync } from 'fflate';
 export type DriveContextError = { status: number; code: string; message: string };
 
 export const MAX_DRIVE_FILES = 3;
@@ -120,6 +121,162 @@ export function isSupportedDriveTextFile(name: string): boolean {
   if (!normalized || SENSITIVE_DRIVE_NAME.test(normalized)) return false;
   const extension = normalized.split('.').pop()?.toLowerCase() ?? '';
   return DRIVE_TEXT_EXTENSIONS.has(extension);
+}
+
+const OFFICE_ARCHIVE_EXTENSIONS = new Set(['docx', 'xlsx', 'pptx']);
+const CONTEXT_EXTENSIONS = new Set([...DRIVE_TEXT_EXTENSIONS, ...OFFICE_ARCHIVE_EXTENSIONS, 'pdf']);
+const MAX_ZIP_ENTRIES = 256;
+const MAX_ZIP_EXPANDED_BYTES = 8 * 1024 * 1024;
+const MAX_OFFICE_ARCHIVE_TEXT = 8_000;
+
+export function isSupportedDriveContextFile(name: string): boolean {
+  const normalized = name.normalize('NFC').trim();
+  if (!normalized || SENSITIVE_DRIVE_NAME.test(normalized)) return false;
+  return CONTEXT_EXTENSIONS.has(normalized.split('.').pop()?.toLowerCase() ?? '');
+}
+
+function inspectOfficeZip(bytes: Uint8Array): void {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const searchStart = Math.max(0, bytes.byteLength - 65_557);
+  let eocd = -1;
+  for (let offset = bytes.byteLength - 22; offset >= searchStart; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) { eocd = offset; break; }
+  }
+  if (eocd < 0) throw { status: 415, code: 'DRIVE_OFFICE_ARCHIVE_INVALID', message: 'The selected Office file is not a valid supported ZIP package.' } satisfies DriveContextError;
+  const disk = view.getUint16(eocd + 4, true);
+  const centralDisk = view.getUint16(eocd + 6, true);
+  const entriesOnDisk = view.getUint16(eocd + 8, true);
+  const entries = view.getUint16(eocd + 10, true);
+  const centralSize = view.getUint32(eocd + 12, true);
+  const centralOffset = view.getUint32(eocd + 16, true);
+  if (disk !== 0 || centralDisk !== 0 || entriesOnDisk !== entries || entries < 1 || entries > MAX_ZIP_ENTRIES
+    || entries === 0xffff || centralSize === 0xffffffff || centralOffset === 0xffffffff
+    || centralOffset + centralSize > eocd) {
+    throw { status: 413, code: 'DRIVE_OFFICE_ARCHIVE_LIMIT', message: 'The selected Office file contains unsupported or excessive archive metadata.' } satisfies DriveContextError;
+  }
+  let cursor = centralOffset;
+  let expanded = 0;
+  const names = new Set<string>();
+  for (let index = 0; index < entries; index += 1) {
+    if (cursor + 46 > centralOffset + centralSize || view.getUint32(cursor, true) !== 0x02014b50) {
+      throw { status: 415, code: 'DRIVE_OFFICE_ARCHIVE_INVALID', message: 'The selected Office file has a malformed archive directory.' } satisfies DriveContextError;
+    }
+    const flags = view.getUint16(cursor + 8, true);
+    const method = view.getUint16(cursor + 10, true);
+    const compressed = view.getUint32(cursor + 20, true);
+    const uncompressed = view.getUint32(cursor + 24, true);
+    const nameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const end = cursor + 46 + nameLength + extraLength + commentLength;
+    if (end > centralOffset + centralSize || (flags & 1) !== 0 || (method !== 0 && method !== 8)
+      || uncompressed === 0xffffffff || compressed === 0xffffffff) {
+      throw { status: 415, code: 'DRIVE_OFFICE_ARCHIVE_UNSUPPORTED', message: 'The selected Office file uses encryption or an unsupported compression format.' } satisfies DriveContextError;
+    }
+    let name = '';
+    try { name = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength)); }
+    catch { throw { status: 415, code: 'DRIVE_OFFICE_ARCHIVE_INVALID', message: 'The selected Office file contains an invalid archive path.' } satisfies DriveContextError; }
+    const segments = name.replace(/\\/g, '/').split('/');
+    if (!name || name.startsWith('/') || name.includes('\\') || segments.some((part) => part === '..' || part === '.')
+      || names.has(name)) {
+      throw { status: 415, code: 'DRIVE_OFFICE_ARCHIVE_INVALID', message: 'The selected Office file contains an unsafe or duplicate archive path.' } satisfies DriveContextError;
+    }
+    names.add(name);
+    expanded += uncompressed;
+    if (expanded > MAX_ZIP_EXPANDED_BYTES) {
+      throw { status: 413, code: 'DRIVE_OFFICE_ARCHIVE_LIMIT', message: 'The selected Office file expands beyond the safe extraction limit.' } satisfies DriveContextError;
+    }
+    cursor = end;
+  }
+  if (cursor !== centralOffset + centralSize) {
+    throw { status: 415, code: 'DRIVE_OFFICE_ARCHIVE_INVALID', message: 'The selected Office file has an inconsistent archive directory.' } satisfies DriveContextError;
+  }
+}
+
+function unzipOffice(bytes: Uint8Array): Record<string, Uint8Array> {
+  inspectOfficeZip(bytes);
+  try { return unzipSync(bytes); }
+  catch { throw { status: 415, code: 'DRIVE_OFFICE_ARCHIVE_INVALID', message: 'The selected Office file could not be safely opened.' } satisfies DriveContextError; }
+}
+
+function zipText(files: Record<string, Uint8Array>, path: string): string {
+  const bytes = files[path];
+  if (!bytes) throw { status: 415, code: 'DRIVE_OFFICE_CONTENT_MISSING', message: 'The selected Office file is missing its main document content.' } satisfies DriveContextError;
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { throw { status: 415, code: 'DRIVE_OFFICE_XML_INVALID', message: 'The selected Office file contains invalid text encoding.' } satisfies DriveContextError; }
+}
+
+function xmlText(xml: string, tag: string): string[] {
+  const expression = new RegExp('<' + tag + '(?:\\s[^>]*)?>([\\s\\S]*?)</' + tag + '>', 'gi');
+  return Array.from(xml.matchAll(expression), (match) => decodeHtmlEntities(match[1] ?? '').replace(/<[^>]*>/g, ''));
+}
+
+function compactExtractedText(value: string): string {
+  const text = value.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (!text) throw { status: 415, code: 'DRIVE_OFFICE_NO_TEXT', message: 'No readable text was found in the selected Office file.' } satisfies DriveContextError;
+  return text.slice(0, MAX_OFFICE_ARCHIVE_TEXT);
+}
+
+export function extractDocxText(bytes: Uint8Array): string {
+  const files = unzipOffice(bytes);
+  const xml = zipText(files, 'word/document.xml');
+  const safe = xml.replace(/<w:del\b[\s\S]*?<\/w:del>/gi, '')
+    .replace(/<w:instrText\b[^>]*>[\s\S]*?<\/w:instrText>/gi, '')
+    .replace(/<w:tab\b[^>]*\/>/gi, '\t')
+    .replace(/<w:br\b[^>]*\/>/gi, '\n')
+    .replace(/<\/w:tc>/gi, '\t').replace(/<\/w:p>/gi, '\n').replace(/<\/w:tr>/gi, '\n')
+    .replace(/<[^>]*>/g, '');
+  return compactExtractedText(decodeHtmlEntities(safe));
+}
+
+export function extractXlsxText(bytes: Uint8Array): string {
+  const files = unzipOffice(bytes);
+  const sharedXml = files['xl/sharedStrings.xml'] ? zipText(files, 'xl/sharedStrings.xml') : '';
+  const shared = sharedXml ? Array.from(sharedXml.matchAll(/<si\b[\s\S]*?<\/si>/gi), (match) => xmlText(match[0], 't').join('')) : [];
+  const sheets = Object.keys(files).filter((path) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(path))
+    .sort((a, b) => Number(a.match(/sheet(\d+)/i)?.[1] ?? 0) - Number(b.match(/sheet(\d+)/i)?.[1] ?? 0));
+  if (!sheets.length || sheets.length > 20) throw { status: 415, code: 'DRIVE_XLSX_INVALID', message: 'The selected workbook has no supported worksheets or has too many worksheets.' } satisfies DriveContextError;
+  const output = ['Workbook text'];
+  let cellsSeen = 0;
+  for (let index = 0; index < sheets.length; index += 1) {
+    const xml = zipText(files, sheets[index]!);
+    output.push('\nSheet ' + (index + 1));
+    for (const match of xml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gi)) {
+      cellsSeen += 1;
+      if (cellsSeen > 1_000) throw { status: 413, code: 'DRIVE_XLSX_TOO_LARGE', message: 'The selected workbook contains too many cells for AI context.' } satisfies DriveContextError;
+      const attributes = match[1] ?? '';
+      const body = match[2] ?? '';
+      const address = /\br="([A-Z]{1,3}[1-9]\d*)"/i.exec(attributes)?.[1]?.toUpperCase();
+      if (!address) continue;
+      const type = /\bt="([^"]+)"/i.exec(attributes)?.[1] ?? '';
+      const rawValue = /<v\b[^>]*>([\s\S]*?)<\/v>/i.exec(body)?.[1] ?? '';
+      let value = decodeHtmlEntities(rawValue);
+      if (type === 's') {
+        const stringIndex = Number(value);
+        value = Number.isInteger(stringIndex) && stringIndex >= 0 && stringIndex < shared.length ? shared[stringIndex]! : '';
+      } else if (type === 'inlineStr') value = xmlText(body, 't').join('');
+      const formula = /<f\b[^>]*>([\s\S]*?)<\/f>/i.exec(body)?.[1];
+      if (formula) value = '=' + decodeHtmlEntities(formula) + (value ? ' → ' + value : '');
+      if (value) output.push(address + ': ' + value.slice(0, 500));
+    }
+  }
+  return compactExtractedText(output.join('\n'));
+}
+
+export function extractPptxText(bytes: Uint8Array): string {
+  const files = unzipOffice(bytes);
+  const slides = Object.keys(files).filter((path) => /^ppt\/slides\/slide\d+\.xml$/i.test(path))
+    .sort((a, b) => Number(a.match(/slide(\d+)/i)?.[1] ?? 0) - Number(b.match(/slide(\d+)/i)?.[1] ?? 0));
+  if (!slides.length || slides.length > 30) throw { status: 415, code: 'DRIVE_PPTX_INVALID', message: 'The selected presentation has no supported slides or has too many slides.' } satisfies DriveContextError;
+  const output: string[] = [];
+  for (let index = 0; index < slides.length; index += 1) {
+    const xml = zipText(files, slides[index]!);
+    const paragraphs = Array.from(xml.matchAll(/<a:p\b[\s\S]*?<\/a:p>/gi), (match) => xmlText(match[0], 'a:t').join(''));
+    const text = paragraphs.filter(Boolean).join('\n');
+    if (text) output.push('Slide ' + (index + 1) + ':\n' + text);
+  }
+  return compactExtractedText(output.join('\n\n'));
 }
 
 async function readBoundedBytes(response: Response, limit: number): Promise<Uint8Array> {
