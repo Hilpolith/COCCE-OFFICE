@@ -760,7 +760,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Horizontal rule" icon={<Minus size={16}/>} onClick={() => editor?.chain().focus().setHorizontalRule().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group" aria-label="Review comments" hidden={activeRibbonTab !== 'review'}>
+      <span className="docs-format-group" aria-label="Review comments" hidden={activeRibbonTab !== 'review' && activeRibbonTab !== 'home'}>
         <FormattingButton label="Add comment to selected text" icon={<MessageSquarePlus size={16} />}
           disabled={!editorState.hasTextSelection || reviewComments.length >= MAX_DOCS_REVIEW_COMMENTS_PER_DOCUMENT}
           onClick={beginReviewComment} />
