@@ -858,12 +858,10 @@ export default function UniversityManagementWorkspace({
   );
 }
 function Overview({
-  data,
   role,
   summary,
   summaryError,
 }: {
-  data: Record<string, Row[]>;
   role: UniversityRole;
   summary: Record<string, number> | null;
   summaryError: string;
