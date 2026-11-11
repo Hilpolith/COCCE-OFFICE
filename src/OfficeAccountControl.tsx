@@ -70,6 +70,13 @@ export default function OfficeAccountControl() {
     }
   }, [client]);
 
+  const completeOfficeAuthCallback = useCallback(() => {
+    if (window.location.pathname !== '/auth/callback') return;
+    window.history.replaceState(window.history.state, '', '/');
+    setOpen(true);
+    setNotice('Sign-in successful. Preparing your COCCE Office workspace…');
+  }, []);
+
   useEffect(() => {
     if (!client) return undefined;
     let alive = true;
@@ -124,13 +131,6 @@ export default function OfficeAccountControl() {
       window.removeEventListener('pointerdown', closeOutside);
     };
   }, [closePanel, open]);
-
-  const completeOfficeAuthCallback = useCallback(() => {
-    if (window.location.pathname !== '/auth/callback') return;
-    window.history.replaceState(window.history.state, '', '/');
-    setOpen(true);
-    setNotice('Sign-in successful. Preparing your COCCE Office workspace…');
-  }, []);
 
   const switchMode = (next: AuthMode) => { setMode(next); setError(''); setNotice(''); setPassword(''); setConfirmPassword(''); };
 
