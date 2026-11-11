@@ -145,3 +145,12 @@
 @media(prefers-reduced-transparency:reduce){
   .office-editor-page .editor-toolbar,.office-editor-page .docs-format-toolbar{backdrop-filter:none;-webkit-backdrop-filter:none;background:#f8fafc}
 }
+
+.office-editor-page .docs-ribbon-tabs{display:flex;align-items:center;gap:4px;padding:4px 12px 0;border-bottom:1px solid #dce2ea;background:rgba(250,251,253,.96)}
+.office-editor-page .docs-ribbon-tabs [role=tab]{position:relative;min-height:34px;padding:0 15px;border:0;border-radius:8px 8px 0 0;color:#64748b;background:transparent;font:inherit;font-size:11px;font-weight:600;cursor:pointer}
+.office-editor-page .docs-ribbon-tabs [role=tab]:hover{color:#1d4ed8;background:#edf3fc}
+.office-editor-page .docs-ribbon-tabs [role=tab].is-active{color:#2459a6;background:#e8f0fe}
+.office-editor-page .docs-ribbon-tabs [role=tab].is-active:after{position:absolute;right:9px;bottom:-1px;left:9px;height:2px;background:#3976c9;content:""}
+.office-editor-page .docs-view-controls{min-height:36px}
+@media(max-width:760px){.office-editor-page .docs-ribbon-tabs{overflow-x:auto;white-space:nowrap}.office-editor-page .docs-ribbon-tabs [role=tab]{flex:none}}
+@media print{.office-editor-page .editor-toolbar,.office-editor-page .docs-ribbon-tabs,.office-editor-page .docs-format-toolbar,.office-editor-page .docs-table-toolbar,.office-editor-page .docs-review-panel,.office-editor-page .editor-footnote{display:none!important}.office-editor-page .document-canvas{width:100%;min-height:0;margin:0;padding:0;border:0;box-shadow:none}}
