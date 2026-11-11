@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const foundation = await readFile(new URL('../supabase/migrations/20261104080000_office_cloud_files.sql', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../supabase/migrations/20261109190000_office_cloud_storage_subscriptions.sql', import.meta.url), 'utf8');
+const billingConfigRls = await readFile(new URL('../supabase/migrations/20261111155637_office_cloud_storage_billing_config_rls.sql', import.meta.url), 'utf8');
 const owner='11111111-1111-4111-8111-111111111111';
 const member='22222222-2222-4222-8222-222222222222';
 const low='33333333-3333-4333-8333-333333333333';
@@ -37,6 +38,7 @@ before(async()=>{
  await db.exec("SELECT set_config('wallet.atomic_writer','v2',false)");
  await db.query("INSERT INTO public.wallet_transactions(user_id,type,amount,description) VALUES ($1,'purchase',100000,'synthetic funding'),($2,'purchase',3000,'synthetic funding')",[owner,low]);
  await db.exec(migration);
+ await db.exec(billingConfigRls);
 });
 beforeEach(async()=>{await db.exec('BEGIN');});
 afterEach(async()=>{await db.exec('ROLLBACK');});
@@ -174,5 +176,10 @@ test('server-side billing remains disabled until both owner approval flags are s
  const plans=await rpc('office_cloud_list_storage_plans',[owner,workspace]);
  assert.deepEqual(plans,[]);
  await expectError(()=>purchase(owner,workspace,'storage_5gb_monthly','eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',false),'55000');
- assert.equal((await db.query("SELECT enabled,price_approved_at,wallet_security_approved_at FROM public.office_cloud_storage_billing_config WHERE singleton=true")).rows[0].enabled,false);
+ const config=(await db.query("SELECT enabled,price_approved_at,wallet_security_approved_at FROM public.office_cloud_storage_billing_config WHERE singleton=true")).rows[0];
+ assert.equal(config.enabled,false);
+ assert.equal((await db.query("SELECT relrowsecurity FROM pg_class WHERE oid='public.office_cloud_storage_billing_config'::regclass")).rows[0].relrowsecurity,true);
+ for(const role of ['anon','authenticated']){
+  assert.equal((await db.query('SELECT has_table_privilege($1,$2,$3) AS ok',[role,'public.office_cloud_storage_billing_config','SELECT'])).rows[0].ok,false);
+ }
 });
