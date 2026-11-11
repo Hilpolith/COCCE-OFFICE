@@ -8,6 +8,10 @@ import {
 import type { OfficeDocument } from './lib/localStore';
 import { formatFileSize, localDriveRepository, MAX_LOCAL_FILE_BYTES } from './lib/driveStore';
 import type { DriveFile, DriveRepository } from './lib/driveStore';
+import OfficeCloudSyncControl from './OfficeCloudSyncControl';
+import { createOfficeCloudApi } from './lib/officeCloudFiles';
+import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
+import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './drive.css';
 import CloudDriveWorkspace from './CloudDriveWorkspace';
 
@@ -56,6 +60,9 @@ export default function DriveWorkspace({
   workspaceId, officeWorkspaceId, documents, query, onOpenDocument, onCreateDocument,
   repository = localDriveRepository,
 }: Props) {
+  const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
+  const client = useMemo(() => getOfficeTeamClient(config), [config]);
+  const [actorId, setActorId] = useState('');
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [showTrash, setShowTrash] = useState(false);
   const [fileCategory, setFileCategory] = useState<DriveCategory>('all');
@@ -71,6 +78,33 @@ export default function DriveWorkspace({
   const [renameValue, setRenameValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const loadSequence = useRef(0);
+
+  useEffect(() => {
+    if (!client) { setActorId(''); return undefined; }
+    let active = true;
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+      if (active) setActorId(session?.user.id ?? '');
+    });
+    void client.auth.getUser().then(({ data, error: authError }) => {
+      if (active) setActorId(authError ? '' : data.user?.id ?? '');
+    }).catch(() => { if (active) setActorId(''); });
+    return () => { active = false; subscription.unsubscribe(); };
+  }, [client]);
+
+  const executeCloudSync = useCallback(async (
+    work: (api: ReturnType<typeof createOfficeCloudApi>, current: () => boolean) => Promise<void>,
+  ) => {
+    if (!client || config.status !== 'ready' || !actorId || !officeWorkspaceId) {
+      throw new Error('Sign in and select an Office workspace before enabling cloud sync.');
+    }
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
+    if (sessionError || !session || session.user.id !== actorId) {
+      throw new Error('Your Office session changed. Sign in again before syncing this file.');
+    }
+    const controller = new AbortController();
+    const current = () => actorId.length > 0 && Boolean(officeWorkspaceId);
+    await work(createOfficeCloudApi(client, config.anonKey, actorId, fetch, controller.signal), current);
+  }, [client, config, actorId, officeWorkspaceId]);
 
   const refresh = useCallback(async () => {
     const current = ++loadSequence.current;
@@ -205,7 +239,7 @@ export default function DriveWorkspace({
       <div className="drive-summary glass-card">
         <span className="drive-summary-icon"><HardDrive size={19} /></span>
         <div><strong>{showTrash ? `${files.length} items in local trash` : `${files.length} local ${files.length === 1 ? 'file' : 'files'}`}</strong><small>{showTrash ? 'Restorable in this browser' : `${formatFileSize(usedBytes)} stored on this device`}</small></div>
-        <span className="local-only-chip"><LockKeyhole size={13} /> This device</span>
+        <span className="local-only-chip"><LockKeyhole size={13} /> Device cache</span>
       </div>
 
       <div className="drive-tabs" role="tablist" aria-label="Drive areas">
@@ -228,7 +262,7 @@ export default function DriveWorkspace({
       </div>}
 
       <section className="drive-files-section" aria-label={showTrash ? 'Files in local trash' : 'Local files'}>
-        {loading ? <div className="drive-empty glass-card" role="status">Reading this browser’s local files…</div> : visibleFiles.length ? <div className="drive-file-grid">{visibleFiles.map((file) => <DriveFileCard key={file.id} file={file} trashed={showTrash} onPreview={() => void openPreview(file)} onDownload={() => void download(file)} onRename={() => startRename(file)} onTrash={() => void moveToTrash(file)} onRestore={() => void restore(file)} onDeletePermanently={() => setPurgeTarget(file)} />)}</div> : <div className="drive-empty glass-card"><div className="drive-empty-icon"><HardDrive size={24} /></div><h2>{query ? 'No matching files' : showTrash ? 'Trash is empty' : 'Your local Drive is ready'}</h2><p>{query ? 'Try a different search term.' : showTrash ? 'Files moved here remain in this browser until you restore or permanently delete them.' : 'Save a file in this browser, or create a text draft with Docs. No upload to COCCE services occurs.'}</p>{!showTrash && <button className="button-primary" onClick={() => inputRef.current?.click()}><Upload size={15} /> Add a file</button>}</div>}
+        {loading ? <div className="drive-empty glass-card" role="status">Reading this browser’s local files…</div> : visibleFiles.length ? <div className="drive-file-grid">{visibleFiles.map((file) => <DriveFileCard key={file.id} file={file} trashed={showTrash} onPreview={() => void openPreview(file)} onDownload={() => void download(file)} onRename={() => startRename(file)} onTrash={() => void moveToTrash(file)} onRestore={() => void restore(file)} onDeletePermanently={() => setPurgeTarget(file)} syncControl={!showTrash && actorId && officeWorkspaceId ? <OfficeCloudSyncControl actorId={actorId} workspaceId={officeWorkspaceId} module={file.mimeType === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'drive'} localRecordId={file.id} displayName={file.name} sourceKey={file.updatedAt + ':' + file.size + ':' + file.name} hasUnsavedChanges={false} busy={uploading || loading} execute={executeCloudSync} snapshot={async () => { const local = await repository.readFile(file.id, workspaceId); return new Uint8Array(await local.blob.arrayBuffer()); }} /> : undefined} />)}</div> : <div className="drive-empty glass-card"><div className="drive-empty-icon"><HardDrive size={24} /></div><h2>{query ? 'No matching files' : showTrash ? 'Trash is empty' : 'Your local Drive is ready'}</h2><p>{query ? 'Try a different search term.' : showTrash ? 'Files moved here remain in this browser until you restore or permanently delete them.' : 'Save a file in this browser, or create a text draft with Docs. No upload to COCCE services occurs.'}</p>{!showTrash && <button className="button-primary" onClick={() => inputRef.current?.click()}><Upload size={15} /> Add a file</button>}</div>}
       </section>
 
       {!showTrash && documents.length > 0 && <section className="drive-documents-section"><div className="panel-heading"><div><span className="eyebrow">COCCE DOCS DRAFTS</span><h2>{documents.length} local {documents.length === 1 ? 'draft' : 'drafts'}</h2></div><span className="local-only-chip"><LockKeyhole size={13} /> Device only</span></div><div className="drive-draft-grid">{documents.slice(0, 6).map((document) => <button key={document.id} className="drive-draft-card glass-card" onClick={() => onOpenDocument(document)}><span><FileText size={17} /></span><strong>{document.title || 'Untitled document'}</strong><small>{new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(document.updatedAt))} · Draft</small><ArrowUpRight size={14} /></button>)}</div></section>}
@@ -241,8 +275,8 @@ export default function DriveWorkspace({
   );
 }
 
-function DriveFileCard({ file, trashed, onPreview, onDownload, onRename, onTrash, onRestore, onDeletePermanently }: {
-  file: DriveFile; trashed: boolean; onPreview: () => void; onDownload: () => void; onRename: () => void; onTrash: () => void; onRestore: () => void; onDeletePermanently: () => void;
+function DriveFileCard({ file, trashed, onPreview, onDownload, onRename, onTrash, onRestore, onDeletePermanently, syncControl }: {
+  file: DriveFile; trashed: boolean; onPreview: () => void; onDownload: () => void; onRename: () => void; onTrash: () => void; onRestore: () => void; onDeletePermanently: () => void; syncControl?: ReactNode;
 }) {
   const date = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(file.updatedAt));
   return <article className="drive-file-card glass-card">
@@ -254,6 +288,7 @@ function DriveFileCard({ file, trashed, onPreview, onDownload, onRename, onTrash
         <button className="icon-button drive-delete-button" onClick={onTrash} aria-label={`Move ${file.name} to trash`} title="Move to trash"><Trash2 size={15} /></button>
       </>}
     </div>
+    {syncControl && <div className="drive-file-sync">{syncControl}</div>}
   </article>;
 }
 
