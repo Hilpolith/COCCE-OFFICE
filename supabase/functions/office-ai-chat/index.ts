@@ -129,6 +129,7 @@ Deno.serve(async (req) => {
     || (body.history !== undefined && !isValidChatHistory(body.history))) {
     return json(origin, 400, { error: "INVALID_REQUEST", message: "Choose a workspace and enter a prompt of up to 1,600 characters." });
   }
+  const prompt = body.prompt;
   const chatHistory = body.history === undefined ? [] : body.history as Array<{ role: "user" | "assistant"; content: string }>;
   if (!rateAllowed(authData.user.id)) return json(origin, 429, { error: "RATE_LIMITED", message: "The short-term AI request limit has been reached. Please wait and try again." });
   if (!openRouterKey) return json(origin, 503, { error: "AI_NOT_CONFIGURED", message: "OPENROUTER_API_KEY is not configured in Supabase Edge Function secrets." });
@@ -177,7 +178,7 @@ Deno.serve(async (req) => {
     const searchResults = await Promise.all(enabledWorkspaces.slice(0, 20).map(async (workspace) => {
       const { data, error } = await client.rpc("office_search_ai_messages", {
         p_workspace_id: workspace.workspace_id,
-        p_query: body.prompt.trim(),
+        p_query: prompt.trim(),
         p_limit: 8,
       });
       return {
