@@ -316,6 +316,7 @@ export async function loadSelectedDriveFiles(
   anonKey: string,
   token: string,
   fetchImpl: typeof fetch = fetch,
+  extractPdf?: (bytes: Uint8Array) => Promise<string>,
 ): Promise<Array<{ workspaceName: string; displayName: string; text: string }>> {
   if (fileIds.length === 0) return [];
   if (fileIds.length > MAX_DRIVE_FILES || new Set(fileIds).size !== fileIds.length || fileIds.some((id) => !isUuid(id))) {
@@ -346,8 +347,8 @@ export async function loadSelectedDriveFiles(
     if (link.sizeBytes > MAX_DRIVE_FILE_BYTES) {
       throw { status: 413, code: 'DRIVE_FILE_TOO_LARGE', message: 'A selected Drive file exceeds the 512 KiB AI context limit.' } satisfies DriveContextError;
     }
-    if (!isSupportedDriveTextFile(link.displayName)) {
-      throw { status: 415, code: 'DRIVE_FILE_UNSUPPORTED_TYPE', message: 'Only UTF-8 text files with supported extensions can be attached to COCCE AI.' } satisfies DriveContextError;
+    if (!isSupportedDriveContextFile(link.displayName)) {
+      throw { status: 415, code: 'DRIVE_FILE_UNSUPPORTED_TYPE', message: 'This file type is not supported for COCCE AI context.' } satisfies DriveContextError;
     }
     const signed = new URL(link.url);
     const expectedPath = new RegExp('^/cocce-kyc/office/v1/workspaces/' + link.workspaceId + '/files/' + fileId + '/revisions/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/payload$', 'i');
@@ -368,11 +369,26 @@ export async function loadSelectedDriveFiles(
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
     const actualSha256 = Array.from(digest, (value) => value.toString(16).padStart(2, '0')).join('');
     if (actualSha256 !== link.sha256Hex.toLowerCase()) throw { status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH', message: 'A selected Drive file failed its SHA-256 integrity check.' } satisfies DriveContextError;
+    const extension = link.displayName.normalize('NFC').trim().split('.').pop()?.toLowerCase() ?? '';
     let text: string;
-    try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
-    catch { throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file is not valid UTF-8 text.' } satisfies DriveContextError; }
-    if (text.includes('\u0000')) throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file contains binary data and cannot be attached as text.' } satisfies DriveContextError;
-    text = extractOfficeSnapshot(link.displayName, text).replace(/\r\n?/g, '\n').replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').slice(0, MAX_DRIVE_FILE_CHARS);
+    if (extension === 'pdf') {
+      if (!extractPdf) throw { status: 503, code: 'DRIVE_PDF_EXTRACTOR_UNAVAILABLE', message: 'PDF text extraction is temporarily unavailable.' } satisfies DriveContextError;
+      try { text = await extractPdf(bytes); }
+      catch (reason) {
+        const failure = reason as Partial<DriveContextError>;
+        if (typeof failure.code === 'string' && typeof failure.message === 'string') throw failure;
+        throw { status: 415, code: 'DRIVE_PDF_INVALID', message: 'The selected PDF could not be safely read.' } satisfies DriveContextError;
+      }
+    } else if (extension === 'docx') text = extractDocxText(bytes);
+    else if (extension === 'xlsx') text = extractXlsxText(bytes);
+    else if (extension === 'pptx') text = extractPptxText(bytes);
+    else {
+      try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+      catch { throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file is not valid UTF-8 text.' } satisfies DriveContextError; }
+      if (text.includes('\u0000')) throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file contains binary data and cannot be attached as text.' } satisfies DriveContextError;
+      text = extractOfficeSnapshot(link.displayName, text);
+    }
+    text = text.replace(/\r\n?/g, '\n').replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').slice(0, MAX_DRIVE_FILE_CHARS);
     return { workspaceName: enabledById.get(link.workspaceId) ?? 'Office workspace', displayName: link.displayName.slice(0, 120), text };
   }));
   let remaining = MAX_DRIVE_CONTEXT_CHARS;
