@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { isUuid, loadSelectedDriveFiles, MAX_DRIVE_FILES, type DriveContextError } from "./drive-context.ts";
+import { extractPdfText } from "./pdf-extract.ts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const FREE_MODEL = "google/gemma-4-31b-it:free";
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
   }
   let driveFiles: Array<{ workspaceName: string; displayName: string; text: string }> = [];
   try {
-    driveFiles = await loadSelectedDriveFiles(Array.isArray(body.fileIds) ? body.fileIds as string[] : [], enabledWorkspaces, supabaseUrl, anonKey, token);
+    driveFiles = await loadSelectedDriveFiles(Array.isArray(body.fileIds) ? body.fileIds as string[] : [], enabledWorkspaces, supabaseUrl, anonKey, token, fetch, extractPdfText);
   } catch (reason) {
     const failure = reason as Partial<DriveContextError>;
     const status = Number.isInteger(failure.status) ? Number(failure.status) : 503;
