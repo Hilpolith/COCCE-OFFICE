@@ -11,7 +11,6 @@ export async function extractPdfText(bytes: Uint8Array): Promise<string> {
   try {
     task = getDocument({
       data: new Uint8Array(bytes),
-      isEvalSupported: false,
       useSystemFonts: false,
       useWorkerFetch: false,
       disableFontFace: true,
