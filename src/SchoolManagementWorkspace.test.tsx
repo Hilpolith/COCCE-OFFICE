@@ -115,6 +115,14 @@ describe('School Management workspace', () => {
   });
 
   it('labels official services as manual and unconnected, and quick actions use real tabs', async () => {
+    mocks.summary.mockResolvedValue({
+      terms_count: 0, classes_count: 0, subjects_count: 0, students_count: 0,
+      applications_count: 1, active_applications_count: 1, attendance_sessions_count: 0,
+      open_attendance_sessions_count: 0, attendance_present_count: 0, attendance_late_count: 0,
+      attendance_absent_count: 0, attendance_excused_count: 0, assessments_count: 0,
+      draft_assessments_count: 0, fee_charges_count: 0, unpaid_fee_charges_count: 0,
+      notices_count: 0, staff_roles_count: 0, class_staff_assignments_count: 0,
+    });
     mocks.read.mockImplementation(async (_client, _workspaceId, resource) => {
       if (resource === 'bootstrap') return { role: 'school_admin', terms: [], classes: [], subjects: [] };
       if (resource === 'admissions') return [{ application_id: 'app-1', person_id: 'person-1', application_code: 'APP-001', term_id: 'term-1', academic_year: '2026/27', term_label: 'Term 1', requested_class_id: 'class-1', class_label: 'Form 1 A', status: 'submitted', version: 1, created_at: '' }];
