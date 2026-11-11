@@ -14,7 +14,7 @@ const AI_DRIVE_TEXT_EXTENSIONS = new Set([
   'txt','md','markdown','mdx','csv','tsv','json','jsonl','ndjson','xml','yaml','yml','log',
   'ts','tsx','js','jsx','mjs','cjs','css','scss','sass','less','html','htm','sql','py','sh','bash','zsh',
   'toml','ini','conf','properties','dart','java','kt','kts','go','rs','php','rb','swift','c','h','cpp','hpp',
-  'cs','r','lua','ps1','bat','graphql','gql','prisma','vue','svelte','astro',
+  'cs','r','lua','ps1','bat','graphql','gql','prisma','vue','svelte','astro','pdf','docx','xlsx','pptx',
 ]);
 const AI_DRIVE_SENSITIVE_NAME = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
 
@@ -259,7 +259,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFiles(files);
       setDriveFileOffsets(Object.fromEntries(results.map((result) => [result.workspaceId, result.offset])));
       setDriveFileHasMore(results.some((result) => result.hasMore) && files.length < 100);
-      if (!files.length) setDriveFilesError('No supported files were found. COCCE Docs and Sheets copies plus safe text and source-code files (TXT, Markdown, CSV, JSON, TypeScript, SQL, Python and more) up to 512 KiB are supported. Secret, credential and environment files are excluded.');
+      if (!files.length) setDriveFilesError('No supported files were found. COCCE Docs and Sheets copies, PDF, DOCX, XLSX, PPTX and safe text/source-code files up to 512 KiB are supported. Secret, credential and environment files are excluded.');
     } catch (reason) {
       if (generation === driveLoadGeneration.current) setDriveFilesError(reason instanceof Error ? reason.message : 'Private Drive files could not be listed.');
     } finally {
@@ -356,7 +356,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         <div className="office-ai-context"><label>Workspace<select value={workspaceId} disabled={driveFilesLoading || busy || status !== 'ready'} onChange={event => void changeWorkspace(event.target.value)}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label><label className="office-ai-context-toggle"><span>Team conversation context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · no team history'}</small></span></label></div>
         {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before using workspace-aware AI.</div>}
         <section className="office-ai-drive-context" aria-label="Selected Drive file context">
-          <div className="office-ai-drive-heading"><div><strong>Drive file context</strong><small>Attach up to 3 private text files or COCCE Docs/Sheets copies. All-workspace mode shows the latest 5 per workspace; a single workspace starts with 50 and can load more. Contents are fetched server-side only after you ask.</small></div><button type="button" className="button-secondary" onClick={() => void openDriveFiles()} disabled={!workspaceId || !userId || busy}>{driveFilesOpen ? 'Hide files' : 'Browse Drive'}</button></div>
+          <div className="office-ai-drive-heading"><div><strong>Drive file context</strong><small>Attach up to 3 private text, PDF, Word, Excel, PowerPoint or COCCE Docs/Sheets files. All-workspace mode shows the latest 5 per workspace; a single workspace starts with 50 and can load more. Contents are fetched server-side only after you ask.</small></div><button type="button" className="button-secondary" onClick={() => void openDriveFiles()} disabled={!workspaceId || !userId || busy}>{driveFilesOpen ? 'Hide files' : 'Browse Drive'}</button></div>
           {selectedFileIds.length > 0 && <div className="office-ai-drive-selected">{selectedFileIds.length} of 3 files attached until you deselect them</div>}
           {driveFilesOpen && <div className="office-ai-drive-list">
             {driveFilesLoading ? <div className="office-ai-state"><LoaderCircle className="spin" size={15}/> Loading private Drive files…</div> : driveFiles.map((file) => <label className="office-ai-drive-file" key={file.fileId}><input type="checkbox" checked={selectedFileIds.includes(file.fileId)} disabled={!selectedFileIds.includes(file.fileId) && selectedFileIds.length >= 3} onChange={(event) => toggleDriveFile(file.fileId, event.target.checked)} /><span><strong>{file.displayName}</strong><small>{workspaces.find((space) => space.workspace_id === file.workspaceId)?.name ?? 'Office workspace'} · {file.sizeBytes.toLocaleString()} bytes</small></span></label>)}
