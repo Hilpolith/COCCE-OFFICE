@@ -50,6 +50,7 @@ export default function OfficeCloudSyncControl({
   const [message, setMessage] = useState('');
   const [registryError, setRegistryError] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const executeRef = useRef(execute);
   const snapshotRef = useRef(snapshot);
   const busyRef = useRef(false);
@@ -158,7 +159,7 @@ export default function OfficeCloudSyncControl({
   }
 
   const syncNow = useCallback(async (manual: boolean) => {
-    if (!link || busy || busyRef.current || hasUnsavedChanges || registryError) return;
+    if (!online || !link || busy || busyRef.current || hasUnsavedChanges || registryError) return;
     const marker = `${link.fileId}/${sourceKey}`;
     if (!manual && attempted.current === marker) return;
     attempted.current = marker;
@@ -210,19 +211,33 @@ export default function OfficeCloudSyncControl({
       busyRef.current = false;
       setSyncing(false);
     }
-  }, [link, busy, hasUnsavedChanges, registryError, sourceKey, newPending, pendingForItem, storePending, clearPending]);
+  }, [online, link, busy, hasUnsavedChanges, registryError, sourceKey, newPending, pendingForItem, storePending, clearPending]);
 
   useEffect(() => {
     syncNowRef.current = syncNow;
   }, [syncNow]);
 
   useEffect(() => {
-    if (!link || !actorId || !workspaceId || hasUnsavedChanges || busy || syncing || registryError) return;
+    const handleOnline = () => {
+      attempted.current = '';
+      setOnline(true);
+    };
+    const handleOffline = () => setOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!online || !link || !actorId || !workspaceId || hasUnsavedChanges || busy || syncing || registryError) return;
     const marker = `${link.fileId}/${sourceKey}`;
     if (attempted.current === marker) return;
     const timer = window.setTimeout(() => { void syncNowRef.current(false); }, 1200);
     return () => window.clearTimeout(timer);
-  }, [link, actorId, workspaceId, sourceKey, hasUnsavedChanges, busy, syncing, registryError]);
+  }, [online, link, actorId, workspaceId, sourceKey, hasUnsavedChanges, busy, syncing, registryError]);
 
   async function turnOff() {
     if (!link || busy || syncing) return;
@@ -245,20 +260,20 @@ export default function OfficeCloudSyncControl({
       <strong>Automatic cloud sync</strong>
       {link ? (
         <>
-          <p>This one local item is linked to a cloud file. Only saved changes are uploaded as new versions; conflicts stop instead of overwriting either copy.</p>
+          <p role="status" aria-live="polite">{online ? 'Online · saved changes sync automatically.' : 'Offline · your local original is safe. Sync will resume when the connection returns.'} Only saved changes are uploaded as new versions; conflicts stop instead of overwriting either copy.</p>
           <div className="docs-cloud-actions">
-            <button type="button" disabled={busy || syncing || hasUnsavedChanges || registryError} onClick={() => void syncNow(true)}>
-              {syncing ? 'Syncing…' : hasUnsavedChanges ? 'Save local changes first' : 'Sync now'}
+            <button type="button" disabled={!online || busy || syncing || hasUnsavedChanges || registryError} onClick={() => void syncNow(true)}>
+              {!online ? 'Waiting for connection' : syncing ? 'Syncing…' : hasUnsavedChanges ? 'Save local changes first' : 'Sync now'}
             </button>
             <button type="button" disabled={busy || syncing} onClick={turnOff}>Turn off this link</button>
           </div>
         </>
       ) : (
         <>
-          <p>Cloud sync is off. Existing local content is not uploaded unless you enable it for this item.</p>
+          <p>{online ? 'Cloud sync is off. Existing local content is not uploaded unless you enable it for this item.' : 'Offline · connect to enable cloud sync. Your local original remains available.'}</p>
           <div className="docs-cloud-actions">
-            <button type="button" disabled={busy || syncing || hasUnsavedChanges || registryError} onClick={() => void enable()}>
-              {syncing ? 'Enabling…' : hasUnsavedChanges ? 'Save local changes first' : 'Enable sync for this item'}
+            <button type="button" disabled={!online || busy || syncing || hasUnsavedChanges || registryError} onClick={() => void enable()}>
+              {!online ? 'Waiting for connection' : syncing ? 'Enabling…' : hasUnsavedChanges ? 'Save local changes first' : 'Enable sync for this item'}
             </button>
           </div>
         </>
