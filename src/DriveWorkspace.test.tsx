@@ -4,6 +4,21 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import DriveWorkspace from './DriveWorkspace';
 import type { DriveFile, DriveRepository } from './lib/driveStore';
 
+vi.mock('./lib/officeTeamSupabase', () => ({
+  resolveOfficeTeamConfig: () => ({ status: 'ready', schemaReady: true, anonKey: 'sb_publishable_test' }),
+  getOfficeTeamClient: () => ({
+    auth: {
+      getUser: vi.fn(async () => ({ data: { user: { id: 'synthetic-office-user' } }, error: null })),
+      getSession: vi.fn(async () => ({ data: { session: { user: { id: 'synthetic-office-user' } } }, error: null })),
+      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+    },
+  }),
+}));
+vi.mock('./OfficeCloudSyncControl', () => ({
+  default: (props: { displayName: string; module: string }) =>
+    <button type="button" data-module={props.module}>Enable cloud sync for {props.displayName}</button>,
+}));
+
 class MemoryDrive implements DriveRepository {
   private files: Array<DriveFile & { blob: Blob }> = [];
   async listFiles(workspaceId: string | null, includeTrash = false) {
@@ -92,4 +107,16 @@ describe('Drive local file UI', () => {
     expect(await screen.findByRole('button', { name: 'Preview a.txt' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Preview b.txt' })).toBeNull();
   });
+  it('offers per-file cloud sync for local Drive files and routes PDFs through the PDF sync module', async () => {
+    const repository = new MemoryDrive();
+    await repository.saveFile(new File(['pdf bytes'], 'report.pdf', { type: 'application/pdf' }), 'local-space');
+    await repository.saveFile(new File(['text bytes'], 'notes.txt', { type: 'text/plain' }), 'local-space');
+    render(<DriveWorkspace workspaceId="local-space" officeWorkspaceId="office-workspace" documents={[]} query="" onOpenDocument={() => {}} onCreateDocument={() => {}} repository={repository} />);
+
+    const pdfSync = await screen.findByRole('button', { name: 'Enable cloud sync for report.pdf' });
+    const fileSync = screen.getByRole('button', { name: 'Enable cloud sync for notes.txt' });
+    expect(pdfSync.getAttribute('data-module')).toBe('pdf');
+    expect(fileSync.getAttribute('data-module')).toBe('drive');
+  });
+
 });
