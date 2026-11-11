@@ -366,7 +366,9 @@ export async function loadSelectedDriveFiles(
     if (!fileResponse.ok) throw { status: 502, code: 'DRIVE_FILE_UNAVAILABLE', message: 'A selected Drive file could not be downloaded for this AI request.' } satisfies DriveContextError;
     const bytes = await readBoundedBytes(fileResponse, MAX_DRIVE_FILE_BYTES);
     if (bytes.byteLength !== link.sizeBytes) throw { status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH', message: 'A selected Drive file failed its stored-size check.' } satisfies DriveContextError;
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+    const digestInput = new Uint8Array(bytes.byteLength);
+    digestInput.set(bytes);
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', digestInput.buffer));
     const actualSha256 = Array.from(digest, (value) => value.toString(16).padStart(2, '0')).join('');
     if (actualSha256 !== link.sha256Hex.toLowerCase()) throw { status: 502, code: 'DRIVE_FILE_INTEGRITY_MISMATCH', message: 'A selected Drive file failed its SHA-256 integrity check.' } satisfies DriveContextError;
     const extension = link.displayName.normalize('NFC').trim().split('.').pop()?.toLowerCase() ?? '';
