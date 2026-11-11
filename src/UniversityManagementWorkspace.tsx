@@ -794,7 +794,7 @@ export default function UniversityManagementWorkspace({
           </button>
         ))}
       </nav>
-      {currentTab === "overview" && <Overview data={data} role={role} summary={serverSummary} summaryError={summaryError} />}{" "}
+      {currentTab === "overview" && <Overview role={role} summary={serverSummary} summaryError={summaryError} />}{" "}
       {currentTab === "academics" && (
         <Academics
           canAdmin={isAdmin}
