@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "fflate": "npm:fflate@0.8.3",
+    "pdfjs-dist/legacy/build/pdf.mjs": "npm:pdfjs-dist@6.4.299/legacy/build/pdf.mjs"
+  }
+}
