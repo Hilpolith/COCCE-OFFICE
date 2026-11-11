@@ -87,4 +87,29 @@ describe('per-record Office cloud sync consent', () => {
     expect(stored).not.toContain('sensitive local draft');
     expect(stored).not.toContain('uploadUrl');
   });
+  it('waits offline and makes cloud sync available again when connectivity returns', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    const api = buildApi();
+    const execute = vi.fn(async (work: (cloud: typeof api, current: () => boolean) => Promise<void>) => work(api, () => true));
+    const snapshot = vi.fn(() => bytes);
+    render(<OfficeCloudSyncControl
+      actorId={actorId} workspaceId={workspaceId} module="docs"
+      localRecordId={localRecordId} displayName={displayName}
+      sourceKey="2026-11-06T12:00:00.000Z" hasUnsavedChanges={false}
+      busy={false} execute={execute as never} snapshot={snapshot}
+    />);
+
+    const waiting = screen.getByRole('button', { name: 'Waiting for connection' });
+    expect((waiting as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/Offline · connect to enable cloud sync/)).toBeTruthy();
+    expect(api.reserve).not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enable sync for this item' })).toBeTruthy());
+    expect(api.reserve).not.toHaveBeenCalled();
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
 });
