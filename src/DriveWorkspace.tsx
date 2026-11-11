@@ -63,6 +63,10 @@ export default function DriveWorkspace({
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const [actorId, setActorId] = useState('');
+  const actorIdRef = useRef(actorId);
+  actorIdRef.current = actorId;
+  const officeWorkspaceIdRef = useRef(officeWorkspaceId);
+  officeWorkspaceIdRef.current = officeWorkspaceId;
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [showTrash, setShowTrash] = useState(false);
   const [fileCategory, setFileCategory] = useState<DriveCategory>('all');
@@ -102,8 +106,12 @@ export default function DriveWorkspace({
       throw new Error('Your Office session changed. Sign in again before syncing this file.');
     }
     const controller = new AbortController();
-    const current = () => actorId.length > 0 && Boolean(officeWorkspaceId);
-    await work(createOfficeCloudApi(client, config.anonKey, actorId, fetch, controller.signal), current);
+    const current = () => actorIdRef.current === actorId && officeWorkspaceIdRef.current === officeWorkspaceId;
+    try {
+      await work(createOfficeCloudApi(client, config.anonKey, actorId, fetch, controller.signal), current);
+    } finally {
+      controller.abort();
+    }
   }, [client, config, actorId, officeWorkspaceId]);
 
   const refresh = useCallback(async () => {
