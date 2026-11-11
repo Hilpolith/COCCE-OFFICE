@@ -8,6 +8,7 @@ import {
 import { officeTeamApi, type OfficeWorkspace, type OfficeWorkspaceSuite, type OfficeSuiteId } from './lib/officeTeamApi';
 import { industryCatalog } from './lib/industryWorkspaces';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
+import { officeAuthRedirectUrl } from './lib/officeAuthRedirect';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './officeAccount.css';
 
@@ -75,6 +76,7 @@ export default function OfficeAccountControl() {
     const { data: subscription } = client.auth.onAuthStateChange((event, session) => {
       eventVersion.current += 1;
       if (event === 'PASSWORD_RECOVERY') { setMode('recovery'); setOpen(true); setNotice('Choose a new password for your COCCE account.'); }
+      if (event === 'SIGNED_IN') completeOfficeAuthCallback();
       const nextUser = session?.user ?? null;
       setUser(nextUser);
       setPassword('');
@@ -95,7 +97,10 @@ export default function OfficeAccountControl() {
         if (userError) throw userError;
         setUser(verified.user);
         setAuthReady(true);
-        if (verified.user) void loadWorkspaces();
+        if (verified.user) {
+          completeOfficeAuthCallback();
+          void loadWorkspaces();
+        }
       } catch (cause) {
         if (alive && eventVersion.current === startingVersion) {
           setError(friendlyError(cause)); setUser(null); setAuthReady(true);
@@ -104,7 +109,7 @@ export default function OfficeAccountControl() {
     };
     void restoreSession();
     return () => { alive = false; subscription.subscription.unsubscribe(); };
-  }, [client, loadWorkspaces]);
+  }, [client, completeOfficeAuthCallback, loadWorkspaces]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -119,6 +124,13 @@ export default function OfficeAccountControl() {
       window.removeEventListener('pointerdown', closeOutside);
     };
   }, [closePanel, open]);
+
+  const completeOfficeAuthCallback = useCallback(() => {
+    if (window.location.pathname !== '/auth/callback') return;
+    window.history.replaceState(window.history.state, '', '/');
+    setOpen(true);
+    setNotice('Sign-in successful. Preparing your COCCE Office workspace…');
+  }, []);
 
   const switchMode = (next: AuthMode) => { setMode(next); setError(''); setNotice(''); setPassword(''); setConfirmPassword(''); };
 
@@ -147,7 +159,7 @@ export default function OfficeAccountControl() {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: officeAuthRedirectUrl(window.location),
           data: { display_name: displayName.trim() },
         },
       });
@@ -169,7 +181,7 @@ export default function OfficeAccountControl() {
     if (!client) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const { error: resetError } = await client.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+      const { error: resetError } = await client.auth.resetPasswordForEmail(email.trim(), { redirectTo: officeAuthRedirectUrl(window.location) });
       if (resetError) throw resetError;
       setNotice('If an account exists for that email, a password-reset link has been sent.');
     } catch (cause) { setError(friendlyError(cause)); }
@@ -193,14 +205,10 @@ export default function OfficeAccountControl() {
     if (!client) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      const officeOrigin = window.location.hostname === 'localhost' || window.location.hostname.endsWith('.vercel.app') && window.location.hostname !== 'cocce-office.vercel.app'
-        ? window.location.origin
-        : 'https://cocce-office.vercel.app';
-      const officeCallback = new URL('/', officeOrigin);
-      officeCallback.searchParams.set('cocce_office_oauth', '1');
+      const officeCallback = officeAuthRedirectUrl(window.location);
       const { error: oauthError } = await client.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: officeCallback.toString(), queryParams: { prompt: 'select_account' } },
+        options: { redirectTo: officeCallback, queryParams: { prompt: 'select_account' } },
       });
       if (oauthError) throw oauthError;
     } catch (cause) { setError(friendlyError(cause)); setBusy(false); }
