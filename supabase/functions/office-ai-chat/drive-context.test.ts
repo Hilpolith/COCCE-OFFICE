@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isSupportedDriveTextFile, loadSelectedDriveFiles } from './drive-context';
+import { zipSync, strToU8 } from 'fflate';
+import { extractDocxText, extractPptxText, extractXlsxText, isSupportedDriveContextFile, isSupportedDriveTextFile, loadSelectedDriveFiles } from './drive-context';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const otherWorkspaceId = '22222222-2222-4222-8222-222222222222';
@@ -185,6 +186,40 @@ describe('COCCE AI selected Drive context', () => {
     for (const name of ['.env','.env.example','secrets.json','credentials.json','service-account.json','private-key.json','token.json','movie.mp4','archive.zip']) {
       expect(isSupportedDriveTextFile(name)).toBe(false);
     }
+  });
+
+  it('extracts bounded text from DOCX, XLSX and PPTX archives without executing embedded content', () => {
+    const docx = zipSync({
+      'word/document.xml': strToU8('<w:document><w:body><w:p><w:r><w:t>Annual report</w:t></w:r></w:p><w:p><w:r><w:t>Revenue increased 12%.</w:t></w:r></w:p></w:body></w:document>'),
+    });
+    const xlsx = zipSync({
+      'xl/sharedStrings.xml': strToU8('<sst><si><t>Category</t></si><si><t>Revenue</t></si>'),
+      'xl/worksheets/sheet1.xml': strToU8('<worksheet><sheetData><row><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="B2"><f>SUM(B3:B4)</f><v>1500</v></c></row></sheetData></worksheet>'),
+    });
+    const pptx = zipSync({
+      'ppt/slides/slide1.xml': strToU8('<p:sld><p:cSld><p:sp><p:txBody><a:p><a:r><a:t>Quarterly review</a:t></a:r></a:p><a:p><a:r><a:t>Growth plan</a:t></a:r></a:p></p:txBody></p:sp></p:cSld></p:sld>'),
+    });
+    expect(extractDocxText(docx)).toContain('Annual report');
+    expect(extractDocxText(docx)).toContain('Revenue increased 12%.');
+    expect(extractXlsxText(xlsx)).toContain('A1: Category');
+    expect(extractXlsxText(xlsx)).toContain('B2: =SUM(B3:B4) → 1500');
+    expect(extractPptxText(pptx)).toContain('Slide 1:');
+    expect(extractPptxText(pptx)).toContain('Quarterly review');
+    expect(isSupportedDriveContextFile('report.pdf')).toBe(true);
+    expect(isSupportedDriveContextFile('report.docx')).toBe(true);
+    expect(isSupportedDriveContextFile('budget.xlsx')).toBe(true);
+    expect(isSupportedDriveContextFile('presentation.pptx')).toBe(true);
+    expect(isSupportedDriveContextFile('secret.pdf')).toBe(false);
+  });
+
+  it('rejects malformed and zip-bomb Office archives before extracting content', () => {
+    expect(() => extractDocxText(new Uint8Array([1, 2, 3, 4]))).toThrow();
+    const oversized = zipSync({
+      'word/document.xml': strToU8('<w:document><w:body><w:p><w:r><w:t>' + 'x'.repeat(8 * 1024 * 1024 + 1) + '</w:t></w:r></w:p></w:body></w:document>'),
+    });
+    expect(() => extractDocxText(oversized)).toThrow(expect.objectContaining({ code: 'DRIVE_OFFICE_ARCHIVE_LIMIT' }));
+    const traversal = zipSync({ '../outside.txt': strToU8('unsafe'), 'word/document.xml': strToU8('<w:document/>') });
+    expect(() => extractDocxText(traversal)).toThrow(expect.objectContaining({ code: 'DRIVE_OFFICE_ARCHIVE_INVALID' }));
   });
 
 });
