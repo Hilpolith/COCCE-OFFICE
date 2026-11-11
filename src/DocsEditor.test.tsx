@@ -574,3 +574,30 @@ describe('Docs Find & Replace document switching', () => {
     expect(onPatch.mock.calls.some(([patch]) => patch.richText?.includes('Updated second draft'))).toBe(true);
   });
 });
+
+describe('Docs tabbed ribbon', () => {
+  it('switches functional Home, Insert, Review and View groups and applies document zoom', async () => {
+    renderEditor();
+    const home = screen.getByRole('tab', { name: 'Home' });
+    const insert = screen.getByRole('tab', { name: 'Insert' });
+    const review = screen.getByRole('tab', { name: 'Review' });
+    const view = screen.getByRole('tab', { name: 'View' });
+    expect(home.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Bold' })).toBeTruthy();
+
+    fireEvent.click(insert);
+    expect(insert.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Insert link' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull();
+
+    fireEvent.click(review);
+    expect(review.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Add comment to selected text' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Insert link' })).toBeNull();
+
+    fireEvent.click(view);
+    expect(view.getAttribute('aria-selected')).toBe('true');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Document zoom' }), { target: { value: '125%' } });
+    expect(document.querySelector('.document-canvas')?.getAttribute('style')).toContain('zoom: 125%');
+  });
+});
