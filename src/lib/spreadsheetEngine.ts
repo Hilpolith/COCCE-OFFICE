@@ -395,13 +395,48 @@ function evaluateCall(node: Extract<Node, { kind: 'call' }>, cells: Record<strin
     case 'COUNT': return numbers.length;
     case 'COUNTA': return values.filter((value) => value !== null && value !== '').length;
     case 'ABS': if (args.length !== 1) throw new FormulaFault('#VALUE!'); return Math.abs(asNumber(args[0]));
-    case 'ROUND': {
+    case 'ROUND': case 'ROUNDUP': case 'ROUNDDOWN': {
       if (args.length < 1 || args.length > 2) throw new FormulaFault('#VALUE!');
       const value = asNumber(args[0]);
       const places = args[1] === undefined ? 0 : Math.trunc(asNumber(args[1]));
       if (Math.abs(places) > 12) throw new FormulaFault('#NUM!');
       const factor = 10 ** places;
+      const scaled = value * factor;
+      if (!Number.isFinite(scaled)) throw new FormulaFault('#NUM!');
+      if (node.name === 'ROUNDUP') return Math.sign(value) * Math.ceil(Math.abs(scaled) - Number.EPSILON) / factor;
+      if (node.name === 'ROUNDDOWN') return Math.sign(value) * Math.floor(Math.abs(scaled) + Number.EPSILON) / factor;
       return Math.round((value + Math.sign(value) * Number.EPSILON) * factor) / factor;
+    }
+    case 'PRODUCT': {
+      const product = numbers.length ? numbers.reduce((total, value) => total * value, 1) : 0;
+      if (!Number.isFinite(product)) throw new FormulaFault('#NUM!');
+      return product;
+    }
+    case 'LEN': {
+      if (args.length !== 1) throw new FormulaFault('#VALUE!');
+      return String(asScalar(args[0]) ?? '').length;
+    }
+    case 'LEFT': case 'RIGHT': {
+      if (args.length < 1 || args.length > 2) throw new FormulaFault('#VALUE!');
+      const value = String(asScalar(args[0]) ?? '');
+      const count = args[1] === undefined ? 1 : Math.trunc(asNumber(args[1]));
+      if (count < 0 || count > 8_000) throw new FormulaFault('#VALUE!');
+      return node.name === 'LEFT' ? value.slice(0, count) : count === 0 ? '' : value.slice(-count);
+    }
+    case 'MID': {
+      if (args.length !== 3) throw new FormulaFault('#VALUE!');
+      const value = String(asScalar(args[0]) ?? '');
+      const start = Math.trunc(asNumber(args[1]));
+      const count = Math.trunc(asNumber(args[2]));
+      if (start < 1 || count < 0 || count > 8_000) throw new FormulaFault('#VALUE!');
+      return value.slice(start - 1, start - 1 + count);
+    }
+    case 'UPPER': case 'LOWER': case 'TRIM': {
+      if (args.length !== 1) throw new FormulaFault('#VALUE!');
+      const value = String(asScalar(args[0]) ?? '');
+      if (node.name === 'UPPER') return value.toUpperCase();
+      if (node.name === 'LOWER') return value.toLowerCase();
+      return value.trim().replace(/ +/g, ' ');
     }
     case 'AND': return args.every(truthy);
     case 'OR': return args.some(truthy);
@@ -461,7 +496,7 @@ export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
   if (typeof formula !== 'string' || !isFormulaTextWithinLimit(formula) || !isFormulaCellValue(formula)) return false;
   try {
     const ast = new Parser(tokenize(formula)).parse();
-    const supportedFunctions = new Set(['IF', 'IFERROR', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'ABS', 'ROUND', 'AND', 'OR', 'NOT', 'CONCAT', 'COUNTIF', 'SUMIF']);
+    const supportedFunctions = new Set(['IF', 'IFERROR', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'ABS', 'ROUND', 'ROUNDUP', 'ROUNDDOWN', 'PRODUCT', 'LEN', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'TRIM', 'AND', 'OR', 'NOT', 'CONCAT', 'COUNTIF', 'SUMIF']);
     const addressIsVisible = (address: string) => {
       const position = parseAddress(address);
       return position.row <= SHEET_VISIBLE_ROWS && position.column <= SHEET_VISIBLE_COLUMNS;
@@ -480,7 +515,10 @@ export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
           if ((node.name === 'IF' && (node.args.length < 2 || node.args.length > 3))
             || (node.name === 'IFERROR' && node.args.length !== 2)
             || (['ABS', 'NOT'].includes(node.name) && node.args.length !== 1)
-            || (node.name === 'ROUND' && (node.args.length < 1 || node.args.length > 2))
+            || (['ROUND', 'ROUNDUP', 'ROUNDDOWN', 'LEFT', 'RIGHT'].includes(node.name) && (node.args.length < 1 || node.args.length > 2))
+            || (['LEN', 'UPPER', 'LOWER', 'TRIM'].includes(node.name) && node.args.length !== 1)
+            || (node.name === 'MID' && node.args.length !== 3)
+            || (node.name === 'PRODUCT' && node.args.length < 1)
             || (node.name === 'COUNTIF' && node.args.length !== 2)
             || (node.name === 'SUMIF' && (node.args.length < 2 || node.args.length > 3))) return false;
           if (node.name === 'COUNTIF' || node.name === 'SUMIF') {
