@@ -99,7 +99,7 @@ describe('COCCE AI workspace context', () => {
         ? { data: { configured: true }, error: null }
         : { data: { text: `## Workspace summary
 
-**Ready for review**
+**Ready for review** with `verified` status and [the report](https://example.com/report)
 
 - First action
 - Second action` }, error: null }
@@ -111,7 +111,24 @@ describe('COCCE AI workspace context', () => {
     fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false });
     expect(await screen.findByRole('heading', { name: 'Workspace summary' })).toBeTruthy();
     expect(screen.getByText('Ready for review', { selector: 'strong' })).toBeTruthy();
+    expect(screen.getByText('verified', { selector: 'code' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'the report' }).getAttribute('href')).toBe('https://example.com/report');
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('asks before searching the signed-in user cloud and sends the consented inventory request', async () => {
+    render(<OfficeAiWorkspace mode="chat" />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    const composer = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'What files do I have on cloud and what are they about?' } });
+    fireEvent.submit(composer.closest('form')!);
+    expect(await screen.findByRole('heading', { name: 'Let COCCE AI inspect your cloud files for this answer?' })).toBeTruthy();
+    expect(mocks.invoke.mock.calls.some((call) => call[1]?.body?.includeDriveInventory === true)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Share cloud context' }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith('office-ai-chat', expect.objectContaining({
+      body: expect.objectContaining({ action: 'chat', includeDriveInventory: true, workspaceId: 'workspace-one' }),
+    })));
+    expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
   });
 
   it('sends on Enter and preserves multiline drafting on Shift+Enter', async () => {
