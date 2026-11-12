@@ -337,6 +337,7 @@ function matchesCriteria(value: CriteriaValue, criteria: ParsedCriteria): boolea
 
 function evaluateConditionalAggregate(node: Extract<Node, { kind: 'call' }>, cells: Record<string, string>, visiting: Set<string>, cache: Map<string, FormulaResult>): number {
   const isCount = node.name === 'COUNTIF';
+  const isAverage = node.name === 'AVERAGEIF';
   if ((isCount && node.args.length !== 2) || (!isCount && (node.args.length < 2 || node.args.length > 3))) {
     throw new FormulaFault('#VALUE!');
   }
@@ -350,6 +351,7 @@ function evaluateConditionalAggregate(node: Extract<Node, { kind: 'call' }>, cel
   }
   const sumRangeAddresses = sumRangeNode ? rangeArgumentAddresses(sumRangeNode) : null;
   let result = 0;
+  let averageCount = 0;
   for (let index = 0; index < criteriaRange.values.length; index += 1) {
     if (!matchesCriteria(criteriaRange.values[index], criteria)) continue;
     if (isCount) result += 1;
@@ -358,10 +360,17 @@ function evaluateConditionalAggregate(node: Extract<Node, { kind: 'call' }>, cel
         ? evaluateCell(sumRangeAddresses[index], cells, visiting, cache)
         : criteriaRange.values[index];
       if (isFormulaError(sumValue)) throw new FormulaFault(sumValue.error);
-      if (typeof sumValue === 'number') result += sumValue;
+      if (typeof sumValue === 'number') {
+        result += sumValue;
+        if (isAverage) averageCount += 1;
+      }
     }
   }
   if (!Number.isFinite(result)) throw new FormulaFault('#NUM!');
+  if (isAverage) {
+    if (!averageCount) throw new FormulaFault('#DIV/0!');
+    return result / averageCount;
+  }
   return result;
 }
 
@@ -380,7 +389,7 @@ function evaluateCall(node: Extract<Node, { kind: 'call' }>, cells: Record<strin
       throw error;
     }
   }
-  if (node.name === 'COUNTIF' || node.name === 'SUMIF') return evaluateConditionalAggregate(node, cells, visiting, cache);
+  if (node.name === 'COUNTIF' || node.name === 'SUMIF' || node.name === 'AVERAGEIF') return evaluateConditionalAggregate(node, cells, visiting, cache);
   const args = node.args.map((arg) => evaluateNode(arg, cells, visiting, cache));
   if (args.some(isFormulaError)) throw new FormulaFault(args.find(isFormulaError)!.error);
   const values = flatten(args);
@@ -497,7 +506,7 @@ export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
   if (typeof formula !== 'string' || !isFormulaTextWithinLimit(formula) || !isFormulaCellValue(formula)) return false;
   try {
     const ast = new Parser(tokenize(formula)).parse();
-    const supportedFunctions = new Set(['IF', 'IFERROR', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'ABS', 'ROUND', 'ROUNDUP', 'ROUNDDOWN', 'PRODUCT', 'LEN', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'TRIM', 'AND', 'OR', 'NOT', 'CONCAT', 'COUNTIF', 'SUMIF']);
+    const supportedFunctions = new Set(['IF', 'IFERROR', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'ABS', 'ROUND', 'ROUNDUP', 'ROUNDDOWN', 'PRODUCT', 'LEN', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'TRIM', 'AND', 'OR', 'NOT', 'CONCAT', 'COUNTIF', 'SUMIF', 'AVERAGEIF']);
     const addressIsVisible = (address: string) => {
       const position = parseAddress(address);
       return position.row <= SHEET_VISIBLE_ROWS && position.column <= SHEET_VISIBLE_COLUMNS;
@@ -521,13 +530,13 @@ export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
             || (node.name === 'MID' && node.args.length !== 3)
             || (node.name === 'PRODUCT' && node.args.length < 1)
             || (node.name === 'COUNTIF' && node.args.length !== 2)
-            || (node.name === 'SUMIF' && (node.args.length < 2 || node.args.length > 3))) return false;
-          if (node.name === 'COUNTIF' || node.name === 'SUMIF') {
+            || (['SUMIF', 'AVERAGEIF'].includes(node.name) && (node.args.length < 2 || node.args.length > 3))) return false;
+          if (node.name === 'COUNTIF' || node.name === 'SUMIF' || node.name === 'AVERAGEIF') {
             const criteriaShape = rangeArgumentShape(node.args[0]);
             if (!criteriaShape) return false;
             if (node.args[1].kind === 'range'
               || (node.args[1].kind === 'string' && node.args[1].value.length > MAX_SHEETS_CRITERIA_CHARS)) return false;
-            if (node.name === 'SUMIF' && node.args[2]) {
+            if (node.name !== 'COUNTIF' && node.args[2]) {
               const sumShape = rangeArgumentShape(node.args[2]);
               if (!sumShape || criteriaShape.rows !== sumShape.rows || criteriaShape.columns !== sumShape.columns) return false;
             }
