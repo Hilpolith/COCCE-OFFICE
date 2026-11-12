@@ -806,6 +806,10 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
   const openSourceMode = (mode: 'html' | 'markdown') => {
     if (!editor) return;
+    if (sourceMode && sourceText.length > 1_000_000) {
+      setSourceNotice('Source text is limited to 1,000,000 characters. Shorten it before switching formats.');
+      return;
+    }
     const currentHtml = sourceMode
       ? sourceMode === 'html' ? sanitizeRichTextHtml(sourceText) : markdownToRichHtml(sourceText).html
       : editor.getHTML();
