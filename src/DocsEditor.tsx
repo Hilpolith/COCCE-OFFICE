@@ -76,34 +76,38 @@ async function prepareDocsImage(file: File): Promise<string> {
   if (file.size <= 0 || file.size > 12 * 1024 * 1024) {
     throw new Error('Images must be smaller than 12 MB before compression.');
   }
-  const bitmap = await createImageBitmap(file);
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
   try {
-    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    let width = Math.max(1, Math.round(bitmap.width * scale));
-    let height = Math.max(1, Math.round(bitmap.height * scale));
-    let result = '';
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const canvas = window.document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('This browser could not prepare the image.');
-      context.drawImage(bitmap, 0, 0, width, height);
-      result = canvas.toDataURL('image/webp', Math.max(0.55, 0.84 - attempt * 0.06));
-      if (!result.startsWith('data:image/webp;base64,')) {
-        result = canvas.toDataURL('image/jpeg', 0.78);
-      }
-      if (result.length <= 1_800_000) break;
-      width = Math.max(1, Math.round(width * 0.78));
-      height = Math.max(1, Math.round(height * 0.78));
-    }
-    if (!result || result.length > 1_800_000) {
-      throw new Error('This image is too detailed to embed safely. Choose a smaller image.');
-    }
-    return result;
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('The selected image could not be decoded.'));
+      image.src = objectUrl;
+    });
   } finally {
-    bitmap.close();
+    URL.revokeObjectURL(objectUrl);
   }
+  const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+  let width = Math.max(1, Math.round(image.naturalWidth * scale));
+  let height = Math.max(1, Math.round(image.naturalHeight * scale));
+  let result = '';
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const canvas = window.document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('This browser could not prepare the image.');
+    context.drawImage(image, 0, 0, width, height);
+    result = canvas.toDataURL('image/webp', Math.max(0.55, 0.84 - attempt * 0.06));
+    if (!result.startsWith('data:image/webp;base64,')) result = canvas.toDataURL('image/jpeg', 0.78);
+    if (result.length <= 1_800_000) break;
+    width = Math.max(1, Math.round(width * 0.78));
+    height = Math.max(1, Math.round(height * 0.78));
+  }
+  if (!result || result.length > 1_800_000) {
+    throw new Error('This image is too detailed to embed safely. Choose a smaller image.');
+  }
+  return result;
 }
 
 function createDocsTableGuard(onRejected: (message: string) => void) {
