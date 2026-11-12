@@ -161,6 +161,12 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       setActiveConversationId(null);
       setPrompt('');
       setShowDriveConsent(false);
+      setShareCloudInventory(false);
+      setShareSectorRecords(false);
+      setIncludeSectorRecords(false);
+      setPendingAction(null);
+      setPendingActionKey('');
+      setActionStatus('');
       setDriveFilesError('');
       setError('');
       setStatus(nextStatus);
@@ -241,6 +247,9 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setPendingAction(null);
     setPendingActionKey('');
     setActionStatus('');
+    setIncludeSectorRecords(false);
+    setShareSectorRecords(false);
+    setShareCloudInventory(false);
     aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
     setBusy(false);
