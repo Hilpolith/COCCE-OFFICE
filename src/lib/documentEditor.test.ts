@@ -5,7 +5,7 @@ import { DOCS_TABLE_LIMITS } from './docsTableLimits';
 
 describe('local Docs content conversion and safety', () => {
   it('imports common Markdown blocks into sanitized editable HTML', () => {
-    const converted = markdownToRichHtml('# Report\\n\\nA **bold** and *italic* note with [a safe link](https://example.com).\\n\\n- First\\n- Second\\n\\n> Keep this quote\\n\\n| Name | Total |\\n| --- | --- |\\n| COCCE | 12 |\\n\\n```txt\\nplain <script>text</script>\\n```');
+    const converted = markdownToRichHtml('# Report\n\nA **bold** and *italic* note with [a safe link](https://example.com).\n\n- First\n- Second\n\n> Keep this quote\n\n| Name | Total |\n| --- | --- |\n| COCCE | 12 |\n\n```txt\nplain <script>text</script>\n```');
     expect(converted.html).toContain('<h1>Report</h1>');
     expect(converted.html).toContain('<strong>bold</strong>');
     expect(converted.html).toContain('<em>italic</em>');
