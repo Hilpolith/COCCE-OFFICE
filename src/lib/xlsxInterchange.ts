@@ -930,6 +930,9 @@ function parseXlsxDrawingCharts(
   if (chartReferenceIds.length !== anchors.length || chartReferenceIds.some((id) => !id)) {
     fail('The XLSX drawing contains missing or extra chart references.');
   }
+  const chartIds: string[] = [];
+  for (const [anchorIndex, anchor] of anchors.entries()) {
+    const children = allElementChildren(anchor);
     if (children.some((child) => child.namespaceURI !== DRAWING_NS || !['from', 'to', 'graphicFrame', 'clientData'].includes(child.localName))) {
       fail('The XLSX drawing contains pictures, shapes or unsupported objects.');
     }
