@@ -115,7 +115,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const authGeneration = useRef(0);
   const aiRequestGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
-  const lastAppliedInitialWorkspaceId = useRef(initialWorkspaceId);
+  const lastAppliedInitialWorkspaceId = useRef<string | undefined>(undefined);
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(mode === 'assistant');
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
   const [turns, setTurns] = useState<AiChatTurn[]>([]);
