@@ -132,6 +132,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const [busy, setBusy] = useState(false);
   const [showDriveConsent, setShowDriveConsent] = useState(false);
   const [shareCloudInventory, setShareCloudInventory] = useState(false);
+  const [includeSectorRecords, setIncludeSectorRecords] = useState(false);
+  const [shareSectorRecords, setShareSectorRecords] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -558,8 +560,9 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setShowDriveConsent(false);
     const question = prompt.trim();
     const wantsCloudInventory = /\b(?:cloud|drive)\b|\b(?:what|which|list|show|find|search|summari[sz]e?|describe).{0,80}\b(?:files?|documents?|folders?)\b/i.test(question);
-    if ((selectedFileIds.length > 0 || wantsCloudInventory) && !confirmedDriveSharing) {
+    if ((selectedFileIds.length > 0 || wantsCloudInventory || includeSectorRecords) && !confirmedDriveSharing) {
       setShareCloudInventory(wantsCloudInventory);
+      setShareSectorRecords(includeSectorRecords);
       setShowDriveConsent(true);
       return;
     }
@@ -569,7 +572,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setError('');
     try {
       const { data, error: invokeError } = await client.functions.invoke('office-ai-chat', {
-        body: { action: 'chat', workspaceId, prompt: question, includeConversations: includeWorkspaceContext, ...(history.length ? { history } : {}), ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}), ...(wantsCloudInventory ? { includeDriveInventory: true } : {}) },
+        body: { action: 'chat', workspaceId, prompt: question, includeConversations: includeWorkspaceContext, ...(history.length ? { history } : {}), ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}), ...(wantsCloudInventory ? { includeDriveInventory: true } : {}), ...(includeSectorRecords ? { includeSectorRecords: true } : {}) },
       });
       if (requestGeneration !== aiRequestGeneration.current) return;
       if (invokeError) throw await officeAiInvokeError(invokeError);
@@ -637,6 +640,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       {status === 'ready' && <>
         <div className="office-ai-context"><label>Workspace<select value={workspaceId} disabled={driveFilesLoading || busy || status !== 'ready'} onChange={event => void changeWorkspace(event.target.value)}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label>{mode === 'assistant' && <label className="office-ai-context-toggle"><span>Team conversation context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · no team history'}</small></span></label>}</div>
         {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before using workspace-aware AI.</div>}
+        {mode === 'assistant' && <label className="office-ai-context-toggle"><span>Industry work queue context</span><span><input type="checkbox" checked={includeSectorRecords} onChange={event => setIncludeSectorRecords(event.target.checked)} /><small>{includeSectorRecords ? 'On · share task metadata after confirmation' : 'Off · no sector work items'}</small></span></label>}
         {mode === 'assistant' && <section className="office-ai-drive-context" aria-label="Selected Drive file context">
           <div className="office-ai-drive-heading"><div><strong>Drive file context</strong><small>Attach up to 3 private text, PDF, Word, Excel, PowerPoint or COCCE Docs/Sheets files. All-workspace mode shows the latest 5 per workspace; a single workspace starts with 50 and can load more. Contents are fetched server-side only after you ask.</small></div><button type="button" className="button-secondary" onClick={() => void openDriveFiles()} disabled={!workspaceId || !userId || busy}>{driveFilesOpen ? 'Hide files' : 'Browse Drive'}</button></div>
           {selectedFileIds.length > 0 && <div className="office-ai-drive-selected">{selectedFileIds.length} of 3 files attached until you deselect them</div>}
@@ -660,15 +664,15 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
         {showDriveConsent && <div className="office-ai-consent-backdrop">
           <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
             <div className="office-ai-consent-mark"><AlertCircle size={19} /></div>
-            <div><span className="eyebrow">EXTERNAL AI DATA SHARING</span><h3 id="office-ai-consent-title">{shareCloudInventory ? "Let COCCE AI inspect your cloud files for this answer?" : "Share selected Drive content with COCCE AI?"}</h3></div>
-            <p id="office-ai-consent-description">{shareCloudInventory ? "COCCE AI will search up to 1,000 recent file records per AI-enabled workspace (up to 20 workspaces), share up to 200 recent file names, workspace names, sizes and dates, and read up to three relevant supported files for content. Access is checked against your signed-in account and workspace membership; sensitive credential/key files are excluded. This request sends the inventory and extracted excerpts to OpenRouter's free-model router. " : "The selected file contents will be read from private Office Drive by the authenticated server and sent to OpenRouter's free-model router to generate this answer. "}OpenRouter provider retention policies may apply; review its <a href="https://openrouter.ai/providers" target="_blank" rel="noopener noreferrer">provider retention details</a> before sharing confidential records. File contents are not stored in COCCE AI chat history. This is not a zero-data-retention guarantee.</p>
+            <div><span className="eyebrow">EXTERNAL AI DATA SHARING</span><h3 id="office-ai-consent-title">{shareCloudInventory && shareSectorRecords ? "Share Drive and sector context with COCCE AI?" : shareCloudInventory ? "Let COCCE AI inspect your cloud files for this answer?" : shareSectorRecords ? "Let COCCE AI inspect your industry work queue for this answer?" : "Share selected Drive content with COCCE AI?"}</h3></div>
+            <p id="office-ai-consent-description">{shareCloudInventory ? "COCCE AI will search up to 1,000 recent file records per AI-enabled workspace (up to 20 workspaces), share up to 200 recent file names, workspace names, sizes and dates, and read up to three relevant supported files for content. Access is checked against your signed-in account and workspace membership; sensitive credential/key files are excluded. " : ""}{shareSectorRecords ? "COCCE AI will read up to 8 recent generic industry work items per enabled workspace through membership-checked RPCs. Only task titles, references, stages, due dates, workspace and industry labels are shared; notes and personal identifiers are excluded. This is read-only and does not grant access to patient, student, beneficiary, guest, ledger or other protected sector records. " : ""}{selectedFileIds.length > 0 ? "Selected file contents will be read from private Office Drive by the authenticated server. " : ""}Any shared context is sent to OpenRouter's free-model router to generate this answer. OpenRouter provider retention policies may apply; review its <a href="https://openrouter.ai/providers" target="_blank" rel="noopener noreferrer">provider retention details</a> before sharing confidential records. File contents are not stored in COCCE AI chat history. This is not a zero-data-retention guarantee.</p>
             {selectedFileIds.length > 0 && <ul>{selectedFileIds.map((fileId) => {
               const file = driveFiles.find((item) => item.fileId === fileId);
               return <li key={fileId}>{file?.displayName ?? 'Selected Drive file'}</li>;
             })}</ul>}
             <div className="office-ai-consent-actions">
-              <button type="button" className="button-secondary" onClick={() => setShowDriveConsent(false)}>Cancel</button>
-              <button type="button" className="button-primary" onClick={() => void ask(true)} disabled={busy}>{shareCloudInventory ? "Share cloud context" : "Send selected content"}</button>
+              <button type="button" className="button-secondary" onClick={() => { setShowDriveConsent(false); setShareCloudInventory(false); setShareSectorRecords(false); }}>Cancel</button>
+              <button type="button" className="button-primary" onClick={() => void ask(true)} disabled={busy}>{shareCloudInventory && shareSectorRecords ? "Share selected context" : shareCloudInventory ? "Share cloud context" : shareSectorRecords ? "Share sector context" : "Send selected content"}</button>
             </div>
           </section>
         </div>}
