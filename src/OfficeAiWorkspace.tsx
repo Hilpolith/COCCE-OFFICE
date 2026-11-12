@@ -8,7 +8,7 @@ import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './officeAiWorkspace.css';
 
-type AiChatTurn = { role: 'user' | 'assistant'; content: string };
+type AiChatTurn = { role: 'user' | 'assistant'; content: string };\ntype AiConversation = { conversation_id: string; workspace_id: string; title: string; last_message_at: string };
 
 const AI_DRIVE_TEXT_EXTENSIONS = new Set([
   'txt','md','markdown','mdx','csv','tsv','json','jsonl','ndjson','xml','yaml','yml','log',
@@ -36,7 +36,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
-  const [turns, setTurns] = useState<AiChatTurn[]>([]);
+  const [turns, setTurns] = useState<AiChatTurn[]>([]);\n  const [conversations, setConversations] = useState<AiConversation[]>([]);\n  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);\n  const [historyLoading, setHistoryLoading] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
   const [busy, setBusy] = useState(false);
   const [showDriveConsent, setShowDriveConsent] = useState(false);
@@ -217,6 +217,79 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setShowDriveConsent(false);
   }, [initialWorkspaceId, workspaces]);
 
+  useEffect(() => {
+    let active = true;
+    const loadHistory = async () => {
+      if (!client || !userId || status !== 'ready' || !workspaceId || workspaceId === '*') {
+        setConversations([]);
+        setActiveConversationId(null);
+        return;
+      }
+      setHistoryLoading(true);
+      const { data, error: historyError } = await client
+        .from('office_ai_conversations')
+        .select('conversation_id,workspace_id,title,last_message_at')
+        .eq('workspace_id', workspaceId)
+        .order('last_message_at', { ascending: false })
+        .limit(30);
+      if (!active) return;
+      if (historyError) {
+        setError('Saved AI conversations could not be loaded. Check workspace access and try again.');
+        setConversations([]);
+      } else {
+        setConversations((data ?? []) as AiConversation[]);
+      }
+      setHistoryLoading(false);
+    };
+    void loadHistory();
+    return () => { active = false; };
+  }, [client, userId, status, workspaceId]);
+
+  const openConversation = async (conversationId: string) => {
+    if (!client || historyLoading || busy) return;
+    setHistoryLoading(true);
+    setError('');
+    try {
+      const { data, error: messagesError } = await client
+        .from('office_ai_messages')
+        .select('role,content')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      if (messagesError) throw messagesError;
+      setTurns((data ?? []).map((row: { role: 'user' | 'assistant'; content: string }) => ({ role: row.role, content: row.content })));
+      setActiveConversationId(conversationId);
+      setSelectedFileIds([]);
+      setDriveFiles([]);
+      setPrompt('');
+    } catch {
+      setError('This saved conversation could not be opened. It may have been deleted or access may have changed.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const startNewConversation = () => {
+    aiRequestGeneration.current += 1;
+    setActiveConversationId(null);
+    setTurns([]);
+    setPrompt('');
+    setError('');
+    setSelectedFileIds([]);
+    setShowDriveConsent(false);
+  };
+
+  const deleteConversation = async (conversationId: string) => {
+    if (!client || busy) return;
+    const { error: deleteError } = await client.rpc('office_ai_delete_conversation', { p_conversation_id: conversationId });
+    if (deleteError) {
+      setError('The conversation could not be deleted. Please retry.');
+      return;
+    }
+    setConversations((current) => current.filter((item) => item.conversation_id !== conversationId));
+    if (activeConversationId === conversationId) startNewConversation();
+  };
+
   const supportedDriveFile = (file: CloudFile) => {
     const name = file.displayName.normalize('NFC').trim();
     const extension = name.split('.').pop()?.toLowerCase() ?? '';
@@ -330,8 +403,38 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       if (requestGeneration !== aiRequestGeneration.current) return;
       if (invokeError) throw new Error(invokeError.message || 'COCCE AI request failed.');
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
-      setTurns((current) => [...current, { role: 'user' as const, content: question }, { role: 'assistant' as const, content: data.text }].slice(-20));
+      setTurns((current) => [...current, { role: 'user' as const, content: question }, { role: 'assistant' as const, content: data.text }].slice(-100));
       setPrompt('');
+      if (workspaceId !== '*') {
+        try {
+          let conversationId = activeConversationId;
+          if (!conversationId) {
+            const { data: createdId, error: createError } = await client.rpc('office_ai_create_conversation', {
+              p_workspace_id: workspaceId,
+              p_title: question.slice(0, 80),
+            });
+            if (createError || typeof createdId !== 'string') throw createError ?? new Error('Conversation creation failed');
+            conversationId = createdId;
+            setActiveConversationId(createdId);
+          }
+          const { error: saveError } = await client.rpc('office_ai_save_exchange', {
+            p_conversation_id: conversationId,
+            p_user_content: question,
+            p_assistant_content: data.text,
+            p_model: typeof data.model === 'string' ? data.model : 'unknown',
+          });
+          if (saveError) throw saveError;
+          const { data: saved, error: listError } = await client
+            .from('office_ai_conversations')
+            .select('conversation_id,workspace_id,title,last_message_at')
+            .eq('workspace_id', workspaceId)
+            .order('last_message_at', { ascending: false })
+            .limit(30);
+          if (!listError) setConversations((saved ?? []) as AiConversation[]);
+        } catch {
+          setError('Your answer was generated, but this exchange could not be saved to conversation history. Retry by sending your message again if you need a saved copy.');
+        }
+      }
     } catch (reason) {
       if (requestGeneration === aiRequestGeneration.current) setError(reason instanceof Error ? reason.message : 'COCCE AI could not complete the request.');
     } finally {
@@ -364,7 +467,14 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
             {driveFilesError && <p className="office-ai-drive-error" role="status">{driveFilesError}</p>}
           </div>}
         </section>
-        <div className="office-ai-answer" aria-live="polite">{turns.length ? <><div className="office-ai-thread-toolbar"><span>{turns.length / 2} {turns.length === 2 ? 'exchange' : 'exchanges'} · this tab only</span><button type="button" className="office-ai-inline-button" onClick={() => { setTurns([]); setPrompt(''); setError(''); }} disabled={busy}>New chat</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div><p>{turn.content}</p></article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose one workspace or all AI-enabled workspaces. Ask for summaries, plans, drafts, and practical next steps.</span></div>}</div>
+        <div className="office-ai-history" aria-label="Saved AI conversations">
+          <div className="office-ai-history-heading"><strong>Conversation history</strong><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy || historyLoading}>New chat</button></div>
+          {workspaceId === '*' ? <small className="office-ai-history-hint">Select one workspace to save and reopen conversations. All-workspace context remains available for one-off questions.</small> : historyLoading ? <small className="office-ai-history-hint">Loading saved conversations…</small> : conversations.length ? conversations.map((conversation) => <div className={`office-ai-history-row ${activeConversationId === conversation.conversation_id ? 'is-active' : ''}`} key={conversation.conversation_id}>
+            <button type="button" className="office-ai-history-open" onClick={() => void openConversation(conversation.conversation_id)} disabled={busy}><strong>{conversation.title}</strong><small>{new Date(conversation.last_message_at).toLocaleString()}</small></button>
+            <button type="button" className="office-ai-history-delete" aria-label={`Delete ${conversation.title}`} onClick={() => void deleteConversation(conversation.conversation_id)} disabled={busy}>×</button>
+          </div>) : <small className="office-ai-history-hint">Your saved chats will appear here.</small>}
+        </div>
+        <div className="office-ai-answer" aria-live="polite">{turns.length ? <><div className="office-ai-thread-toolbar"><span>{Math.floor(turns.length / 2)} {turns.length === 2 ? 'exchange' : 'exchanges'} · {activeConversationId ? 'saved to this workspace' : workspaceId === '*' ? 'temporary all-workspace chat' : 'new conversation'}</span><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy}>New chat</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div><p>{turn.content}</p></article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><MessageCircle size={23} /><strong>Your next idea starts here.</strong><span>Choose one workspace or all AI-enabled workspaces. Ask for summaries, plans, drafts, and practical next steps.</span></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder="Ask across your workspace…" disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
         {showDriveConsent && <div className="office-ai-consent-backdrop">
           <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
