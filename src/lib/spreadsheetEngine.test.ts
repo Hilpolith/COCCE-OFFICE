@@ -25,6 +25,7 @@ describe('spreadsheet formula engine', () => {
       A19: '=MID("abc",0,1)',
       A20: '=ROUNDUP(1,13)',
       A21: '=PRODUCT(1E308,1E308)',
+      A22: '=PRODUCT()',
     };
     expect(evaluateCellValue(cells, 'A2')).toBe(-12.35);
     expect(evaluateCellValue(cells, 'A3')).toBe(-12.34);
@@ -46,6 +47,7 @@ describe('spreadsheet formula engine', () => {
     expect(evaluateCellValue(cells, 'A19')).toEqual({ error: '#VALUE!' });
     expect(evaluateCellValue(cells, 'A20')).toEqual({ error: '#NUM!' });
     expect(evaluateCellValue(cells, 'A21')).toEqual({ error: '#NUM!' });
+    expect(evaluateCellValue(cells, 'A22')).toEqual({ error: '#VALUE!' });
   });
 
   it('evaluates AVERAGEIF with optional same-shape average ranges and safe no-match errors', () => {
