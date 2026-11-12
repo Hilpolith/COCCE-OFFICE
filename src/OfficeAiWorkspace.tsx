@@ -26,7 +26,7 @@ function renderOfficeAiMarkdown(source: string): ReactNode {
     if (link) return <a key={key} href={link[2]} target="_blank" rel="noopener noreferrer">{link[1]}</a>;
     return <Fragment key={key}>{part}</Fragment>;
   });
-  const tableCells = (line: string) => line.trim().replace(/^\\|/, '').replace(/\\|$/, '').split('|').map((cell) => cell.trim());
+  const tableCells = (line: string) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
   const isTableSeparator = (line: string) => {
     const cells = tableCells(line);
     return cells.length >= 2 && cells.length <= 10 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
