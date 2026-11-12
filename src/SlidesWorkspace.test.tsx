@@ -497,7 +497,8 @@ describe('Slides workspace', () => {
     await waitFor(() => expect(document.querySelector('.slides-workbench .slide-local-image')).toBeTruthy());
     const fit = screen.getByRole('combobox', { name: 'Image fit' });
     fireEvent.change(fit, { target: { value: 'cover' } });
-    await waitFor(() => expect(document.querySelector('.slides-workbench .slide-local-image')?.classList.contains('slide-image-fit-cover')).toBe(true));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Image fit' })).toHaveValue('cover'));
+    expect(document.querySelector('.slides-workbench .slide-local-image')?.classList.contains('slide-image-fit-cover')).toBe(true);
     expect(await localSlidesAssetRepository.listDeckImages(JSON.parse(window.localStorage.getItem(SLIDES_STORAGE_KEY)!).decks[0].id)).toHaveLength(1);
     expect(screen.getByRole('combobox', { name: 'Image fit' }).getAttribute('value')).not.toBe('stretch');
   });

@@ -65,7 +65,7 @@ describe('per-record Office cloud sync consent', () => {
       busy={false} execute={execute as never} snapshot={snapshot}
     />);
 
-    expect(screen.getByRole('button', { name: 'Enable sync for this item' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Waiting for connection' })).toBeTruthy();
     expect(snapshot).not.toHaveBeenCalled();
     expect(api.reserve).not.toHaveBeenCalled();
     expect(api.upload).not.toHaveBeenCalled();
@@ -107,7 +107,7 @@ describe('per-record Office cloud sync consent', () => {
     await act(async () => {
       window.dispatchEvent(new Event('online'));
     });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Enable sync for this item' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Waiting for connection' })).toBeTruthy());
     expect(api.reserve).not.toHaveBeenCalled();
     expect(snapshot).not.toHaveBeenCalled();
   });
@@ -189,6 +189,7 @@ describe('per-record Office cloud sync consent', () => {
     });
     await waitFor(() => expect(screen.getByText(/settings were refreshed from another/)).toBeTruthy());
     expect(screen.getByText(/Offline · your local original is safe/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Waiting for connection' })).toBeTruthy();
 
     window.localStorage.setItem(OFFICE_CLOUD_SYNC_LINKS_KEY, JSON.stringify({ version: 1, links: [] }));
     await act(async () => {

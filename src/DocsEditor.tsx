@@ -469,7 +469,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       if (!activeEditor) return {
         bold: false, italic: false, underline: false, heading1: false, heading2: false, heading3: false,
         strike: false, paragraph: false, bulletList: false, orderedList: false, blockquote: false,
-        canUndo: false, canRedo: false, empty: true, tableActive: false, tableRows: 0, tableColumns: 0,
+        canUndo: false, canRedo: false, empty: true, wordCount: 0, tableActive: false, tableRows: 0, tableColumns: 0,
         tableCount: 0, tableTextChars: 0, tableHeaderRow: false, hasTextSelection: false, selectedCells: 0, imageActive: false, imageWidth: null,
       };
       const activeTable = activeDocsTable(activeEditor.state.selection);
@@ -492,6 +492,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         canUndo: activeEditor.can().undo(),
         canRedo: activeEditor.can().redo(),
         empty: activeEditor.isEmpty,
+        wordCount: activeEditor.getText().trim() ? activeEditor.getText().trim().split(/\s+/u).length : 0,
         tableActive: Boolean(activeTable),
         tableRows: activeTable?.rows ?? 0,
         tableColumns: activeTable?.columns ?? 0,
@@ -505,9 +506,10 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     },
   });
 
-  const documentTextForCount = sourceMode ? sourceText : editor?.getText() ?? document.content;
-  const normalizedDocumentText = documentTextForCount.trim();
-  const documentWordCount = normalizedDocumentText ? normalizedDocumentText.split(/\s+/u).length : 0;
+  const normalizedSourceText = sourceText.trim();
+  const documentWordCount = sourceMode
+    ? (normalizedSourceText ? normalizedSourceText.split(/\s+/u).length : 0)
+    : editorState.wordCount;
 
   const insertTable = () => {
     if (!editor) return;
