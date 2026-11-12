@@ -67,11 +67,11 @@ Distinct specialist components and tab structures are present for government, sc
 - [x] Scope Cloud Drive to the globally selected server workspace.
 - [x] Retain private Bunny-backed file operations through the authenticated Office Cloud Files function.
 - [x] Support in-app previews for common media, PDF, text and DOCX paths already implemented in the app.
-- [ ] Split the file filters into distinct tabs for Documents, Spreadsheets, Presentations, PDFs, Images, Video, Audio and Other.
-- [ ] Add in-app XLSX/ODS spreadsheet preview with sheets, rows, columns and safe cell rendering.
-- [ ] Add in-app PPTX/ODP presentation preview with slide navigation.
+- [x] Split the file filters into distinct tabs for Documents, Spreadsheets, Presentations, PDFs, Images, Video, Audio and Other.
+- [x] Add a bounded read-only in-app XLSX preview with safe cell rendering for one visible 24×12 worksheet; formulas are shown as stored, not recalculated. ODS preview remains unsupported.
+- [x] Add a bounded read-only PPTX preview with slide text, layouts and speaker notes. Embedded images are not rendered in this preview; ODP preview remains unsupported.
 - [ ] Improve DOCX/PDF previews, including large-file handling, page navigation and accessibility.
-- [ ] Add preview tests for unsupported, malformed, encrypted and oversized files.
+- [ ] Extend preview tests to encrypted and oversized files; malformed XLSX/PPTX packages and unsupported workbook structures now have explicit safe-fallback tests.
 - [ ] Complete optional monthly storage subscriptions only after explicit billing approval; current subscription work is gated off by default and is not live.
 - [ ] Add and verify a scheduled renewal job before enabling automatic subscription renewal or charging wallets.
 - [ ] Keep local files local unless the user explicitly uploads them.
