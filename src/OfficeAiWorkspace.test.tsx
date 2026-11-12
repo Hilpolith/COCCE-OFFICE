@@ -326,7 +326,7 @@ describe('COCCE AI workspace context', () => {
     render(<OfficeAiWorkspace initialWorkspaceId="workspace-one" initialPrompt="Summarise our next steps." />);
     const selector = await screen.findByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement;
     await waitFor(() => expect(selector.value).toBe('workspace-one'));
-    const contextToggle = screen.getByRole('checkbox') as HTMLInputElement;
+    const contextToggle = screen.getByLabelText(/Team conversation context/) as HTMLInputElement;
     fireEvent.click(contextToggle);
     expect(contextToggle.checked).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));

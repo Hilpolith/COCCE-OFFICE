@@ -926,7 +926,14 @@ function parseXlsxDrawingCharts(
     }
     const frames = children.filter((child) => child.localName === 'graphicFrame');
     if (frames.length !== 1) fail('Each XLSX drawing anchor must contain exactly one chart frame.');
-    const chartNodes = frames[0]!.getElementsByTagNameNS(CHART_NS, 'chart');
+    const chartNodes: Element[] = [];
+    const visitChartNodes = (node: Element) => {
+      for (const child of allElementChildren(node)) {
+        if (child.namespaceURI === CHART_NS && child.localName === 'chart') chartNodes.push(child);
+        visitChartNodes(child);
+      }
+    };
+    visitChartNodes(frames[0]!);
     if (chartNodes.length !== 1) fail('The XLSX drawing frame does not reference exactly one chart.');
     const id = chartNodes[0]!.getAttributeNS(OFFICE_REL_NS, 'id');
     if (!id || chartIds.includes(id)) fail('The XLSX drawing contains an invalid or duplicate chart reference.');
