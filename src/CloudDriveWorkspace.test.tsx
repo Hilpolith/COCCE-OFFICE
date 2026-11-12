@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => {
     getUser: vi.fn(),
     onAuthStateChange: vi.fn(),
   };
-  return { cloudApi, auth, listWorkspaces: vi.fn(), confirm: vi.fn(), importDocxFile: vi.fn() };
+  return { cloudApi, auth, listWorkspaces: vi.fn(), confirm: vi.fn(), importDocxFile: vi.fn(), importXlsxFile: vi.fn() };
 
 });
 
@@ -44,6 +44,7 @@ vi.mock('./lib/officeCloudFiles', () => ({
   OFFICE_CLOUD_MAX_FILE_BYTES: 25 * 1024 * 1024,
 }));
 vi.mock('./lib/docxInterchange', () => ({ importDocxFile: mocks.importDocxFile, MAX_DOCX_FILE_BYTES: 5 * 1024 * 1024, DOCX_MIME: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+vi.mock('./lib/xlsxInterchange', () => ({ importXlsxFile: mocks.importXlsxFile, MAX_XLSX_FILE_BYTES: 5 * 1024 * 1024, XLSX_MIME: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 vi.mock('./lib/driveStore', () => ({
   formatFileSize: (value: number) => `${value} B`,
 }));
@@ -75,6 +76,7 @@ beforeEach(() => {
   mocks.cloudApi.finalize.mockResolvedValue({ status: 'finalized' });
   mocks.cloudApi.recover.mockResolvedValue({ status: 'recovered' });
   mocks.importDocxFile.mockResolvedValue({ title: 'brief', content: 'Preview body', richText: '<h1>Imported brief</h1><p>Preview body</p>', warnings: [] });
+  mocks.importXlsxFile.mockResolvedValue({ title: 'Budget', sheetName: 'Summary', cells: { A1: 'Department', B1: 'Amount', A2: 'Operations', B2: '1200' }, warnings: [] });
 });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
@@ -110,6 +112,32 @@ describe('Cloud Drive workspace', () => {
     expect(docxFrame).toContain('srcDoc=');
     expect(componentSource).toContain('${preview.docxHtml}');
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(docxFile);
+  });
+
+  it('renders a bounded read-only XLSX grid after verified private download', async () => {
+    const workbook = { ...cloudFile, displayName: 'budget.xlsx', sizeBytes: 4096 };
+    mocks.cloudApi.list.mockResolvedValue([workbook]);
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
+    await chooseWorkspace();
+    fireEvent.click(await screen.findByRole('button', { name: /^XLSX budget\\.xlsx/ }));
+    expect(await screen.findByText('Summary')).toBeTruthy();
+    expect(screen.getByText('Department')).toBeTruthy();
+    expect(screen.getByText('Operations')).toBeTruthy();
+    expect(screen.getByText('1200')).toBeTruthy();
+    expect(mocks.importXlsxFile).toHaveBeenCalledWith(expect.any(File));
+    expect(mocks.cloudApi.download).toHaveBeenCalledWith(workbook);
+  });
+
+  it('does not render malformed XLSX content and keeps the verified download available', async () => {
+    const workbook = { ...cloudFile, displayName: 'broken.xlsx', sizeBytes: 128 };
+    mocks.cloudApi.list.mockResolvedValue([workbook]);
+    mocks.importXlsxFile.mockRejectedValue(new Error('The workbook contains unsupported worksheet content.'));
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
+    await chooseWorkspace();
+    fireEvent.click(await screen.findByRole('button', { name: /^XLSX broken\\.xlsx/ }));
+    expect(await screen.findByText(/unsupported worksheet content/i)).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy();
   });
 
   it('loads subsequent 50-file pages without replacing the first page', async () => {
