@@ -97,7 +97,12 @@ describe('COCCE AI workspace context', () => {
     mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
       args.body.action === 'status'
         ? { data: { configured: true }, error: null }
-        : { data: { text: '## Workspace summary\\n\\n**Ready for review**\\n\\n- First action\\n- Second action' }, error: null }
+        : { data: { text: `## Workspace summary
+
+**Ready for review**
+
+- First action
+- Second action` }, error: null }
     ));
     render(<OfficeAiWorkspace mode="chat" />);
     await screen.findByRole('combobox', { name: 'Workspace' });
