@@ -347,38 +347,65 @@ export async function loadDriveInventory(
   const pages = await Promise.all(enabledWorkspaces.slice(0, 20).map(async (workspace) => {
     const workspaceId = String(workspace.workspace_id ?? '');
     if (!isUuid(workspaceId)) return [];
-    const response = await fetchImpl(endpoint, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, apikey: anonKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'list_files', workspaceId, limit: 100, offset: 0 }),
-      cache: 'no-store',
-      redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) {
-      const status = response.status === 403 ? 403 : response.status === 404 ? 404 : 503;
-      throw { status, code: status === 403 ? 'DRIVE_INVENTORY_ACCESS_DENIED' : 'DRIVE_INVENTORY_UNAVAILABLE', message: 'Your private cloud file inventory could not be authorised or retrieved.' } satisfies DriveContextError;
-    }
-    const payload: unknown = await response.json();
-    if (!isRecord(payload) || !Array.isArray(payload.files) || payload.files.length > 100) {
-      throw { status: 502, code: 'DRIVE_INVENTORY_INVALID', message: 'The private cloud returned an invalid file inventory.' } satisfies DriveContextError;
-    }
     const workspaceName = String(workspace.name ?? 'Office workspace').slice(0, 80);
-    return payload.files.flatMap((item): DriveInventoryItem[] => {
-      if (!isRecord(item) || !isUuid(item.fileId) || !isUuid(item.workspaceId)
-        || item.workspaceId.toLowerCase() !== workspaceId.toLowerCase()
-        || typeof item.displayName !== 'string' || !item.displayName.trim()
-        || item.displayName.length > 255 || !safeInventoryDate(item.createdAt)
-        || !Number.isSafeInteger(item.sizeBytes) || Number(item.sizeBytes) < 1) return [];
-      const displayName = item.displayName.normalize('NFC').trim();
-      if (isSensitiveDriveFileName(displayName)) return [];
-      return [{
-        fileId: item.fileId.toLowerCase(), workspaceId: workspaceId.toLowerCase(), workspaceName,
-        displayName: displayName.slice(0, 160), sizeBytes: Number(item.sizeBytes), createdAt: item.createdAt as string,
-      }];
-    });
+    const workspaceFiles: DriveInventoryItem[] = [];
+    // The cloud API caps each page at 100. Walk a bounded number of pages so
+    // older files are discoverable without allowing an unbounded AI request.
+    for (let page = 0; page < 10; page += 1) {
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, apikey: anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list_files', workspaceId, limit: 100, offset: page * 100 }),
+        cache: 'no-store',
+        redirect: 'error',
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) {
+        const status = response.status === 403 ? 403 : response.status === 404 ? 404 : 503;
+        throw { status, code: status === 403 ? 'DRIVE_INVENTORY_ACCESS_DENIED' : 'DRIVE_INVENTORY_UNAVAILABLE', message: 'Your private cloud file inventory could not be authorised or retrieved.' } satisfies DriveContextError;
+      }
+      const payload: unknown = await response.json();
+      if (!isRecord(payload) || !Array.isArray(payload.files) || payload.files.length > 100) {
+        throw { status: 502, code: 'DRIVE_INVENTORY_INVALID', message: 'The private cloud returned an invalid file inventory.' } satisfies DriveContextError;
+      }
+      const files = payload.files.flatMap((item): DriveInventoryItem[] => {
+        if (!isRecord(item) || !isUuid(item.fileId) || !isUuid(item.workspaceId)
+          || item.workspaceId.toLowerCase() !== workspaceId.toLowerCase()
+          || typeof item.displayName !== 'string' || !item.displayName.trim()
+          || item.displayName.length > 255 || !safeInventoryDate(item.createdAt)
+          || !Number.isSafeInteger(item.sizeBytes) || Number(item.sizeBytes) < 1) return [];
+        const displayName = item.displayName.normalize('NFC').trim();
+        if (isSensitiveDriveFileName(displayName)) return [];
+        return [{
+          fileId: item.fileId.toLowerCase(), workspaceId: workspaceId.toLowerCase(), workspaceName,
+          displayName: displayName.slice(0, 160), sizeBytes: Number(item.sizeBytes), createdAt: item.createdAt as string,
+        }];
+      });
+      workspaceFiles.push(...files);
+      if (payload.files.length < 100) break;
+    }
+    return workspaceFiles;
   }));
   return pages.flat().sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).slice(0, 200);
+}
+
+export function rankDriveInventoryFiles(
+  inventory: DriveInventoryItem[],
+  prompt: string,
+  limit = MAX_DRIVE_FILES,
+): DriveInventoryItem[] {
+  const ignored = new Set(['about','after','again','also','and','are','can','cloud','could','describe','does','file','files','find','from','have','help','into','list','look','me','my','please','show','tell','that','the','their','them','these','this','those','what','which','with','workspace','your']);
+  const terms = prompt.toLocaleLowerCase().normalize('NFKC').match(/[\\p{L}\\p{N}]{3,}/gu)?.filter((term) => !ignored.has(term)) ?? [];
+  if (terms.length === 0) return inventory.slice(0, limit);
+  const ranked = inventory.map((file, index) => {
+    const searchable = (file.displayName + ' ' + file.workspaceName).toLocaleLowerCase().normalize('NFKC');
+    const score = terms.reduce((total, term) => total + (searchable.includes(term) ? (file.displayName.toLocaleLowerCase().includes(term) ? 3 : 1) : 0), 0);
+    return { file, index, score };
+  }).filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, limit)
+    .map((entry) => entry.file);
+  return ranked.length ? ranked : inventory.slice(0, limit);
 }
 
 function safeInventoryDate(value: unknown): value is string {
