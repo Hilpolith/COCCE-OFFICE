@@ -28,8 +28,8 @@ const deck: PresentationDeck = {
   theme: 'ocean',
   updatedAt: '2026-10-20T12:34:56.000Z',
   slides: [
-    { id: 'slide-cover', title: 'Focus', body: 'First line\nSecond line', notes: 'Private talk reminder', layout: 'two-column', imageAssetId: 'asset-used', imageAltText: 'A blue chart' },
-    { id: 'slide-quote', title: 'Customer voice', body: 'Keep the detail', notes: '', layout: 'quote', imageAssetId: 'asset-used' },
+    { id: 'slide-cover', title: 'Focus', body: 'First line\nSecond line', notes: 'Private talk reminder', layout: 'two-column', imageAssetId: 'asset-used', imageAltText: 'A blue chart', imageFit: 'cover' },
+    { id: 'slide-quote', title: 'Customer voice', body: 'Keep the detail', notes: '', layout: 'quote', imageAssetId: 'asset-used', imageFit: 'contain' },
   ],
 };
 const metadata: SlideImageMetadata = {
@@ -111,6 +111,15 @@ describe('Slides cloud snapshot codec', () => {
     }));
     await expect(createSlidesCloudSnapshot(deck, tooManyBytes, decoder)).rejects.toThrow(/exceed the 24 MB/);
     expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+
+  it('rejects unsupported image-fit values in cloud copies', async () => {
+    const packageBytes = await createSlidesCloudSnapshot(deck, [{ metadata, blob: png() }], decoder);
+    const { envelope, payload } = envelopeAndPayload(packageBytes);
+    const cloudDeck = envelope.deck as { slides: Array<Record<string, unknown>> };
+    cloudDeck.slides[0].imageFit = 'stretch';
+    await expect(parseSlidesCloudSnapshot(pack(envelope, payload), decoder)).rejects.toThrow(/image fit is unsupported/);
   });
 
   it('refuses missing image bytes and image metadata that no longer matches the local asset', async () => {

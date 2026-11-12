@@ -10,7 +10,7 @@ import {
 } from './slidesAssets';
 import type { SlideImageDecoder, SlideImageMetadata, SlideImageMimeType } from './slidesAssets';
 import { MAX_SLIDE_TEXT_LENGTH, MAX_SLIDES_PER_DECK, SLIDE_LAYOUTS } from './slidesStore';
-import type { PresentationDeck, Slide, SlideLayout, SlidesTheme } from './slidesStore';
+import type { PresentationDeck, Slide, SlideImageFit, SlideLayout, SlidesTheme } from './slidesStore';
 
 export const SLIDES_CLOUD_MAX_BYTES = OFFICE_CLOUD_MAX_FILE_BYTES;
 export const SLIDES_CLOUD_MAX_IMAGES = MAX_RETAINED_SLIDE_IMAGES_PER_DECK;
@@ -25,7 +25,7 @@ const THEMES = new Set<SlidesTheme>(['violet', 'ocean', 'ember']);
 const MIME_TYPES = new Set<SlideImageMimeType>(SLIDE_IMAGE_MIME_TYPES);
 const DECK_KEYS = ['id', 'workspaceId', 'title', 'theme', 'slides', 'updatedAt'] as const;
 const SLIDE_REQUIRED_KEYS = ['id', 'title', 'body', 'notes', 'layout'] as const;
-const SLIDE_OPTIONAL_KEYS = ['imageAssetId', 'imageAltText'] as const;
+const SLIDE_OPTIONAL_KEYS = ['imageAssetId', 'imageAltText', 'imageFit'] as const;
 const IMAGE_META_KEYS = ['id', 'deckId', 'mimeType', 'size', 'width', 'height', 'createdAt'] as const;
 const ENVELOPE_KEYS = ['format', 'version', 'deck', 'images'] as const;
 const IMAGE_DESCRIPTOR_KEYS = ['metadata', 'sha256Hex'] as const;
@@ -99,6 +99,8 @@ function cloneDeck(value: unknown): PresentationDeck {
     if (typeof entry.layout !== 'string' || !(SLIDE_LAYOUTS as readonly string[]).includes(entry.layout)) fail('slide layout is unsupported');
     const imageAssetId = entry.imageAssetId === undefined ? undefined : validateId(entry.imageAssetId, 'slide image ID');
     const imageAltText = entry.imageAltText === undefined ? undefined : validateText(entry.imageAltText, 'image description', 500);
+    const imageFit = entry.imageFit;
+    if (imageFit !== undefined && imageFit !== 'contain' && imageFit !== 'cover') fail('slide image fit is unsupported');
     return {
       id: slideId,
       title: slideTitle,
@@ -107,6 +109,7 @@ function cloneDeck(value: unknown): PresentationDeck {
       layout: entry.layout as SlideLayout,
       ...(imageAssetId === undefined ? {} : { imageAssetId }),
       ...(imageAltText === undefined ? {} : { imageAltText }),
+      ...(imageFit === undefined ? {} : { imageFit: imageFit as SlideImageFit }),
     };
   });
   return { id, workspaceId: workspaceId as string | null, title, theme: value.theme as SlidesTheme, slides, updatedAt: value.updatedAt };
