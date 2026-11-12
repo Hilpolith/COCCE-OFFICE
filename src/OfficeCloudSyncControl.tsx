@@ -149,7 +149,7 @@ export default function OfficeCloudSyncControl({
           if (intent && [400, 401, 403, 413, 429].includes(status ?? 0) && !intent.uploadSessionId)
             clearPending(intent.idempotencyKey);
           setMessage(error instanceof Error ? `Sync was not enabled: ${error.message}` : 'Sync was not enabled. Your local original is unchanged.');
-          throw error;
+          // The panel reports the failure and the recovery journal retains uncertain uploads.
         }
       });
     } finally {
