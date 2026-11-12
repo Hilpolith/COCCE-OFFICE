@@ -2,7 +2,6 @@ import type { PresentationDeck } from './slidesStore';
 import { localSlidesAssetRepository } from './slidesAssets';
 import { importDeck } from './slidesStore';
 import type { ImportedSlideDeck } from './slidesStore';
-import { strFromU8, unzipSync } from 'fflate';
 export type SlidesImageReader = (imageId: string, deckId: string) => Promise<{ metadata: { width: number; height: number }; blob: Blob }>;
 const PALETTES = {
   violet: { background: '17152A', accent: 'A99BFF', text: 'F6F4FF', muted: 'C4BEDA' },
@@ -160,6 +159,7 @@ export async function importPptxFile(file: File, workspaceId: string | null): Pr
   if (file.size < 22 || file.size > PPTX_MAX_COMPRESSED_BYTES) throw new Error('Choose a PowerPoint file no larger than 25 MB.');
   const bytes = new Uint8Array(await file.arrayBuffer());
   assertPptxZipBounds(bytes);
+  const { strFromU8, unzipSync } = await import('fflate');
   let files: Record<string, Uint8Array>;
   try { files = unzipSync(bytes); } catch { throw new Error('The PowerPoint archive could not be safely opened.'); }
   if (!files['[Content_Types].xml'] || !files['ppt/presentation.xml']) throw new Error('This file is not a supported PowerPoint presentation.');
