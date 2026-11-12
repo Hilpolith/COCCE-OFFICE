@@ -1,4 +1,6 @@
-import { hasControlCharacters } from './textSafety';\n\nexport const CLOUD_PENDING_KEY = 'cocce-office-cloud-pending-v1';
+import { hasControlCharacters } from './textSafety';
+
+export const CLOUD_PENDING_KEY = 'cocce-office-cloud-pending-v1';
 const MAX_RECORDS = 20;
 const MAX_BYTES = 64 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -50,7 +52,7 @@ function valid(value: unknown): value is PendingCloudCopy {
       r.displayName.endsWith('.cocce-sheets.json') ||
       r.displayName.endsWith('.cocce-slides.bin')) &&
     r.displayName.length <= 255 &&
-    !/[\x00-\x1f\x7f/\\:<>"|?*]/.test(r.displayName) &&
+    !hasControlCharacters(r.displayName) && !/[\\/:<>"|?*]/.test(r.displayName) &&
     typeof r.sizeBytes === 'number' &&
     Number.isSafeInteger(r.sizeBytes) &&
     r.sizeBytes > 0 &&

@@ -696,7 +696,7 @@ export function createOfficeCloudApi(
         typeof displayName !== 'string' ||
         !displayName.trim() ||
         displayName.length > 255 ||
-        /[\x00-\x1f\x7f/\\]/.test(displayName) ||
+        (hasControlCharacters(displayName) || displayName.includes('/') || displayName.includes(String.fromCharCode(92))) ||
         !(data instanceof Uint8Array) ||
         !fileBytes(data.byteLength)
       )

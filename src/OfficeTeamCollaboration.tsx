@@ -491,7 +491,7 @@ export default function OfficeTeamCollaboration({
 
   const saveMemberJobTitle = (member: OfficeMember, jobTitle: string) => {
     const value = jobTitle.trim();
-    if (value.length > 80 || /[\u0000-\u001f\u007f]/.test(value)) {
+    if (value.length > 80 || hasControlCharacters(value)) {
       setError('Position must be plain text up to 80 characters.');
       return;
     }

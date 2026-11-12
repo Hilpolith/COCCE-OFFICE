@@ -46,13 +46,13 @@ function validateInput(input: AttachmentInput): void {
     typeof input.name !== "string" ||
     !input.name.trim() ||
     input.name.length > 255 ||
-    /[\x00-\x1f\x7f/\\]/.test(input.name)
+    (hasControlCharacters(input.name) || input.name.includes('/') || input.name.includes(String.fromCharCode(92)))
   )
     throw new Error("Attachment filename is invalid.");
   if (
     typeof input.type !== "string" ||
     input.type.length > 255 ||
-    /[\x00-\x1f\x7f]/.test(input.type)
+    hasControlCharacters(input.type)
   )
     throw new Error("Attachment MIME type is invalid.");
   if (
@@ -181,10 +181,10 @@ export async function decryptOfficeAttachment(
     typeof item.name !== "string" ||
     !item.name.trim() ||
     item.name.length > 255 ||
-    /[\x00-\x1f\x7f/\\]/.test(item.name) ||
+    (hasControlCharacters(item.name) || item.name.includes('/') || item.name.includes(String.fromCharCode(92))) ||
     typeof item.type !== "string" ||
     item.type.length > 255 ||
-    /[\x00-\x1f\x7f]/.test(item.type) ||
+    hasControlCharacters(item.type) ||
     typeof originalLength !== "number" ||
     !Number.isSafeInteger(originalLength) ||
     originalLength < 0 ||

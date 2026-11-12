@@ -202,7 +202,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     try {
       for (const file of files) {
         if (!file.size || file.size > MAX_CHAT_FILE_BYTES) throw new Error(file.name + ' exceeds the 25 MiB attachment limit.');
-        const normalizedName = file.name.normalize('NFC').trim().replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 180);
+        const normalizedName = stripControlCharacters(file.name.normalize('NFC').trim()).slice(0, 180);
         if (!normalizedName) throw new Error('Choose a file with a valid name.');
         const bytes = new Uint8Array(await file.arrayBuffer());
         const reservation = await cloud.reserve(workspaceId, normalizedName, bytes, createChatUploadUuid());

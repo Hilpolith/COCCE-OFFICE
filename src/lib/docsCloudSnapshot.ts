@@ -194,7 +194,7 @@ export function safeDocsCloudFilename(title: string): string {
     typeof title === 'string' ? title.normalize('NFC').trim() : '';
   const base =
     normalized
-      .replaceAll('/', '-').replaceAll('\\\\', '-').split('').map((character) => hasControlCharacters(character) ? '-' : character).join('')
+      .replaceAll('/', '-').replaceAll(String.fromCharCode(92), '-').split('').map((character) => hasControlCharacters(character) ? '-' : character).join('')
       .replace(/[<>:"|?*]/g, '-')
       .replace(/\s+/g, ' ')
       .replace(/[. ]+$/g, '')

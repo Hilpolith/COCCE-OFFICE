@@ -229,7 +229,7 @@ function xmlText(xml: string, tag: string): string[] {
 }
 
 function compactExtractedText(value: string): string {
-  const text = value.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+  const text = stripXmlControlCharacters(value.replace(/\r\n?/g, '\n'))
     .replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   if (!text) throw { status: 415, code: 'DRIVE_OFFICE_NO_TEXT', message: 'No readable text was found in the selected Office file.' } satisfies DriveContextError;
   return text.slice(0, MAX_OFFICE_ARCHIVE_TEXT);
@@ -407,7 +407,7 @@ export async function loadSelectedDriveFiles(
       if (text.includes('\u0000')) throw { status: 415, code: 'DRIVE_FILE_NOT_TEXT', message: 'A selected Drive file contains binary data and cannot be attached as text.' } satisfies DriveContextError;
       text = extractOfficeSnapshot(link.displayName, text);
     }
-    text = text.replace(/\r\n?/g, '\n').replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').slice(0, MAX_DRIVE_FILE_CHARS);
+    text = stripXmlControlCharacters(text.replace(/\r\n?/g, '\n')).slice(0, MAX_DRIVE_FILE_CHARS);
     return { workspaceName: enabledById.get(link.workspaceId) ?? 'Office workspace', displayName: link.displayName.slice(0, 120), text };
   }));
   let remaining = MAX_DRIVE_CONTEXT_CHARS;

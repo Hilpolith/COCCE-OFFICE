@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { OfficeRecordsKeyConfig } from "./officePrivateRecordsCrypto";\nimport { hasControlCharacters } from "./textSafety";
+import type { OfficeRecordsKeyConfig } from "./officePrivateRecordsCrypto";
+import { hasControlCharacters } from "./textSafety";
 
 export type BusinessRole =
   | "business_admin"
@@ -49,7 +50,7 @@ export function normalizeBusinessPrivateContact(
     if (
       typeof text !== "string" ||
       text.length > max ||
-      /[\u0000-\u001f\u007f]/.test(text)
+      hasControlCharacters(text)
     )
       throw new Error("Private contact fields are invalid or too long.");
     result[field] = text.trim();

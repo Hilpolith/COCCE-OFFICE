@@ -1,4 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";\nimport { hasControlCharacters } from "./textSafety";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { hasControlCharacters } from "./textSafety";
 
 export type UniversityRole =
   | "university_admin"
@@ -125,7 +126,7 @@ function clean(value: unknown, field: string, max: number, required = false) {
   if (
     typeof value !== "string" ||
     value.length > max ||
-    /[\u0000-\u001f\u007f]/.test(value) ||
+    hasControlCharacters(value) ||
     (required && !value.trim())
   )
     throw new Error(`${field} is missing or too long.`);
