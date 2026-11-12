@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { HospitalityDataResource, HospitalityFilter, HospitalityPage, HospitalityRow } from './lib/officeHospitalityTypes';
 import type { HospitalityWorkspaceContext } from './hospitalityWorkspaceTypes';
@@ -12,8 +12,8 @@ export function HospitalitySelect({ label, rows, value, onChange, labelKey = 'na
 export function HospitalityPager({ collection }: { collection: ReturnType<typeof useHospitalityRows> }) { if (!collection.page?.has_more) return null; return <button type="button" className="button-secondary hospitality-load-more" onClick={() => void collection.loadMore().catch(() => undefined)} disabled={collection.loading}>Load more ({collection.rows.length} of {collection.page.total_count})</button>; }
 export function useHospitalityRows(context: HospitalityWorkspaceContext, resource: HospitalityDataResource, filter: HospitalityFilter = {}) {
   const [rows, setRows] = useState<HospitalityRow[]>([]); const [page, setPage] = useState<HospitalityPage | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const contextLoad = context.load;
-  const filterKey = useMemo(() => JSON.stringify(filter), [filter.id, filter.property_id, filter.reservation_id, filter.status, filter.purpose, filter.start_on, filter.end_on]); const epoch = useRef(0);
+  const filterKey = JSON.stringify({ id: filter.id, property_id: filter.property_id, reservation_id: filter.reservation_id, status: filter.status, purpose: filter.purpose, start_on: filter.start_on, end_on: filter.end_on }); const epoch = useRef(0);
   const load = useCallback(async (offset = 0, append = false) => { const request = ++epoch.current; setLoading(true); setError(''); try { const result = await contextLoad(resource, JSON.parse(filterKey) as HospitalityFilter, offset); if (request !== epoch.current) return result; if (!result || !Array.isArray(result.rows) || typeof result.total_count !== 'number' || typeof result.limit !== 'number' || typeof result.offset !== 'number' || typeof result.has_more !== 'boolean') throw new Error('The server returned an unreadable collection.'); setRows(current => append ? [...current, ...result.rows] : result.rows); setPage(result); return result; } catch (cause) { if (request === epoch.current) { const message = cause instanceof Error ? cause.message : 'Could not load this collection.'; setError(message); } throw cause; } finally { if (request === epoch.current) setLoading(false); } }, [contextLoad, resource, filterKey]);
-  useEffect(() => { epoch.current += 1; void load(0, false).catch(() => undefined); return () => { epoch.current += 1; }; }, [load, context.revision]);
+  useEffect(() => { const scheduledEpoch = ++epoch.current; void Promise.resolve().then(() => { if (epoch.current === scheduledEpoch) void load(0, false).catch(() => undefined); }); return () => { epoch.current += 1; }; }, [load, context.revision]);
   const loadMore = useCallback(() => page?.has_more && !loading ? load(page.offset + page.limit, true) : Promise.resolve(page), [load, page, loading]); return { rows, page, loading, error, loadMore, reload: () => load(0, false) };
 }
