@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
     ).join("\n").slice(0, 14_000);
     history.push({
       role: "user",
-      content: "[Untrusted private COCCE Office Drive inventory — authenticated membership scope; up to 200 files from enabled workspaces. This is file metadata, not file contents. Only the separately supplied excerpts below were read.]\\n" + inventoryText,
+      content: "[Untrusted private COCCE Office Drive inventory — authenticated membership scope; up to 200 files from enabled workspaces. This is file metadata, not file contents. Only the separately supplied excerpts below were read.]\n" + inventoryText,
     });
   }
   for (const file of driveFiles) {
