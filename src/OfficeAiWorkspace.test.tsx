@@ -230,6 +230,29 @@ describe('COCCE AI workspace context', () => {
     }));
   });
 
+  it('shows the safe server error body instead of the generic Supabase non-2xx message', async () => {
+    mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
+      args.body.action === 'status'
+        ? { data: { configured: true }, error: null }
+        : {
+            data: null,
+            error: {
+              message: 'Edge Function returned a non-2xx status code',
+              context: new Response(JSON.stringify({
+                error: 'WORKSPACE_AI_CONTROL_UNAVAILABLE',
+                message: 'Workspace AI permissions could not be checked. Try again later.',
+              }), { status: 503, headers: { 'Content-Type': 'application/json' } }),
+            },
+          }
+    ));
+    render(<OfficeAiWorkspace initialWorkspaceId="workspace-one" initialPrompt="Summarise our next steps." />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Workspace AI permissions could not be checked. Try again later.');
+    expect(alert.textContent).not.toContain('Edge Function returned a non-2xx status code');
+  });
+
   it('sends only the prompt when workspace context is switched off', async () => {
     render(<OfficeAiWorkspace initialWorkspaceId="workspace-one" initialPrompt="Summarise our next steps." />);
     const selector = await screen.findByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement;
