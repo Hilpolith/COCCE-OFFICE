@@ -361,3 +361,8 @@ Images are embedded in the local rich-text document. This implementation does no
 - Permanent conversation deletion now requires the shared Frosted Confirm dialog, names the conversation, explains that its messages will be removed, and uses a destructive confirmation action.
 - Cancelling leaves the conversation and its message rows untouched; the existing owner-only hard-delete RPC remains the only deletion path.
 - Added a regression test for cancellation. The dedicated AI Chat component suite now passes 11/11 tests and the TypeScript/Vite build passes after this change.
+
+### AI Chat keyboard interaction
+
+- Enter submits the current message; Shift+Enter keeps a multiline draft. The behavior is covered by a component test and uses the same validated submit path as the send control.
+- The dedicated AI Chat component suite now passes 12/12 tests; the glass boundary suite passes 8/8; the production TypeScript/Vite build passes. The latest commits are not yet deployed because Vercel is returning a build-rate-limit failure for both linked project checks; the previously verified production deployment remains commit `7de27e8` until a newer deployment reaches READY.
