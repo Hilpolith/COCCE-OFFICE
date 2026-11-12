@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { AlertCircle, ArrowUp, Bot, CheckCircle2, LoaderCircle, Sparkles } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
 import { useFrostedConfirm } from './FrostedConfirm';
@@ -9,6 +10,57 @@ import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import { officeAiInvokeError } from './lib/officeAi';
 import './officeAiWorkspace.css';
+
+
+function renderOfficeAiMarkdown(source: string): ReactNode {
+  const lines = source.replace(/\r\n?/g, '\n').split('\n');
+  const blocks: ReactNode[] = [];
+  let index = 0;
+  const inline = (value: string) => value.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_)/g).filter(Boolean).map((part, key) => {
+    if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) return <strong key={key}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('*') && part.endsWith('*')) return <em key={key}>{part.slice(1, -1)}</em>;
+    if (part.startsWith('_') && part.endsWith('_')) return <em key={key}>{part.slice(1, -1)}</em>;
+    return <Fragment key={key}>{part}</Fragment>;
+  });
+  while (index < lines.length) {
+    const line = lines[index] ?? '';
+    if (!line.trim()) { index += 1; continue; }
+    if (line.trim().startsWith('~~~')) {
+      index += 1; const code: string[] = [];
+      while (index < lines.length && !lines[index]!.trim().startsWith('~~~')) code.push(lines[index++]!);
+      if (index < lines.length) index += 1;
+      blocks.push(<pre className="office-ai-code-block" key={blocks.length}><code>{code.join('\n')}</code></pre>);
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    if (heading) {
+      const Tag = heading[1]!.length === 1 ? 'h2' : heading[1]!.length === 2 ? 'h3' : 'h4';
+      blocks.push(<Tag key={blocks.length}>{inline(heading[2]!)}</Tag>); index += 1; continue;
+    }
+    if (/^\s*(?:---+|\*\*\*|___)\s*$/.test(line)) { blocks.push(<hr key={blocks.length} />); index += 1; continue; }
+    if (/^\s*>\s?/.test(line)) {
+      const quote: string[] = [];
+      while (index < lines.length && /^\s*>\s?/.test(lines[index]!)) quote.push(lines[index++]!.replace(/^\s*>\s?/, ''));
+      blocks.push(<blockquote key={blocks.length}>{quote.map((item, key) => <p key={key}>{inline(item)}</p>)}</blockquote>); continue;
+    }
+    const list = /^\s*(?:([-+*])|(\d+)[.)])\s+(.+)$/.exec(line);
+    if (list) {
+      const ordered = Boolean(list[2]); const items: string[] = [];
+      while (index < lines.length) {
+        const match = /^\s*(?:([-+*])|(\d+)[.)])\s+(.+)$/.exec(lines[index]!);
+        if (!match || Boolean(match[2]) !== ordered) break;
+        items.push(match[3]!); index += 1;
+      }
+      const List = ordered ? 'ol' : 'ul';
+      blocks.push(<List key={blocks.length}>{items.map((item, key) => <li key={key}>{inline(item)}</li>)}</List>); continue;
+    }
+    const paragraph: string[] = [];
+    while (index < lines.length && lines[index]!.trim() && !/^\s*(?:#{1,3}\s|[-+*]\s+|\d+[.)]\s+|>|---+\s*$)/.test(lines[index]!)) paragraph.push(lines[index++]!);
+    if (!paragraph.length) { index += 1; continue; }
+    blocks.push(<p key={blocks.length}>{paragraph.map((part, key) => <Fragment key={key}>{key ? <br /> : null}{inline(part)}</Fragment>)}</p>);
+  }
+  return <>{blocks}</>;
+}
 
 type AiChatTurn = { role: 'user' | 'assistant'; content: string };
 type AiConversation = { conversation_id: string; workspace_id: string; title: string; last_message_at: string };
@@ -569,7 +621,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
           </div>) : <small className="office-ai-history-hint">{conversationSearch.trim() ? 'No matching conversations.' : 'Your saved chats will appear here.'}</small>}
           {hasMoreConversations && !conversationSearch.trim() && <button type="button" className="office-ai-inline-button office-ai-load-more" onClick={() => void loadMoreConversations()} disabled={historyLoading || busy}>{historyLoading ? 'Loading older chats…' : 'Load older chats'}</button>}
         </aside>
-        <div className="office-ai-answer" aria-live="polite" ref={answerPaneRef}>{turns.length ? <><div className="office-ai-thread-toolbar"><span><span className="office-ai-presence-dot" /> {activeConversationId ? 'Saved conversation' : 'New conversation'} · {Math.floor(turns.length / 2)} messages</span><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy}>Clear thread</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div><p>{turn.content}</p></article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><div className="office-ai-empty-orb"><Sparkles size={23} /></div><strong>Start a conversation</strong><span>Ask a question, work through an idea, or get help with your workspace.</span><div className="office-ai-suggestions"><span>Summarise a document</span><span>Draft a project plan</span><span>Analyse a report</span></div></div>}</div>
+        <div className="office-ai-answer" aria-live="polite" ref={answerPaneRef}>{turns.length ? <><div className="office-ai-thread-toolbar"><span><span className="office-ai-presence-dot" /> {activeConversationId ? 'Saved conversation' : 'New conversation'} · {Math.floor(turns.length / 2)} messages</span><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy}>Clear thread</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div>{turn.role === 'assistant' ? <div className="office-ai-rich-content">{renderOfficeAiMarkdown(turn.content)}</div> : <p>{turn.content}</p>}</article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><div className="office-ai-empty-orb"><Sparkles size={23} /></div><strong>Start a conversation</strong><span>Ask a question, work through an idea, or get help with your workspace.</span><div className="office-ai-suggestions"><span>Summarise a document</span><span>Draft a project plan</span><span>Analyse a report</span></div></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void ask(); } }} maxLength={1600} placeholder={mode === 'chat' ? 'Message…' : 'Ask across your workspace…'} aria-label={mode === 'chat' ? 'Message' : 'Ask across your workspace'} disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
         {showDriveConsent && <div className="office-ai-consent-backdrop">
           <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
