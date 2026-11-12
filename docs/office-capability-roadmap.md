@@ -422,3 +422,12 @@ This entry supersedes earlier same-day notes that said the Stories migration had
 - **Sheets cloud copies:** Cloud snapshot format version 2 preserves bounded bar/line chart metadata on each worksheet. The parser remains backward compatible with version-1 cloud copies. XLSX interchange remains the existing bounded single-sheet subset and does not yet include chart objects.
 - **Validation:** GitHub Actions run `43201795115` passed on commit `304940a3ef3105e933fd6f5de9dcb7dde8e8b610`: all 139 Vitest files passed (1,167 tests passed, one skipped), the additional PostgreSQL/sector acceptance scripts passed, and the production TypeScript/Vite build completed successfully.
 - **Release status:** These changes are committed to `main`. They are not yet included in the production Vercel deployment: the latest confirmed READY deployment remains commit `257c28d`. The earlier deployment attempt was rejected by Vercel's daily deployment quota (HTTP 402). Do not claim the updated UI is live until a deployment for a newer commit reaches READY.
+
+
+## 2026-11-12 — Native XLSX chart export
+
+- Single-worksheet XLSX exports now include supported native Excel bar and line chart objects, with chart series linked to the selected worksheet cell ranges. Chart titles and worksheet names are XML-escaped; apostrophes in worksheet names are correctly quoted in formulas.
+- Chart export validates the existing 20-chart cap, chart type, title, timestamp and visible-grid range before generating package relationships. It does not silently drop invalid chart metadata.
+- Existing versioned cloud snapshots continue to preserve chart metadata and restore charts as editable COCCE worksheet charts.
+- External XLSX chart import remains unsupported and is explicitly disclosed in the UI and import/export fidelity warning. The importer still refuses drawing/chart packages rather than silently losing chart data.
+- Regression coverage added for native bar/line chart package parts, worksheet drawing relationships, safe references and invalid/over-limit chart rejection. Full CI and a new production build are pending for this tranche.
