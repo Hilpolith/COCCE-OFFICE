@@ -231,7 +231,7 @@ export async function importPptxFile(
       id: 'pptx-slide-' + (index + 1), title: parsed.title, body: parsed.body, notes: parsed.notes, layout: parsed.layout,
       image,
       imageOmitted: parsed.imageOmitted && !image,
-      extraImageCount: Math.max(0, parsed.imageCount - (image ? 1 : 0)),
+      extraImageCount: Math.max(0, parsed.imageCount - 1),
     };
   });
   const title = file.name.replace(/\.pptx$/i, '').slice(0, 300) || 'Imported PowerPoint';
