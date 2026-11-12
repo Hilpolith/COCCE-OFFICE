@@ -117,6 +117,44 @@ export async function extractPdfPages(source: Uint8Array, pages: number[]): Prom
   return saveBoundedPageCopy(extracted);
 }
 
+export const MAX_PDF_INSERT_IMAGE_BYTES = 5 * 1024 * 1024;
+
+export async function insertImageOnPdfPage(
+  source: Uint8Array,
+  pageNumber: number,
+  imageBytes: Uint8Array,
+  mimeType: string,
+): Promise<Uint8Array> {
+  const document = await loadPageCopySource(source);
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > document.getPageCount()) {
+    throw new Error(`Page number must be between 1 and ${document.getPageCount()}.`);
+  }
+  if (!(imageBytes instanceof Uint8Array) || imageBytes.byteLength < 1 || imageBytes.byteLength > MAX_PDF_INSERT_IMAGE_BYTES) {
+    throw new Error(`Choose an image no larger than ${MAX_PDF_INSERT_IMAGE_BYTES} bytes.`);
+  }
+  if (mimeType !== 'image/png' && mimeType !== 'image/jpeg') {
+    throw new Error('PDF image insertion supports PNG and JPEG files only.');
+  }
+  let image;
+  try {
+    image = mimeType === 'image/png'
+      ? await document.embedPng(imageBytes.slice())
+      : await document.embedJpg(imageBytes.slice());
+  } catch {
+    throw new Error('The selected image is malformed or cannot be embedded in the PDF.');
+  }
+  const page = document.getPage(pageNumber - 1);
+  const size = page.getSize();
+  const fitted = image.scaleToFit(size.width * 0.34, size.height * 0.34);
+  page.drawImage(image, {
+    x: (size.width - fitted.width) / 2,
+    y: (size.height - fitted.height) / 2,
+    width: fitted.width,
+    height: fitted.height,
+  });
+  return saveBoundedPageCopy(document);
+}
+
 export async function removePdfPage(source: Uint8Array, pageNumber: number): Promise<Uint8Array> {
   const original = await loadPageCopySource(source);
   const pageCount = original.getPageCount();
