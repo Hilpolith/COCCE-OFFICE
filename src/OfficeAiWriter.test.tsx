@@ -156,6 +156,7 @@ describe('Docs Writing assistant', () => {
 
   it('discards a pending excerpt result when the selected AI workspace changes', async () => {
     let resolvePost!: (response: Response) => void;
+    let responseRead = false;
     const pendingPost = new Promise<Response>((resolve) => { resolvePost = resolve; });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') return pendingPost;
