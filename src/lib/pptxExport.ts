@@ -217,11 +217,11 @@ export async function importPptxFile(
   let files: Record<string, Uint8Array>;
   try { files = unzipSync(bytes); } catch { throw new Error('The PowerPoint archive could not be safely opened.'); }
   if (!files['[Content_Types].xml'] || !files['ppt/presentation.xml']) throw new Error('This file is not a supported PowerPoint presentation.');
-  const slideNames = Object.keys(files).filter((name) => /^ppt\\/slides\\/slide\\d+\\.xml$/.test(name))
-    .sort((a, b) => Number(a.match(/slide(\\d+)/)?.[1] ?? 0) - Number(b.match(/slide(\\d+)/)?.[1] ?? 0));
+  const slideNames = Object.keys(files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => Number(a.match(/slide(\d+)/)?.[1] ?? 0) - Number(b.match(/slide(\\d+)/)?.[1] ?? 0));
   if (slideNames.length < 1 || slideNames.length > 100) throw new Error('PowerPoint import supports 1 to 100 slides.');
   const slideDrafts = slideNames.map((name, index) => {
-    const number = Number(name.match(/slide(\\d+)/)?.[1] ?? index + 1);
+    const number = Number(name.match(/slide(\d+)/)?.[1] ?? index + 1);
     const notes = files['ppt/notesSlides/notesSlide' + number + '.xml'];
     const parsed = pptxSlideContent(strFromU8(files[name]!), index + 1, notes ? strFromU8(notes) : undefined);
     const relationshipsPath = 'ppt/slides/_rels/slide' + number + '.xml.rels';
@@ -232,7 +232,7 @@ export async function importPptxFile(
       imageOmitted: parsed.imageOmitted && !image,
     };
   });
-  const title = file.name.replace(/\\.pptx$/i, '').slice(0, 300) || 'Imported PowerPoint';
+  const title = file.name.replace(/\.pptx$/i, '').slice(0, 300) || 'Imported PowerPoint';
   const imported = importDeck(JSON.stringify({
     format: 'cocce-office-slides', version: 2, title, theme: 'violet',
     slides: slideDrafts.map(({ image, ...slide }) => ({
