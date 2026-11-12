@@ -133,7 +133,6 @@ Deno.serve(async (req) => {
     || (body.history !== undefined && !isValidChatHistory(body.history))) {
     return json(origin, 400, { error: "INVALID_REQUEST", message: "Choose a workspace and enter a prompt of up to 1,600 characters." });
   }
-  const prompt = body.prompt;
   const chatHistory = body.history === undefined ? [] : body.history as Array<{ role: "user" | "assistant"; content: string }>;
   if (!rateAllowed(authData.user.id)) return json(origin, 429, { error: "RATE_LIMITED", message: "The short-term AI request limit has been reached. Please wait and try again." });
 
