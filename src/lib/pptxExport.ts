@@ -1,5 +1,8 @@
 import type { PresentationDeck } from './slidesStore';
 import { localSlidesAssetRepository } from './slidesAssets';
+import { importDeck } from './slidesStore';
+import type { ImportedSlideDeck } from './slidesStore';
+import { strFromU8, unzipSync } from 'fflate';
 export type SlidesImageReader = (imageId: string, deckId: string) => Promise<{ metadata: { width: number; height: number }; blob: Blob }>;
 const PALETTES = {
   violet: { background: '17152A', accent: 'A99BFF', text: 'F6F4FF', muted: 'C4BEDA' },
@@ -63,4 +66,115 @@ export async function createPptxBlob(
   const output = await pptx.write({ outputType: 'blob', compression: true });
   if (!(output instanceof Blob) || output.size < 2_000) throw new Error('PowerPoint export did not produce a valid presentation file.');
   return output;
+}
+
+
+const PPTX_MAX_COMPRESSED_BYTES = 25 * 1024 * 1024;
+const PPTX_MAX_EXPANDED_BYTES = 50 * 1024 * 1024;
+const PPTX_MAX_ZIP_ENTRIES = 500;
+
+function assertPptxZipBounds(bytes: Uint8Array): void {
+  if (bytes.byteLength < 22 || bytes.byteLength > PPTX_MAX_COMPRESSED_BYTES) throw new Error('Choose a PowerPoint file no larger than 25 MB.');
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const searchStart = Math.max(0, bytes.byteLength - 65_557);
+  let eocd = -1;
+  for (let offset = bytes.byteLength - 22; offset >= searchStart; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) { eocd = offset; break; }
+  }
+  if (eocd < 0) throw new Error('The selected file is not a valid PowerPoint ZIP package.');
+  const entries = view.getUint16(eocd + 10, true);
+  const directorySize = view.getUint32(eocd + 12, true);
+  const directoryOffset = view.getUint32(eocd + 16, true);
+  if (entries < 1 || entries > PPTX_MAX_ZIP_ENTRIES || directoryOffset + directorySize > eocd) throw new Error('The PowerPoint package contains an unsupported archive structure.');
+  let offset = directoryOffset;
+  let expanded = 0;
+  const names = new Set<string>();
+  for (let index = 0; index < entries; index += 1) {
+    if (offset + 46 > bytes.byteLength || view.getUint32(offset, true) !== 0x02014b50) throw new Error('The PowerPoint package contains a malformed ZIP directory.');
+    const compressed = view.getUint32(offset + 20, true);
+    const uncompressed = view.getUint32(offset + 24, true);
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const end = offset + 46 + nameLength + extraLength + commentLength;
+    if (end > bytes.byteLength || compressed === 0xffffffff || uncompressed === 0xffffffff) throw new Error('The PowerPoint package uses an unsupported ZIP64 or truncated entry.');
+    const name = new TextDecoder().decode(bytes.subarray(offset + 46, offset + 46 + nameLength));
+    if (!name || name.startsWith('/') || name.split('/').includes('..') || names.has(name)) throw new Error('The PowerPoint package contains an unsafe or duplicate path.');
+    names.add(name);
+    expanded += uncompressed;
+    if (uncompressed > 12 * 1024 * 1024 || expanded > PPTX_MAX_EXPANDED_BYTES) throw new Error('The PowerPoint package expands beyond the safe 50 MB import limit.');
+    offset = end;
+  }
+}
+
+function parsePptxXml(xml: string): Document {
+  const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+  if (parsed.getElementsByTagName('parsererror').length) throw new Error('The PowerPoint package contains malformed XML.');
+  return parsed;
+}
+
+function shapeText(shape: Element): string {
+  const paragraphs = Array.from(shape.getElementsByTagName('a:p'));
+  return paragraphs.map((paragraph) => Array.from(paragraph.getElementsByTagName('a:t')).map((node) => node.textContent ?? '').join('')).filter(Boolean).join('\n').trim();
+}
+
+function shapeTop(shape: Element): number {
+  const offset = shape.getElementsByTagName('a:off')[0];
+  const value = Number(offset?.getAttribute('y') ?? 0);
+  return Number.isFinite(value) ? value / 914400 : 0;
+}
+
+function pptxSlideContent(xml: string, index: number, notesXml?: string): {
+  title: string; body: string; notes: string; layout: 'title-content' | 'two-column' | 'quote' | 'section-divider'; imageOmitted: boolean;
+} {
+  const document = parsePptxXml(xml);
+  const shapes = Array.from(document.getElementsByTagName('p:sp'));
+  const blocks = shapes.map((shape) => ({ text: shapeText(shape), top: shapeTop(shape) })).filter((block) => block.text && block.text !== 'COCCE OFFICE');
+  const first = blocks[0];
+  const imageOmitted = document.getElementsByTagName('p:pic').length > 0;
+  let title = first?.text ?? 'Slide ' + index;
+  let body = blocks.slice(1).map((block) => block.text).join('\n\n');
+  let layout: 'title-content' | 'two-column' | 'quote' | 'section-divider' = 'title-content';
+  if (first && first.top >= 2) {
+    layout = 'section-divider';
+    body = blocks[1]?.text ?? '';
+  } else if (first && first.top >= 1.2 && first.top < 2) {
+    layout = 'quote';
+    body = first.text;
+    title = blocks[1]?.text ?? '';
+  } else if (blocks.length >= 4) {
+    layout = 'two-column';
+    body = [blocks[1]?.text, blocks[2]?.text].filter(Boolean).join('\n\n');
+  }
+  let notes = '';
+  if (notesXml) {
+    const notesDocument = parsePptxXml(notesXml);
+    notes = Array.from(notesDocument.getElementsByTagName('a:t')).map((node) => node.textContent ?? '')
+      .filter((value) => value.trim() && value.trim() !== 'COCCE OFFICE' && !/^\d+$/.test(value.trim())).join('\n').slice(0, 12_000);
+  }
+  return { title: title.slice(0, 12_000) || 'Slide ' + index, body: body.slice(0, 12_000), notes, layout, imageOmitted };
+}
+
+export async function importPptxFile(file: File, workspaceId: string | null): Promise<ImportedSlideDeck> {
+  if (!file.name.toLowerCase().endsWith('.pptx')) throw new Error('Choose a .pptx PowerPoint presentation.');
+  if (file.size < 22 || file.size > PPTX_MAX_COMPRESSED_BYTES) throw new Error('Choose a PowerPoint file no larger than 25 MB.');
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  assertPptxZipBounds(bytes);
+  let files: Record<string, Uint8Array>;
+  try { files = unzipSync(bytes); } catch { throw new Error('The PowerPoint archive could not be safely opened.'); }
+  if (!files['[Content_Types].xml'] || !files['ppt/presentation.xml']) throw new Error('This file is not a supported PowerPoint presentation.');
+  const slideNames = Object.keys(files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => Number(a.match(/slide(\d+)/)?.[1] ?? 0) - Number(b.match(/slide(\d+)/)?.[1] ?? 0));
+  if (slideNames.length < 1 || slideNames.length > 100) throw new Error('PowerPoint import supports 1 to 100 slides.');
+  const slides = slideNames.map((name, index) => {
+    const number = Number(name.match(/slide(\d+)/)?.[1] ?? index + 1);
+    const notes = files['ppt/notesSlides/notesSlide' + number + '.xml'];
+    const parsed = pptxSlideContent(strFromU8(files[name]!), index + 1, notes ? strFromU8(notes) : undefined);
+    return {
+      id: 'pptx-slide-' + (index + 1), title: parsed.title, body: parsed.body, notes: parsed.notes, layout: parsed.layout,
+      ...(parsed.imageOmitted ? { imageOmitted: true, imageAltText: 'This slide contains an embedded image. Reinsert the image after importing this text/layout draft.' } : {}),
+    };
+  });
+  const title = file.name.replace(/\.pptx$/i, '').slice(0, 300) || 'Imported PowerPoint';
+  return importDeck(JSON.stringify({ format: 'cocce-office-slides', version: 2, title, theme: 'violet', slides }), workspaceId);
 }
