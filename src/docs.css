@@ -217,3 +217,5 @@
 .docs-source-mode .docs-workbench-layout>.office-workbench-editor{grid-column:1!important}
 @media(max-width:620px){.docs-source-editor{padding:12px;border-radius:13px}.docs-source-textarea{min-height:55vh;padding:11px;font-size:11px}.docs-source-actions{align-items:stretch;flex-direction:column}.docs-source-actions>div>*{flex:1}.docs-source-actions>div{width:100%}}
 @media(forced-colors:active){.docs-source-editor,.docs-source-mode-tabs,.docs-source-textarea,.docs-source-local{background:Canvas;color:CanvasText;border-color:ButtonText}.docs-source-mode-tabs button[aria-pressed=true]{background:Highlight;color:HighlightText}}
+
+.docs-source-mode .editor-actions,.docs-source-mode #docs-cloud-area{display:none!important}
