@@ -877,9 +877,9 @@ function parseSimpleXlsxChart(xml: string, sheetName: string): Pick<OfficeSheetC
     fail('The XLSX chart must use adjacent category and numeric value columns over the same rows.');
   }
   const titleNode = elementChildren(charts[0]!, 'title', CHART_NS)[0];
-  const title = titleNode
-    ? [...titleNode.getElementsByTagNameNS(DRAWING_MAIN_NS, 't')].map((node) => node.textContent ?? '').join('').trim()
-    : '';
+  // Read only text content from the chart title element. This preserves
+  // rich-text titles even when producers use different DrawingML prefixes.
+  const title = titleNode?.textContent?.trim() ?? '';
   const safeTitle = stripControlCharacters(title, true).trim().slice(0, 80) || 'Imported chart';
   const range = `${columnLabel(categoryRange.column)}${categoryRange.firstRow - 1}:${columnLabel(valueRange.column)}${valueRange.lastRow}`;
   return { title: safeTitle, type, range };
