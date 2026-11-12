@@ -93,6 +93,15 @@ describe('shared Office editor chrome and COCCE AI', () => {
     expect(railContent?.hidden).toBe(false);
   });
 
+  it('offers contextual starter prompts without sending content until Preview is explicitly chosen', async () => {
+    const fetcher = installFetch();
+    render(<OfficeAiPromptWorkbench {...defaultPromptProps()} />);
+    await waitFor(() => expect(screen.getByText('Free AI configured')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Build a monthly budget with live totals' }));
+    expect((screen.getByLabelText('Prompt for cell A1') as HTMLTextAreaElement).value).toBe('Build a monthly budget with live totals');
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+
   it('keeps prompt entry and generation disabled until a real response has been verified', () => {
     const fetcher = installFetch();
     render(<OfficeAiPromptWorkbench {...defaultPromptProps({ liveActionVerified: false })} />);

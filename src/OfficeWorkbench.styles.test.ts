@@ -23,6 +23,14 @@ describe('Office workbench style boundaries', () => {
     expect(layout.style.getPropertyPriority('display')).toBe('important');
   });
 
+  it('places the contextual AI rail on the right of the editor canvas with a responsive stacked fallback', () => {
+    expect(source).toContain('.office-workbench-layout{grid-template-columns:minmax(0,1fr) minmax(278px,320px)}');
+    expect(source).toContain('.office-workbench-layout>.office-workbench-rail{grid-column:2;grid-row:1}');
+    expect(source).toContain('.office-workbench-layout>.office-workbench-rail{grid-column:1;grid-row:2}');
+    expect(source).toContain('.office-ai-model-badge');
+    expect(source).toContain('.office-ai-prompt-suggestions');
+  });
+
   it('scopes toolbar refinements to the named editor-page class and uses accessibility-controlled blur tokens', () => {
     expect(source).toContain('.office-editor-page .editor-toolbar,.office-editor-page .sheet-editor-topline,.office-editor-page .slides-editor-toolbar');
     expect(source).not.toContain('.editor-toolbar,.sheet-editor-topline,.slides-editor-toolbar');

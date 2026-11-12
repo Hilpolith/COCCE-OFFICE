@@ -425,14 +425,14 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
 
   return <section className="office-ai-panel" aria-label="AI writing assistant">
     <button className="office-ai-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>Writing assistant</strong><small>Work with selected text or draft</small></span></span>
+      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>COCCE AI</strong><small>Document-aware writing and editing</small></span></span>
       <span className="office-ai-disclosure-status">{availabilityLabel}{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
     </button>
 
     {expanded && <div className="office-ai-body">
       <label className="office-ai-field office-ai-workspace-scope"><span className="office-ai-label">Workspace</span><select aria-label="AI workspace scope" value={workspaceId} disabled={workspaceLoading || workspaces.length === 0} onChange={(event) => { setWorkspaceId(event.target.value); setResult(''); setPreviewTarget(null); setError(''); }}><option value="*">All AI-enabled workspaces</option>{workspaces.map((space) => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label>
       <p className="office-ai-privacy"><ShieldCheck size={15} /><span>Nothing is sent automatically. Only the text or prompt you choose to submit is shared.</span></p>
-      <details className="office-ai-privacy-details"><summary>Privacy and model details</summary><p>Requests use the fixed free Google AI Studio model through the COCCE Office server route. No paid-model or alternate-provider fallback is used. The provider's current policy lists 55-day prompt retention and no training. Do not send text you are not permitted to share.</p></details>
+      <details className="office-ai-privacy-details"><summary>Privacy and model details</summary><p>Requests use OpenRouter’s openrouter/free router. OpenRouter selects an eligible free model for each request; COCCE Office verifies the returned model is marked free and the reported response cost is zero. No paid-model fallback is enabled. Provider and model data-handling policies can differ; review the current OpenRouter and selected model terms before sharing sensitive text.</p></details>
 
       {authStatus === 'signed-in' && !workspaceLoading && workspaces.length === 0 && <div className="office-ai-state" role="status"><AlertCircle size={15} /><span>No Office workspace yet.</span><button className="office-ai-inline-button" onClick={onGoToTeam}>Create workspace</button></div>}
       {selection.isCellSelection && <div className="office-ai-state" role="status"><AlertCircle size={15} /><span>Select ordinary text to use excerpt actions.</span></div>}
@@ -495,8 +495,8 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
           }
         }}>
           <h3 id="office-ai-confirm-title">Confirm full-document summary</h3>
-          <p id="office-ai-confirm-description">The complete plain-text content of <strong>{documentSummaryConfirmation.title}</strong> ({documentSummaryConfirmation.payload.documentText.length.toLocaleString()} characters) will be sent through OpenRouter to its fixed free Google AI Studio endpoint. No text is sent until you choose the confirmation button.</p>
-          <p>Google AI Studio's current policy lists 55-day prompt retention and no training. No paid model or alternate provider fallback will be used. The document title, ID, file, and other metadata are not sent.</p>
+          <p id="office-ai-confirm-description">The complete plain-text content of <strong>{documentSummaryConfirmation.title}</strong> ({documentSummaryConfirmation.payload.documentText.length.toLocaleString()} characters) will be sent through OpenRouter’s openrouter/free router. OpenRouter selects an eligible free model when the request runs. No text is sent until you choose the confirmation button.</p>
+          <p>COCCE Office verifies that the returned model is marked free and reports zero response cost; no paid-model fallback is enabled. Provider and model retention or training terms may differ, so review the current terms before sharing sensitive text. The document title, ID, file, and other metadata are not sent.</p>
           <p>Confirm only if you are allowed to share this document with that cloud provider. The request limit is {OFFICE_AI_MAX_DOCUMENT_SUMMARY_CHARS.toLocaleString()} characters and {Math.round(OFFICE_AI_MAX_REQUEST_BYTES / 1_000)} KB; the text will not be truncated or split.</p>
           <div className="office-ai-confirm-actions">
             <button type="button" className="office-ai-action-button" onClick={() => setDocumentSummaryConfirmation(null)}>Cancel · keep it local</button>

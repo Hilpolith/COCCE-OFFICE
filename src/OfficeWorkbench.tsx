@@ -35,7 +35,8 @@ export function OfficeWorkbenchLayout({
   return <div className={`office-workbench-layout ${collapsed ? 'is-collapsed' : ''} ${className}`.trim()}>
     <aside className="office-workbench-rail" aria-label="COCCE AI">
       <div className="office-workbench-rail-heading">
-        <span className="office-workbench-rail-title"><span className="office-workbench-rail-icon"><Sparkles size={16} /></span><span>COCCE AI</span></span>
+        <span className="office-workbench-rail-title"><span className="office-workbench-rail-icon"><Sparkles size={16} /></span><span className="office-workbench-rail-copy"><strong>COCCE AI</strong><small>Editor copilot</small></span></span>
+        <span className="office-workbench-context-pill"><i aria-hidden="true" /> EDITOR CONTEXT</span>
         <button type="button" className="office-workbench-collapse" aria-label={collapsed ? 'Expand COCCE AI' : 'Collapse COCCE AI'} aria-controls={railId} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -151,6 +152,9 @@ export default function OfficeAiPromptWorkbench({
   const visibleResult = liveActionVerified ? result : '';
   const stalePreview = Boolean(visibleResult) && (resultTargetId !== targetId || resultBefore !== currentValue);
   const generatedPreview = visibleResult ? previewResult(visibleResult, resultBefore) : null;
+  const promptSuggestions = area === 'sheets'
+    ? ['Build a monthly budget with live totals', 'Summarize this range by category', 'Explain this formula in plain language']
+    : ['Rewrite for an executive audience', 'Strengthen the slide headline', 'Draft concise speaker notes'];
   const authLabel = !liveActionVerified ? 'Verification pending'
     : authStatus === 'loading' ? 'Checking sign-in'
       : authStatus === 'signed-out' ? 'Sign-in required'
@@ -233,10 +237,13 @@ export default function OfficeAiPromptWorkbench({
   return <section className={`office-ai-prompt-panel office-ai-prompt-${area}`} aria-label={`${area === 'sheets' ? 'Sheets' : 'Slides'} AI prompt workbench`}>
     <div className="office-ai-prompt-heading">
       <span className="office-ai-icon"><Sparkles size={17} /></span>
-      <div><strong>{area === 'sheets' ? 'Formula assistant' : 'Slide writing assistant'}</strong><small>{authLabel}</small></div>
+      <div><strong>{area === 'sheets' ? 'Sheets copilot' : 'Slides copilot'}</strong><small>{authLabel}</small></div>
+      <span className="office-ai-model-badge">OPENROUTER · FREE</span>
     </div>
     <p className="office-ai-prompt-description">{description}</p>
+    <div className="office-ai-prompt-context"><span>ACTIVE TARGET</span><strong>{targetLabel}</strong></div>
     <p className="office-ai-prompt-privacy"><LockKeyhole size={14} /><span>{privacyNote}</span></p>
+    <div className="office-ai-prompt-suggestions" aria-label="Suggested prompts"><span>TRY A PROMPT</span>{promptSuggestions.map((suggestion) => <button key={suggestion} type="button" disabled={!canEditPrompt} onClick={() => setPrompt(suggestion)}>{suggestion}</button>)}</div>
 
     {!liveActionVerified && <div className="office-ai-prompt-state" role="note"><AlertCircle size={15} /><span>The free-model response has not been verified for this deployment yet, so generation is disabled. No workbook, slide, or document content has been sent.</span></div>}
     {liveActionVerified && authStatus === 'signed-out' && <div className="office-ai-prompt-state" role="status"><AlertCircle size={15} /><span>Sign in with an existing COCCE account to use cloud AI. Editor content remains local.</span></div>}
