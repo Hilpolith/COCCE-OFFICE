@@ -54,6 +54,7 @@ beforeEach(() => {
       eq: vi.fn(() => builder),
       order: vi.fn(() => builder),
       limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+      range: vi.fn().mockResolvedValue({ data: [], error: null }),
     };
     return builder;
   });
@@ -77,6 +78,36 @@ describe('COCCE AI workspace context', () => {
     expect(container.querySelector('.office-ai-answer[aria-live="polite"]')).toBeTruthy();
     expect(screen.getByPlaceholderText('Message…')).toBeTruthy();
     expect(screen.getByText('Start a conversation')).toBeTruthy();
+  });
+
+  it('loads older private conversations in bounded pages', async () => {
+    const makeConversation = (index: number) => ({
+      conversation_id: `55555555-5555-4555-8555-${String(index + 1).padStart(12, '0')}`,
+      workspace_id: 'workspace-one',
+      title: `Project conversation ${index}`,
+      last_message_at: new Date(Date.UTC(2026, 10, 12, 0, index)).toISOString(),
+    });
+    const ranges: Array<[number, number]> = [];
+    mocks.from.mockImplementation(() => {
+      const builder = {
+        select: vi.fn(() => builder),
+        eq: vi.fn(() => builder),
+        order: vi.fn(() => builder),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        range: vi.fn(async (start: number, end: number) => {
+          ranges.push([start, end]);
+          return { data: start === 0 ? Array.from({ length: 30 }, (_, index) => makeConversation(index)) : [makeConversation(30)], error: null };
+        }),
+      };
+      return builder;
+    });
+    render(<OfficeAiWorkspace mode="chat" />);
+    await screen.findByText('Project conversation 0');
+    expect(screen.getByText('Project conversation 29')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Load older chats' }));
+    expect(await screen.findByText('Project conversation 30')).toBeTruthy();
+    expect(ranges).toEqual([[0, 29], [30, 59]]);
+    expect(screen.getByText('Project conversation 0')).toBeTruthy();
   });
 
   it('starts in all authorised workspaces and allows a single workspace selection', async () => {
