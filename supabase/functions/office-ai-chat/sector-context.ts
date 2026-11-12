@@ -25,7 +25,11 @@ export type SectorWorkItem = {
 
 function safeText(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
-  return value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  const printable = Array.from(value, (character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f ? " " : character;
+  }).join("");
+  return printable.replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 function safeDate(value: unknown): string {
