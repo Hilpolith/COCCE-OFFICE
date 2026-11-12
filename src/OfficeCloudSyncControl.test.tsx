@@ -140,4 +140,26 @@ describe('per-record Office cloud sync consent', () => {
   });
 
 
+  it('cancels a queued tab-resume retry when the sync control unmounts', () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout');
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+    const api = buildApi();
+    const execute = vi.fn(async (work: (cloud: typeof api, current: () => boolean) => Promise<void>) => work(api, () => true));
+    render(<OfficeCloudSyncControl
+      actorId={actorId} workspaceId={workspaceId} module="docs"
+      localRecordId={localRecordId} displayName={displayName}
+      sourceKey="2026-11-06T12:02:00.000Z" hasUnsavedChanges={false}
+      busy={false} execute={execute as never} snapshot={() => bytes}
+    />);
+    window.dispatchEvent(new Event('focus'));
+    const resumeTimer = setTimeoutSpy.mock.results.at(-1)?.value;
+    expect(resumeTimer).toBeDefined();
+    cleanup();
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(resumeTimer);
+    expect(api.reserve).not.toHaveBeenCalled();
+    expect(api.beginRevision).not.toHaveBeenCalled();
+  });
+
+
 });
