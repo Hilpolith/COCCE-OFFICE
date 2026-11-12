@@ -115,6 +115,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const authGeneration = useRef(0);
   const aiRequestGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
+  const initialWorkspaceIdAtMount = useRef(initialWorkspaceId);
   const previousInitialWorkspaceId = useRef(initialWorkspaceId);
   const pendingInitialWorkspaceId = useRef<string | undefined>(undefined);
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(mode === 'assistant');
@@ -189,7 +190,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
           setStatus('ready');
           return;
         }
-        setWorkspaceId(initialWorkspaceId && spaces.some((space) => space.workspace_id === initialWorkspaceId) ? initialWorkspaceId : mode === 'chat' ? spaces[0].workspace_id : '*');
+        const requestedAtMount = initialWorkspaceIdAtMount.current;
+        setWorkspaceId(requestedAtMount && spaces.some((space) => space.workspace_id === requestedAtMount) ? requestedAtMount : mode === 'chat' ? spaces[0].workspace_id : '*');
         setStatus('ready');
       } catch (reason) {
         if (isCurrent()) {
@@ -212,7 +214,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     });
     void initialize();
     return () => { active = false; subscription.unsubscribe(); };
-  }, [client, config.status, initialWorkspaceId, mode]);
+  }, [client, config.status, mode]);
 
   useEffect(() => {
     aiRequestGeneration.current += 1;
