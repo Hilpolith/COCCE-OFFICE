@@ -171,7 +171,11 @@ function isSupportedPartName(name: string): boolean {
     'xl/sharedStrings.xml', 'xl/styles.xml', 'xl/theme/theme1.xml', 'xl/calcChain.xml',
   ]).has(name)
     || /^xl\/worksheets\/sheet\d+\.xml$/.test(name)
-    || /^xl\/worksheets\/_rels\/sheet\d+\.xml\.rels$/.test(name)\n    || /^xl\/drawings\/drawing\d+\.xml$/.test(name)\n    || /^xl\/drawings\/_rels\/drawing\d+\.xml\.rels$/.test(name)\n    || /^xl\/charts\/chart\d+\.xml$/.test(name)\n    || /^xl\/charts\/_rels\/chart\d+\.xml\.rels$/.test(name);
+    || /^xl\/worksheets\/_rels\/sheet\d+\.xml\.rels$/.test(name)
+    || /^xl\/drawings\/drawing\d+\.xml$/.test(name)
+    || /^xl\/drawings\/_rels\/drawing\d+\.xml\.rels$/.test(name)
+    || /^xl\/charts\/chart\d+\.xml$/.test(name)
+    || /^xl\/charts\/_rels\/chart\d+\.xml\.rels$/.test(name);
 }
 
 function unsupportedPartMessage(name: string): string {
