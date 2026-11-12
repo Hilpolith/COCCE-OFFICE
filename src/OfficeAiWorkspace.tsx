@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ArrowUp, Bot, CheckCircle2, LoaderCircle, Sparkles } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
+import { useFrostedConfirm } from './FrostedConfirm';
 import { createOfficeCloudApi } from './lib/officeCloudFiles';
 import type { CloudFile } from './lib/officeCloudFiles';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
@@ -20,6 +21,7 @@ const AI_DRIVE_TEXT_EXTENSIONS = new Set([
 const AI_DRIVE_SENSITIVE_NAME = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
 
 export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspaceId, initialPrompt }: { mode?: 'assistant' | 'chat'; initialWorkspaceId?: string; initialPrompt?: string } = {}) {
+  const confirm = useFrostedConfirm();
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
@@ -346,6 +348,15 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
 
   const deleteConversation = async (conversationId: string) => {
     if (!client || busy) return;
+    const conversation = conversations.find((item) => item.conversation_id === conversationId);
+    const accepted = await confirm({
+      title: 'Delete saved conversation?',
+      description: `“${conversation?.title ?? 'This conversation'}” and its saved messages will be permanently deleted from this workspace. This cannot be undone.`,
+      confirmLabel: 'Delete conversation',
+      cancelLabel: 'Keep conversation',
+      destructive: true,
+    });
+    if (!accepted) return;
     const { error: deleteError } = await client.rpc('office_ai_delete_conversation', { p_conversation_id: conversationId });
     if (deleteError) {
       setError('The conversation could not be deleted. Please retry.');
