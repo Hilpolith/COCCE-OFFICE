@@ -162,4 +162,45 @@ describe('per-record Office cloud sync consent', () => {
   });
 
 
+}
+  it('refreshes this item when another tab enables or removes its sync link', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    const api = buildApi();
+    const execute = vi.fn(async (work: (cloud: typeof api, current: () => boolean) => Promise<void>) => work(api, () => true));
+    render(<OfficeCloudSyncControl
+      actorId={actorId} workspaceId={workspaceId} module="docs"
+      localRecordId={localRecordId} displayName={displayName}
+      sourceKey="2026-11-06T12:03:00.000Z" hasUnsavedChanges={false}
+      busy={false} execute={execute as never} snapshot={() => bytes}
+    />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enable sync for this item' })).toBeTruthy());
+
+    saveOfficeCloudSyncLink(window.localStorage, {
+      actorId, workspaceId, module: 'docs', localRecordId,
+      fileId, baseRevisionId: revisionId, baseSha256Hex: 'a'.repeat(64),
+      displayName, sizeBytes: bytes.byteLength,
+      enabledAt: '2026-11-06T12:00:00.000Z',
+      lastSyncedAt: '2026-11-06T12:00:00.000Z',
+    });
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: OFFICE_CLOUD_SYNC_LINKS_KEY,
+        newValue: window.localStorage.getItem(OFFICE_CLOUD_SYNC_LINKS_KEY),
+      }));
+    });
+    await waitFor(() => expect(screen.getByText(/settings were refreshed from another/)).toBeTruthy());
+    expect(screen.getByText(/Offline · your local original is safe/)).toBeTruthy();
+
+    window.localStorage.setItem(OFFICE_CLOUD_SYNC_LINKS_KEY, JSON.stringify({ version: 1, links: [] }));
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: OFFICE_CLOUD_SYNC_LINKS_KEY,
+        newValue: window.localStorage.getItem(OFFICE_CLOUD_SYNC_LINKS_KEY),
+      }));
+    });
+    await waitFor(() => expect(screen.getByText(/turned off in another/)).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Enable sync for this item' })).toBeTruthy();
+    expect(api.reserve).not.toHaveBeenCalled();
+  });
+
 });

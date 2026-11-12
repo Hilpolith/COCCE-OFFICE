@@ -619,7 +619,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         applyLabel="Apply formula"
         maxPromptChars={800}
         liveActionVerified={false}
-        buildPrompt={(prompt) => `Write one formula for cell ${selectedAddress} in COCCE Sheets. Return only a single formula beginning with =. Use only the local engine functions IF, IFERROR, SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, PRODUCT, ABS, ROUND, ROUNDUP, ROUNDDOWN, AND, OR, NOT, CONCAT, LEN, LEFT, RIGHT, MID, UPPER, LOWER, TRIM, COUNTIF, SUMIF, AVERAGEIF, and visible A1:L24 references. Do not assume cell contents unless I include them in my prompt. Request: ${prompt}`}
+        buildPrompt={(prompt) => `Write one formula for cell ${selectedAddress} in COCCE Sheets. Return only a single formula beginning with =. Use only the local engine functions IF, IFERROR, SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, COUNTBLANK, MEDIAN, PRODUCT, ABS, ROUND, ROUNDUP, ROUNDDOWN, AND, OR, NOT, CONCAT, LEN, LEFT, RIGHT, MID, UPPER, LOWER, TRIM, COUNTIF, SUMIF, AVERAGEIF, and visible A1:L24 references. Do not assume cell contents unless I include them in my prompt. Request: ${prompt}`}
         previewResult={previewAiFormula}
         onApply={(formula, capturedTargetId) => capturedTargetId === aiTargetId
           && isSupportedFormulaWithinVisibleGrid(formula)

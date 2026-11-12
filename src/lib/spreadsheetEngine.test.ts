@@ -50,6 +50,26 @@ describe('spreadsheet formula engine', () => {
     expect(evaluateCellValue(cells, 'A22')).toEqual({ error: '#VALUE!' });
   });
 
+
+  it('evaluates COUNTBLANK and MEDIAN across bounded scalar and range arguments', () => {
+    const cells = {
+      A1: '1', A2: '', A3: '3', A4: '=IF(TRUE,"",0)', A5: 'not numeric',
+      B1: '=COUNTBLANK(A1:A5)',
+      B2: '=MEDIAN(A1:A5)',
+      B3: '=MEDIAN(1,2,3,4)',
+      B4: '=MEDIAN(A2:A2)',
+      B5: '=COUNTBLANK()',
+    };
+    expect(evaluateCellValue(cells, 'B1')).toBe(2);
+    expect(evaluateCellValue(cells, 'B2')).toBe(2);
+    expect(evaluateCellValue(cells, 'B3')).toBe(2.5);
+    expect(evaluateCellValue(cells, 'B4')).toEqual({ error: '#NUM!' });
+    expect(evaluateCellValue(cells, 'B5')).toEqual({ error: '#VALUE!' });
+    expect(isSupportedFormulaWithinVisibleGrid('=COUNTBLANK(A1:A5)')).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid('=MEDIAN(A1:A5)')).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid('=MEDIAN()')).toBe(false);
+  });
+
   it('evaluates AVERAGEIF with optional same-shape average ranges and safe no-match errors', () => {
     const cells = {
       A1: 'East', A2: 'West', A3: 'East', A4: 'North',

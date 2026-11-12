@@ -403,6 +403,18 @@ function evaluateCall(node: Extract<Node, { kind: 'call' }>, cells: Record<strin
     case 'MAX': return numbers.length ? Math.max(...numbers) : 0;
     case 'COUNT': return numbers.length;
     case 'COUNTA': return values.filter((value) => value !== null && value !== '').length;
+    case 'COUNTBLANK':
+      if (!args.length) throw new FormulaFault('#VALUE!');
+      return values.filter((value) => value === null || value === '').length;
+    case 'MEDIAN': {
+      if (!args.length) throw new FormulaFault('#VALUE!');
+      if (!numbers.length) throw new FormulaFault('#NUM!');
+      const sorted = [...numbers].sort((left, right) => left - right);
+      const middle = Math.floor(sorted.length / 2);
+      const median = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+      if (!Number.isFinite(median)) throw new FormulaFault('#NUM!');
+      return median;
+    }
     case 'ABS': if (args.length !== 1) throw new FormulaFault('#VALUE!'); return Math.abs(asNumber(args[0]));
     case 'ROUND': case 'ROUNDUP': case 'ROUNDDOWN': {
       if (args.length < 1 || args.length > 2) throw new FormulaFault('#VALUE!');
@@ -507,7 +519,7 @@ export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
   if (typeof formula !== 'string' || !isFormulaTextWithinLimit(formula) || !isFormulaCellValue(formula)) return false;
   try {
     const ast = new Parser(tokenize(formula)).parse();
-    const supportedFunctions = new Set(['IF', 'IFERROR', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'ABS', 'ROUND', 'ROUNDUP', 'ROUNDDOWN', 'PRODUCT', 'LEN', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'TRIM', 'AND', 'OR', 'NOT', 'CONCAT', 'COUNTIF', 'SUMIF', 'AVERAGEIF']);
+    const supportedFunctions = new Set(['IF', 'IFERROR', 'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'COUNTBLANK', 'MEDIAN', 'ABS', 'ROUND', 'ROUNDUP', 'ROUNDDOWN', 'PRODUCT', 'LEN', 'LEFT', 'RIGHT', 'MID', 'UPPER', 'LOWER', 'TRIM', 'AND', 'OR', 'NOT', 'CONCAT', 'COUNTIF', 'SUMIF', 'AVERAGEIF']);
     const addressIsVisible = (address: string) => {
       const position = parseAddress(address);
       return position.row <= SHEET_VISIBLE_ROWS && position.column <= SHEET_VISIBLE_COLUMNS;
@@ -529,7 +541,7 @@ export function isSupportedFormulaWithinVisibleGrid(formula: string): boolean {
             || (['ROUND', 'ROUNDUP', 'ROUNDDOWN', 'LEFT', 'RIGHT'].includes(node.name) && (node.args.length < 1 || node.args.length > 2))
             || (['LEN', 'UPPER', 'LOWER', 'TRIM'].includes(node.name) && node.args.length !== 1)
             || (node.name === 'MID' && node.args.length !== 3)
-            || (node.name === 'PRODUCT' && node.args.length < 1)
+            || (['PRODUCT', 'COUNTBLANK', 'MEDIAN'].includes(node.name) && node.args.length < 1)
             || (node.name === 'COUNTIF' && node.args.length !== 2)
             || (['SUMIF', 'AVERAGEIF'].includes(node.name) && (node.args.length < 2 || node.args.length > 3))) return false;
           if (node.name === 'COUNTIF' || node.name === 'SUMIF' || node.name === 'AVERAGEIF') {

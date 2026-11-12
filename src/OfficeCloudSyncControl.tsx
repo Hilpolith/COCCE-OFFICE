@@ -3,6 +3,7 @@ import { useFrostedConfirm } from './FrostedConfirm';
 import {
   createOfficeCloudSyncLink,
   getOfficeCloudSyncLink,
+  OFFICE_CLOUD_SYNC_LINKS_KEY,
   removeOfficeCloudSyncLink,
   saveOfficeCloudSyncLink,
   syncOfficeCloudRevision,
@@ -93,6 +94,27 @@ export default function OfficeCloudSyncControl({
       createdAt: new Date().toISOString(),
     };
   }, [actorId, workspaceId, localRecordId, displayName]);
+
+  useEffect(() => {
+    const refreshFromAnotherTab = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== OFFICE_CLOUD_SYNC_LINKS_KEY) return;
+      if (!actorId || !workspaceId || !localRecordId) return;
+      attempted.current = '';
+      try {
+        const next = getOfficeCloudSyncLink(window.localStorage, actorId, workspaceId, module, localRecordId);
+        setLink(next);
+        setRegistryError(false);
+        setMessage(next
+          ? 'Cloud sync settings were refreshed from another COCCE Office tab.'
+          : 'Cloud sync was turned off in another COCCE Office tab. Existing cloud versions remain available.');
+      } catch {
+        setRegistryError(true);
+        setMessage('The local sync-link registry is unreadable. It was preserved; no upload was started.');
+      }
+    };
+    window.addEventListener('storage', refreshFromAnotherTab);
+    return () => window.removeEventListener('storage', refreshFromAnotherTab);
+  }, [actorId, workspaceId, module, localRecordId]);
 
   useEffect(() => {
     attempted.current = '';
