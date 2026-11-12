@@ -38,6 +38,7 @@ function makeEditor(documentText = 'Synthetic full document content for consent 
   const chain = {
     focus: vi.fn(() => chain),
     insertContentAt: vi.fn(() => chain),
+    undo: vi.fn(() => chain),
     run: vi.fn(() => true),
   };
   const editor = {
@@ -125,6 +126,23 @@ describe('Docs Writing assistant', () => {
       { from: 2, to: 30 },
       { type: 'text', text: 'A preview edit.' },
     );
+  });
+
+  it('offers a one-click rollback immediately after applying a reviewed AI edit', async () => {
+    const fetcher = mockFetch();
+    const { editor, chain } = makeEditor();
+    render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
+    await screen.findByText('A preview edit.');
+    fireEvent.click(screen.getByRole('button', { name: 'Replace selection' }));
+    const rollback = await screen.findByRole('button', { name: 'Roll back AI edit' });
+    expect(rollback.disabled).toBe(false);
+    fireEvent.click(rollback);
+    expect(chain.undo).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('The most recent AI edit was rolled back.')).toBeTruthy();
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 
   it('keeps every Docs AI action disabled when the account has no Office workspace', async () => {

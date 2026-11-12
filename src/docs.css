@@ -219,3 +219,9 @@
 @media(forced-colors:active){.docs-source-editor,.docs-source-mode-tabs,.docs-source-textarea,.docs-source-local{background:Canvas;color:CanvasText;border-color:ButtonText}.docs-source-mode-tabs button[aria-pressed=true]{background:Highlight;color:HighlightText}}
 
 .docs-source-mode .editor-actions,.docs-source-mode #docs-cloud-area{display:none!important}
+
+.office-ai-notice{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.office-ai-notice>span{flex:1;min-width:120px}
+.office-ai-rollback-button{margin-left:auto;padding:5px 8px;border:1px solid color-mix(in srgb,var(--success) 32%,var(--border));border-radius:9px;background:color-mix(in srgb,var(--success) 8%,transparent);color:var(--success);font-size:9px;font-weight:750}
+.office-ai-rollback-button:hover{background:color-mix(in srgb,var(--success) 15%,transparent)}
+@media(forced-colors:active){.office-ai-rollback-button{background:Canvas;color:CanvasText;border-color:ButtonText}}

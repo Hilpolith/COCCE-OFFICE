@@ -80,6 +80,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [rollbackDoc, setRollbackDoc] = useState<object | null>(null);
   const [result, setResult] = useState('');
   const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(null);
   const [documentSummaryConfirmation, setDocumentSummaryConfirmation] = useState<DocumentSummaryConfirmation | null>(null);
@@ -377,6 +378,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       return;
     }
     const activeSelection = editor.state.selection;
+    const beforeDoc = editor.state.doc;
     if (activeSelection instanceof CellSelection) {
       setError('A table cell range is active for formatting. Click a text cursor before applying this AI preview; no table cells were changed.');
       return;
@@ -400,6 +402,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         setError('The preview could not be inserted. Copy the text below and try again.');
         return;
       }
+      setRollbackDoc(editor.state.doc);
       const appliedNotice = previewTarget.kind === 'document-summary'
         ? 'Document summary inserted at the captured cursor position. Use Undo to reverse it.'
         : previewTarget.kind === 'draft'
@@ -420,6 +423,23 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     : availability === 'available' ? 'Cloud AI configured'
       : availability === 'not-configured' ? 'AI not configured'
         : availability === 'checking' ? 'Checking service' : availability === 'unavailable' ? 'AI temporarily unavailable' : 'Service status unknown';
+  const canRollbackApplied = Boolean(editor && rollbackDoc && editor.state.doc === rollbackDoc);
+
+  const rollbackLastApplied = () => {
+    if (!editor || !rollbackDoc) return;
+    if (editor.state.doc !== rollbackDoc) {
+      setRollbackDoc(null);
+      setNotice('The document changed after the AI edit, so the one-click rollback is no longer safe. Use the normal Undo history instead.');
+      return;
+    }
+    if (editor.chain().focus().undo().run()) {
+      setRollbackDoc(null);
+      setNotice('The most recent AI edit was rolled back.');
+    } else {
+      setError('The AI edit could not be rolled back from the current editor history.');
+    }
+  };
+
   const selectionAvailable = !selection.isCellSelection && selection.text.trim().length > 0;
   const canRunAiActions = authStatus === 'signed-in' && workspaces.length > 0 && Boolean(workspaceId) && !workspaceLoading && (availability === 'available' || availability === 'unavailable');
 
@@ -479,7 +499,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
 
       {busy && <div className="office-ai-progress" role="status"><LoaderCircle size={16} className="office-ai-spinner" /> Preparing preview…</div>}
       {error && <div className="office-ai-message office-ai-error" role="alert"><AlertCircle size={15} />{error}</div>}
-      {notice && <div className="office-ai-message office-ai-notice" role="status"><Check size={15} />{notice}</div>}
+      {notice && <div className="office-ai-message office-ai-notice" role="status"><Check size={15} /><span>{notice}</span>{canRollbackApplied && <button type="button" className="office-ai-inline-button office-ai-rollback-button" onClick={rollbackLastApplied}>Roll back AI edit</button>}</div>}
 
       {documentSummaryConfirmation && <div className="office-ai-confirm-backdrop">
         <div className="office-ai-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="office-ai-confirm-title" aria-describedby="office-ai-confirm-description" onKeyDown={(event) => {
