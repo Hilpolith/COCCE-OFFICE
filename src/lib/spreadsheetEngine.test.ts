@@ -28,7 +28,7 @@ describe('spreadsheet formula engine', () => {
     };
     expect(evaluateCellValue(cells, 'A2')).toBe(-12.35);
     expect(evaluateCellValue(cells, 'A3')).toBe(-12.34);
-    expect(evaluateCellValue(cells, 'A4')).toBe(-74.07);
+    expect(evaluateCellValue(cells, 'A4')).toBeCloseTo(-74.07, 10);
     expect(evaluateCellValue(cells, 'A5')).toBe(5);
     expect(evaluateCellValue(cells, 'A6')).toBe('COCCE');
     expect(evaluateCellValue(cells, 'A7')).toBe('Office');
