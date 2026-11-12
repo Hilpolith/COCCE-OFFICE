@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => {
     getUser: vi.fn(),
     onAuthStateChange: vi.fn(),
   };
-  return { cloudApi, auth, listWorkspaces: vi.fn(), confirm: vi.fn(), importDocxFile: vi.fn(), importXlsxFile: vi.fn() };
+  return { cloudApi, auth, listWorkspaces: vi.fn(), confirm: vi.fn(), importDocxFile: vi.fn(), importXlsxFile: vi.fn(), importPptxFile: vi.fn() };
 
 });
 
@@ -45,6 +45,7 @@ vi.mock('./lib/officeCloudFiles', () => ({
 }));
 vi.mock('./lib/docxInterchange', () => ({ importDocxFile: mocks.importDocxFile, MAX_DOCX_FILE_BYTES: 5 * 1024 * 1024, DOCX_MIME: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
 vi.mock('./lib/xlsxInterchange', () => ({ importXlsxFile: mocks.importXlsxFile, MAX_XLSX_FILE_BYTES: 5 * 1024 * 1024, XLSX_MIME: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+vi.mock('./lib/pptxExport', () => ({ importPptxFile: mocks.importPptxFile }));
 vi.mock('./lib/driveStore', () => ({
   formatFileSize: (value: number) => `${value} B`,
 }));
@@ -77,6 +78,7 @@ beforeEach(() => {
   mocks.cloudApi.recover.mockResolvedValue({ status: 'recovered' });
   mocks.importDocxFile.mockResolvedValue({ title: 'brief', content: 'Preview body', richText: '<h1>Imported brief</h1><p>Preview body</p>', warnings: [] });
   mocks.importXlsxFile.mockResolvedValue({ title: 'Budget', sheetName: 'Summary', cells: { A1: 'Department', B1: 'Amount', A2: 'Operations', B2: '1200' }, warnings: [] });
+  mocks.importPptxFile.mockResolvedValue({ deck: { id: 'preview-deck', workspaceId: 'workspace-1', title: 'Quarterly review', theme: 'violet', slides: [{ id: 'slide-1', title: 'Quarterly review', body: 'Revenue increased.', notes: 'Discuss the new targets.', layout: 'title-content' }] }, omittedImageCount: 0 });
 });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
@@ -137,6 +139,32 @@ describe('Cloud Drive workspace', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^XLSX broken\\.xlsx/ }));
     expect(await screen.findByText(/unsupported worksheet content/i)).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy();
+  });
+
+  it('renders a read-only PPTX slide and speaker-notes preview without saving imported images', async () => {
+    const presentation = { ...cloudFile, displayName: 'quarterly.pptx', sizeBytes: 8192 };
+    mocks.cloudApi.list.mockResolvedValue([presentation]);
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
+    await chooseWorkspace();
+    fireEvent.click(await screen.findByRole('button', { name: /^PPTX quarterly\\.pptx/ }));
+    expect(await screen.findByText('Quarterly review')).toBeTruthy();
+    expect(screen.getByText('Revenue increased.')).toBeTruthy();
+    fireEvent.click(screen.getByText('Speaker notes'));
+    expect(screen.getByText('Discuss the new targets.')).toBeTruthy();
+    expect(mocks.importPptxFile).toHaveBeenCalledWith(expect.any(File), 'workspace-1', expect.any(Function), expect.any(Function));
+    expect(mocks.cloudApi.download).toHaveBeenCalledWith(presentation);
+  });
+
+  it('does not render malformed PPTX content and preserves the original download action', async () => {
+    const presentation = { ...cloudFile, displayName: 'broken.pptx', sizeBytes: 128 };
+    mocks.cloudApi.list.mockResolvedValue([presentation]);
+    mocks.importPptxFile.mockRejectedValue(new Error('The PowerPoint archive could not be safely opened.'));
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
+    await chooseWorkspace();
+    fireEvent.click(await screen.findByRole('button', { name: /^PPTX broken\\.pptx/ }));
+    expect(await screen.findByText(/PowerPoint archive could not be safely opened/i)).toBeTruthy();
+    expect(screen.queryByText('Slide 1')).toBeNull();
     expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy();
   });
 
