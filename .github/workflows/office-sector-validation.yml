@@ -8,6 +8,7 @@ on:
       - "api/**"
       - "supabase/**"
       - "scripts/**"
+      - "docs/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/office-sector-validation.yml"
