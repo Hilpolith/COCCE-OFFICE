@@ -425,7 +425,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
 
   return <section className="office-ai-panel" aria-label="AI writing assistant">
     <button className="office-ai-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>COCCE AI</strong><small>Document-aware writing and editing</small></span></span>
+      <span className="office-ai-disclosure-title"><span className="office-ai-icon"><Sparkles size={17} /></span><span><strong>COCCE AI</strong><small>Writing assistant · document-aware editing</small></span></span>
       <span className="office-ai-disclosure-status"><span className="office-ai-provider-pill">OPENROUTER · FREE</span><span>{availabilityLabel}</span>{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
     </button>
 
