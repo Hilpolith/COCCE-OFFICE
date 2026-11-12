@@ -494,8 +494,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         tableTextChars: usage.textChars,
         tableHeaderRow: activeTable?.headerRow ?? false,
         hasTextSelection: !(selection instanceof CellSelection) && !selection.empty
-          && activeEditor.state.doc.textBetween(selection.from, selection.to, '
-').trim().length > 0,
+          && activeEditor.state.doc.textBetween(selection.from, selection.to, '\n').trim().length > 0,
         selectedCells,
       };
     },
@@ -541,8 +540,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     const selection = editor.state.selection;
     const quote = selection.empty || selection instanceof CellSelection
       ? ''
-      : editor.state.doc.textBetween(selection.from, selection.to, '
-');
+      : editor.state.doc.textBetween(selection.from, selection.to, '\n');
     if (!quote.trim()) {
       showReviewCommentNotice('Select text in the document before adding a review comment.', true);
       return;
@@ -561,8 +559,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     if (!editor || !commentDraft) return;
     const scope = reviewCommentScopeRef.current;
     if (commentDraft.scopeKey !== scope.key || !editor.state.doc.eq(commentDraft.document)
-      || editor.state.doc.textBetween(commentDraft.from, commentDraft.to, '
-') !== commentDraft.quote) {
+      || editor.state.doc.textBetween(commentDraft.from, commentDraft.to, '\n') !== commentDraft.quote) {
       showReviewCommentNotice('The selected text changed. Select it again before saving this comment.', true);
       return;
     }
