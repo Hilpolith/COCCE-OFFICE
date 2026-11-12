@@ -153,15 +153,6 @@ describe('COCCE AI workspace context', () => {
       },
     }));
     expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
-    expect(mocks.rpc).toHaveBeenCalledWith('office_ai_create_conversation', {
-      p_workspace_id: 'workspace-one',
-      p_title: 'Prepare a short project plan.',
-    });
-    expect(mocks.rpc).toHaveBeenCalledWith('office_ai_save_exchange', expect.objectContaining({
-      p_conversation_id: '55555555-5555-4555-8555-555555555555',
-      p_user_content: 'Prepare a short project plan.',
-      p_assistant_content: 'A tested workspace summary.',
-    }));
   });
   it('clears the selected workspace and ignores an in-flight answer after workspace access is cleared', async () => {
     let resolveChat: ((value: { data: { text: string }; error: null }) => void) | null = null;
@@ -191,6 +182,15 @@ describe('COCCE AI workspace context', () => {
     await screen.findByRole('combobox', { name: 'Workspace' });
     fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
     expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
+    expect(mocks.rpc).toHaveBeenCalledWith('office_ai_create_conversation', {
+      p_workspace_id: 'workspace-one',
+      p_title: 'Prepare a short project plan.',
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith('office_ai_save_exchange', expect.objectContaining({
+      p_conversation_id: '55555555-5555-4555-8555-555555555555',
+      p_user_content: 'Prepare a short project plan.',
+      p_assistant_content: 'A tested workspace summary.',
+    }));
 
     fireEvent.change(screen.getByPlaceholderText('Ask across your workspace…'), { target: { value: 'Add a risk section to that plan.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
