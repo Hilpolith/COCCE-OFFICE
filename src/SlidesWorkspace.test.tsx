@@ -490,6 +490,18 @@ describe('Slides workspace', () => {
     expect(screen.getByText(/Replace it before printing or presenting/)).toBeTruthy();
   });
 
+
+  it('lets users crop a local slide image to fill its frame without changing the source asset', async () => {
+    await createPresentation();
+    fireEvent.change(screen.getByLabelText('Choose a local slide image'), { target: { files: [validPngFile()] } });
+    await waitFor(() => expect(document.querySelector('.slides-workbench .slide-local-image')).toBeTruthy());
+    const fit = screen.getByRole('combobox', { name: 'Image fit' });
+    fireEvent.change(fit, { target: { value: 'cover' } });
+    await waitFor(() => expect(document.querySelector('.slides-workbench .slide-local-image')?.classList.contains('slide-image-fit-cover')).toBe(true));
+    expect(await localSlidesAssetRepository.listDeckImages(JSON.parse(window.localStorage.getItem(SLIDES_STORAGE_KEY)!).decks[0].id)).toHaveLength(1);
+    expect(screen.getByRole('combobox', { name: 'Image fit' }).getAttribute('value')).not.toBe('stretch');
+  });
+
   it('permanently deletes a presentation’s IndexedDB images only after the user confirms deletion', async () => {
     await createPresentation();
     fireEvent.change(screen.getByLabelText('Choose a local slide image'), { target: { files: [validPngFile()] } });

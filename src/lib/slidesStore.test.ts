@@ -87,6 +87,18 @@ describe('local Slides data model', () => {
     expect(imported.slides[0].body).toBe(deck.slides[0].body);
   });
 
+  it('persists validated image-fit preferences and defaults invalid values safely', () => {
+    const deck = createDeck({ version: 1, decks: [] }, null).deck;
+    const withFit = updateSlide({ version: 1, decks: [deck] }, deck.id, deck.slides[0].id, { imageFit: 'cover' });
+    writeSlidesState(disk, withFit);
+    expect(readSlidesState(disk).state?.decks[0].slides[0].imageFit).toBe('cover');
+
+    const stored = JSON.parse(disk.values.get(SLIDES_STORAGE_KEY)!) as { decks: Array<{ slides: Array<Record<string, unknown>> }> };
+    stored.decks[0].slides[0].imageFit = 'stretch';
+    disk.values.set(SLIDES_STORAGE_KEY, JSON.stringify(stored));
+    expect(readSlidesState(disk).state?.decks[0].slides[0].imageFit).toBeUndefined();
+  });
+
   it('persists local image references while keeping image bytes and asset IDs out of JSON transfer', () => {
     const deck = createDeck({ version: 1, decks: [] }, null).deck;
     const withImage = updateSlide({ version: 1, decks: [deck] }, deck.id, deck.slides[0].id, {

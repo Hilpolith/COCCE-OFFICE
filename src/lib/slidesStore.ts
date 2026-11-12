@@ -4,6 +4,7 @@ export const MAX_SLIDE_TEXT_LENGTH = 12_000;
 
 export const SLIDE_LAYOUTS = ['title-content', 'two-column', 'quote', 'section-divider'] as const;
 export type SlideLayout = typeof SLIDE_LAYOUTS[number];
+export type SlideImageFit = 'contain' | 'cover';
 export const DEFAULT_SLIDE_LAYOUT: SlideLayout = 'title-content';
 export type SlidesTheme = 'violet' | 'ocean' | 'ember';
 export type Slide = {
@@ -14,6 +15,7 @@ export type Slide = {
   layout: SlideLayout;
   imageAssetId?: string;
   imageAltText?: string;
+  imageFit?: SlideImageFit;
 };
 export type PresentationDeck = {
   id: string;
@@ -39,6 +41,7 @@ type SlideInput = Pick<Slide, 'id' | 'title' | 'body' | 'notes'> & {
   layout?: unknown;
   imageAssetId?: unknown;
   imageAltText?: unknown;
+  imageFit?: unknown;
   imageOmitted?: unknown;
 };
 type PresentationDeckInput = Omit<PresentationDeck, 'slides'> & { slides: SlideInput[] };
@@ -53,6 +56,7 @@ function validSlide(value: unknown): value is SlideInput {
     && typeof value.notes === 'string' && value.notes.length <= MAX_SLIDE_TEXT_LENGTH
     && (value.imageAssetId === undefined || (typeof value.imageAssetId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.imageAssetId)))
     && (value.imageAltText === undefined || (typeof value.imageAltText === 'string' && value.imageAltText.length <= 500))
+    && (value.imageFit === undefined || value.imageFit === 'contain' || value.imageFit === 'cover')
     && (value.imageOmitted === undefined || typeof value.imageOmitted === 'boolean');
 }
 
@@ -76,6 +80,7 @@ function normalizeSlide(slide: SlideInput): Slide {
     layout: isSlideLayout(slide.layout) ? slide.layout : DEFAULT_SLIDE_LAYOUT,
     ...(typeof slide.imageAssetId === 'string' ? { imageAssetId: slide.imageAssetId } : {}),
     ...(typeof slide.imageAltText === 'string' ? { imageAltText: slide.imageAltText } : {}),
+    ...(slide.imageFit === 'contain' || slide.imageFit === 'cover' ? { imageFit: slide.imageFit } : {}),
   };
 }
 
@@ -122,7 +127,7 @@ export function updateDeck(state: SlidesState, deckId: string, patch: Partial<Pi
   return { ...state, decks: state.decks.map((deck) => deck.id === deckId ? { ...deck, ...patch, updatedAt: now() } : deck) };
 }
 
-export function updateSlide(state: SlidesState, deckId: string, slideId: string, patch: Partial<Pick<Slide, 'title' | 'body' | 'notes' | 'layout' | 'imageAssetId' | 'imageAltText'>>): SlidesState {
+export function updateSlide(state: SlidesState, deckId: string, slideId: string, patch: Partial<Pick<Slide, 'title' | 'body' | 'notes' | 'layout' | 'imageAssetId' | 'imageAltText' | 'imageFit'>>): SlidesState {
   return { ...state, decks: state.decks.map((deck) => deck.id === deckId
     ? { ...deck, slides: deck.slides.map((slide) => slide.id === slideId ? { ...slide, ...patch } : slide), updatedAt: now() }
     : deck) };
