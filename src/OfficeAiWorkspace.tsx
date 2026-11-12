@@ -19,7 +19,11 @@ const AI_DRIVE_TEXT_EXTENSIONS = new Set([
   'toml','ini','conf','properties','dart','java','kt','kts','go','rs','php','rb','swift','c','h','cpp','hpp',
   'cs','r','lua','ps1','bat','graphql','gql','prisma','vue','svelte','astro','pdf','docx','xlsx','pptx',
 ]);
-const AI_DRIVE_SENSITIVE_NAME = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
+const AI_DRIVE_SENSITIVE_SEGMENT = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|secrets|credential|credentials|password|token|private[-_]?key)(?:[._-]|$)/i;
+
+function isSensitiveDriveFileName(value: string): boolean {
+  return value.normalize('NFC').replaceAll('\\\\', '/').split('/').some((segment) => AI_DRIVE_SENSITIVE_SEGMENT.test(segment));
+}
 
 export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspaceId, initialPrompt }: { mode?: 'assistant' | 'chat'; initialWorkspaceId?: string; initialPrompt?: string } = {}) {
   const confirm = useFrostedConfirm();
@@ -370,7 +374,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const supportedDriveFile = (file: CloudFile) => {
     const name = file.displayName.normalize('NFC').trim();
     const extension = name.split('.').pop()?.toLowerCase() ?? '';
-    return file.sizeBytes <= 512 * 1024 && AI_DRIVE_TEXT_EXTENSIONS.has(extension) && !AI_DRIVE_SENSITIVE_NAME.test(name);
+    return file.sizeBytes <= 512 * 1024 && AI_DRIVE_TEXT_EXTENSIONS.has(extension) && !isSensitiveDriveFileName(name);
   };
 
   const openDriveFiles = async () => {
