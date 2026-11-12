@@ -102,7 +102,7 @@ describe('COCCE AI workspace context', () => {
 **Ready for review** with \`verified\` status and [the report](https://example.com/report)
 
 - First action
-- Second action` }, error: null }
+- Second action\n\n| Area | Status |\n| --- | --- |\n| Docs | Ready |\n| Sheets | In progress |` }, error: null }
     ));
     render(<OfficeAiWorkspace mode="chat" />);
     await screen.findByRole('combobox', { name: 'Workspace' });
@@ -114,6 +114,8 @@ describe('COCCE AI workspace context', () => {
     expect(screen.getByText('verified', { selector: 'code' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'the report' }).getAttribute('href')).toBe('https://example.com/report');
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.getAllByRole('row')).toHaveLength(3);
   });
 
   it('asks before searching the signed-in user cloud and sends the consented inventory request', async () => {
