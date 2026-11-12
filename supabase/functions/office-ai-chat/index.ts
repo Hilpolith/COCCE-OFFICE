@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { isUuid, loadDriveInventory, loadSelectedDriveFiles, MAX_DRIVE_FILES, type DriveContextError } from "./drive-context.ts";
+import { isUuid, loadDriveInventory, loadSelectedDriveFiles, rankDriveInventoryFiles, MAX_DRIVE_FILES, type DriveContextError } from "./drive-context.ts";
 import { extractPdfText } from "./pdf-extract.ts";
 
 const AI_PROVIDER_URL = "https://cocce-office.vercel.app/api/office-ai-provider";
@@ -164,7 +164,10 @@ Deno.serve(async (req) => {
     }
     const requestedFileIds = Array.isArray(body.fileIds) ? body.fileIds as string[] : [];
     const inventoryFileIds = body.includeDriveInventory === true
-      ? driveInventory.filter((file) => file.sizeBytes <= 512 * 1024 && /\.(?:txt|md|markdown|csv|json|xml|yaml|yml|log|pdf|docx|xlsx|pptx|cocce-docs\.json|cocce-sheets\.json)$/i.test(file.displayName)).map((file) => file.fileId)
+      ? rankDriveInventoryFiles(
+        driveInventory.filter((file) => file.sizeBytes <= 512 * 1024 && /\.(?:txt|md|markdown|csv|json|xml|yaml|yml|log|pdf|docx|xlsx|pptx)$/i.test(file.displayName)),
+        body.prompt,
+      ).map((file) => file.fileId)
       : [];
     const contextFileIds = [...new Set([...requestedFileIds, ...inventoryFileIds])].slice(0, MAX_DRIVE_FILES);
     driveFiles = await loadSelectedDriveFiles(contextFileIds, enabledWorkspaces, supabaseUrl, anonKey, token, fetch, extractPdfText);
