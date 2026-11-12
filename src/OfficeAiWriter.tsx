@@ -378,7 +378,6 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       return;
     }
     const activeSelection = editor.state.selection;
-    const beforeDoc = editor.state.doc;
     if (activeSelection instanceof CellSelection) {
       setError('A table cell range is active for formatting. Click a text cursor before applying this AI preview; no table cells were changed.');
       return;
