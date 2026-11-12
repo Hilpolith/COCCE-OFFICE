@@ -468,7 +468,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       {status === 'ready' && <>
         <div className="office-ai-context"><label>Workspace<select value={workspaceId} disabled={driveFilesLoading || busy || status !== 'ready'} onChange={event => void changeWorkspace(event.target.value)}>{mode === 'assistant' && <option value="*">All AI-enabled workspaces (up to 20)</option>}{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label>{mode === 'assistant' && <label className="office-ai-context-toggle"><span>Team conversation context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · no team history'}</small></span></label>}</div>
         {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before using workspace-aware AI.</div>}
-        <section className="office-ai-drive-context" aria-label="Selected Drive file context">
+        {mode === 'assistant' && <section className="office-ai-drive-context" aria-label="Selected Drive file context">
           <div className="office-ai-drive-heading"><div><strong>Drive file context</strong><small>Attach up to 3 private text, PDF, Word, Excel, PowerPoint or COCCE Docs/Sheets files. All-workspace mode shows the latest 5 per workspace; a single workspace starts with 50 and can load more. Contents are fetched server-side only after you ask.</small></div><button type="button" className="button-secondary" onClick={() => void openDriveFiles()} disabled={!workspaceId || !userId || busy}>{driveFilesOpen ? 'Hide files' : 'Browse Drive'}</button></div>
           {selectedFileIds.length > 0 && <div className="office-ai-drive-selected">{selectedFileIds.length} of 3 files attached until you deselect them</div>}
           {driveFilesOpen && <div className="office-ai-drive-list">
@@ -476,7 +476,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
             {driveFileHasMore && <button type="button" className="office-ai-inline-button" onClick={() => void loadMoreDriveFiles()} disabled={driveFilesLoading}>{driveFilesLoading ? 'Loading…' : 'Load more files'}</button>}
             {driveFilesError && <p className="office-ai-drive-error" role="status">{driveFilesError}</p>}
           </div>}
-        </section>
+        </section>}
         <div className="office-ai-history" aria-label="Saved AI conversations">
           <div className="office-ai-history-heading"><strong>Conversation history</strong><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy || historyLoading}>New chat</button></div>
           {workspaceId === '*' ? <small className="office-ai-history-hint">Select one workspace to save and reopen conversations. All-workspace context remains available for one-off questions.</small> : historyLoading ? <small className="office-ai-history-hint">Loading saved conversations…</small> : conversations.length ? conversations.map((conversation) => <div className={`office-ai-history-row ${activeConversationId === conversation.conversation_id ? 'is-active' : ''}`} key={conversation.conversation_id}>
