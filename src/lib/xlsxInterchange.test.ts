@@ -338,7 +338,7 @@ describe('bounded local XLSX interchange', () => {
       {
         label: 'chart part',
         file: makeXlsxFile({ extraFiles: { 'xl/charts/chart1.xml': '<chart/>' } }),
-        message: 'charts, drawings',
+        message: 'content-type manifest',
       },
       {
         label: 'macro part',
@@ -472,6 +472,12 @@ describe('bounded local XLSX interchange', () => {
     expect(line).toContain("'Owner''s Budget'!$B$2:$B$3");
     expect(bar).toContain('Revenue by month');
     expect(decoder.decode(archive['[Content_Types].xml'])).toContain('drawingml.chart+xml');
+    const imported = await importXlsxFile(fileFromBlob(blob));
+    expect(imported.cells).toEqual({ A1: 'Month', B1: 'Revenue', A2: 'Jan', B2: '1200', A3: 'Feb', B3: '1800' });
+    expect(imported.charts).toEqual([
+      { title: 'Revenue by month', type: 'bar', range: 'A1:B3' },
+      { title: 'Revenue trend', type: 'line', range: 'A1:B3' },
+    ]);
   });
 
   it('rejects malformed chart metadata rather than emitting broken XLSX relationships', async () => {
