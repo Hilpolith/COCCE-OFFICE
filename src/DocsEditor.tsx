@@ -735,16 +735,15 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   };
 
   const insertImageFile = async (file: File) => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) throw new Error('The document editor is not ready for image insertion.');
     setImageNotice('');
     try {
       const src = await prepareDocsImage(file);
-      if (!editor.isDestroyed) {
-        editor.chain().focus().insertContent({
-          type: 'docsImage',
-          attrs: { src, alt: file.name.replace(/[<>]/g, '').slice(0, 180), width: null },
-        }).run();
-      }
+      if (editor.isDestroyed) throw new Error('The document editor closed before the image could be inserted.');
+      editor.chain().focus().insertContent({
+        type: 'docsImage',
+        attrs: { src, alt: file.name.replace(/[<>]/g, '').slice(0, 180), width: null },
+      }).run();
     } catch (reason) {
       setImageNotice(reason instanceof Error ? reason.message : 'The image could not be inserted.');
       throw reason;
