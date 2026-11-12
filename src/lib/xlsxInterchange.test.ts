@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, unzipSync, zipSync } from 'fflate';
 import {
   createXlsxBlob,
   importXlsxFile,
@@ -440,6 +440,47 @@ describe('bounded local XLSX interchange', () => {
       .rejects.toThrow('does not match its declared size');
     await expect(importXlsxFile(await mutateDeclaredEntrySize(valid, 'xl/worksheets/sheet1.xml', -1)))
       .rejects.toThrow('does not match its declared size');
+  });
+
+  it('exports bounded bar and line charts as native Excel chart parts with safe worksheet references', async () => {
+    const blob = await createXlsxBlob({
+      title: 'Quarter Budget',
+      sheetName: "Owner's Budget",
+      cells: { A1: 'Month', B1: 'Revenue', A2: 'Jan', B2: '1200', A3: 'Feb', B3: '1800' },
+      charts: [
+        { id: 'bar-1', title: 'Revenue by month', type: 'bar', range: 'A1:B3', createdAt: '2026-11-12T10:00:00.000Z' },
+        { id: 'line-1', title: 'Revenue trend', type: 'line', range: 'A1:B3', createdAt: '2026-11-12T10:01:00.000Z' },
+      ],
+    });
+    const archive = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+    const decoder = new TextDecoder();
+    expect(Object.keys(archive)).toContain('xl/charts/chart1.xml');
+    expect(Object.keys(archive)).toContain('xl/charts/chart2.xml');
+    expect(Object.keys(archive)).toContain('xl/drawings/drawing1.xml');
+    expect(Object.keys(archive)).toContain('xl/drawings/_rels/drawing1.xml.rels');
+    const sheet = decoder.decode(archive['xl/worksheets/sheet1.xml']);
+    expect(sheet).toContain('<drawing r:id="rId1"/>');
+    const drawing = decoder.decode(archive['xl/drawings/drawing1.xml']);
+    expect(drawing.match(/<xdr:twoCellAnchor/g)).toHaveLength(2);
+    const bar = decoder.decode(archive['xl/charts/chart1.xml']);
+    const line = decoder.decode(archive['xl/charts/chart2.xml']);
+    expect(bar).toContain('<c:barChart>');
+    expect(line).toContain('<c:lineChart>');
+    expect(bar).toContain("'Owner''s Budget'!$A$2:$A$3");
+    expect(bar).toContain("'Owner''s Budget'!$B$2:$B$3");
+    expect(bar).toContain('Revenue by month');
+    expect(decoder.decode(archive['[Content_Types].xml'])).toContain('drawingml.chart+xml');
+  });
+
+  it('rejects malformed chart metadata rather than emitting broken XLSX relationships', async () => {
+    await expect(createXlsxBlob({
+      title: 'Invalid chart', sheetName: 'Data', cells: { A1: 'x', B1: 'y', A2: 'a', B2: '1' },
+      charts: [{ id: 'bad', title: 'Broken', type: 'bar', range: 'A1:M25', createdAt: '2026-11-12T10:00:00.000Z' }],
+    })).rejects.toThrow(/chart range is invalid/);
+    await expect(createXlsxBlob({
+      title: 'Too many charts', sheetName: 'Data', cells: { A1: 'x' },
+      charts: Array.from({ length: 21 }, (_, index) => ({ id: String(index), title: 'Chart', type: 'bar' as const, range: 'A1:B2', createdAt: '2026-11-12T10:00:00.000Z' })),
+    })).rejects.toThrow(/at most 20 charts/);
   });
 
   it('refuses unsupported formulas and out-of-grid cells during export', async () => {
