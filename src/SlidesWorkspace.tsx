@@ -18,7 +18,7 @@ import OfficeAiPromptWorkbench, { OfficeWorkbenchLayout } from './OfficeWorkbenc
 import {
   localSlidesAssetRepository, MAX_ACTIVE_SLIDE_IMAGES, MAX_ACTIVE_SLIDE_IMAGE_BYTES, MAX_SLIDE_IMAGE_BYTES,
 } from './lib/slidesAssets';
-import { createPptxBlob } from './lib/pptxExport';
+import { createPptxBlob, importPptxFile } from './lib/pptxExport';
 import {
   addSlide, createDeck, duplicateSlide, importDeck, moveSlide, readSlidesState,
   removeDeck, removeSlide, serializeDeck, SLIDE_LAYOUTS, SLIDES_STORAGE_KEY, updateDeck, updateSlide, writeSlidesState,
@@ -416,9 +416,10 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || !state) return;
-    if (file.size > 5_000_000) { setFeedback('That file is larger than the 5 MB import limit.'); return; }
+    const isPptx = file.name.toLowerCase().endsWith('.pptx');
+    if (file.size > (isPptx ? 25_000_000 : 5_000_000)) { setFeedback(isPptx ? 'That PowerPoint file is larger than the 25 MB import limit.' : 'That JSON file is larger than the 5 MB import limit.'); return; }
     try {
-      const importedResult = importDeck(await file.text(), workspaceId);
+      const importedResult = isPptx ? await importPptxFile(file, workspaceId) : importDeck(await file.text(), workspaceId);
       const imported = importedResult.deck;
       const saved = persist({ ...state, decks: [imported, ...state.decks] });
       setHistory(createSlidesHistory());
@@ -426,7 +427,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
       selectDeck(imported.id);
       setActiveSlideIndex(0);
       if (saved) setFeedback(importedResult.omittedImageCount
-        ? `Presentation imported. ${importedResult.omittedImageCount} local image${importedResult.omittedImageCount === 1 ? ' was' : 's were'} not included in the JSON file.`
+        ? `Presentation imported. ${importedResult.omittedImageCount} embedded image${importedResult.omittedImageCount === 1 ? ' was' : 's were'} not imported; reinsert those images in the affected slides.`
         : 'Presentation imported on this device.');
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Could not read that presentation file.');
@@ -581,7 +582,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
         </div>
       </div>
 
-      <div className="slides-local-note"><LockKeyhole size={14} /><span>Slides are saved in this browser, scoped to <strong>{workspaceId ? 'this local workspace' : 'Personal space'}</strong>. Image files use local IndexedDB; {slidesCloudReady ? 'a confirmed cloud copy includes the full presentation and all retained image files. No background sync occurs.' : 'JSON transfer omits local images after confirmation; PowerPoint export embeds retained local images and notes.'}</span></div>
+      <div className="slides-local-note"><LockKeyhole size={14} /><span>Slides are saved in this browser, scoped to <strong>{workspaceId ? 'this local workspace' : 'Personal space'}</strong>. Image files use local IndexedDB; {slidesCloudReady ? 'a confirmed cloud copy includes the full presentation and all retained image files. No background sync occurs.' : 'JSON transfer omits local images after confirmation; PPTX import preserves text and notes, while embedded images are flagged for reinsertion. PowerPoint export embeds retained local images and notes.'}</span></div>
       {unsaved && <div className="slides-unsaved" role="alert"><span>{feedback}</span><button className="button-tertiary" onClick={retrySave}>Retry save</button></div>}
       {assetCleanupFailed && <div className="slides-unsaved" role="alert"><span>The presentation is deleted, but its local image files still need cleanup.</span><button className="button-tertiary" onClick={() => { void retryPendingAssetCleanup(); }}>Retry image cleanup</button></div>}
 
@@ -589,7 +590,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
         <div className="slides-library-toolbar">
           <div><span className="eyebrow">YOUR DECKS</span><h2>{decks.length ? `${decks.length} ${decks.length === 1 ? 'presentation' : 'presentations'}` : 'A clear canvas'}</h2></div>
           <div className="slides-library-actions">
-            <input ref={inputRef} className="visually-hidden-input" type="file" accept="application/json,.json" onChange={importFile} aria-label="Choose a presentation JSON file" />
+            <input ref={inputRef} className="visually-hidden-input" type="file" accept="application/json,.json,application/vnd.openxmlformats-officedocument.presentationml.presentation,.pptx" onChange={importFile} aria-label="Choose a PowerPoint or COCCE presentation file" />
             <button className="button-secondary" onClick={() => inputRef.current?.click()}><FileUp size={15} /> Import JSON</button>
             {slidesCloudReady && <button className="button-secondary" aria-expanded={slidesCloudOpen} onClick={() => setSlidesCloudOpen((open) => !open)}>{slidesCloudOpen ? 'Hide cloud copies' : 'Cloud copies'}</button>}
             {decks.length > 0 && <button className="button-primary" onClick={beginDeck}><Plus size={16} /> New presentation</button>}
