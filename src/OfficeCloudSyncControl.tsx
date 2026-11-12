@@ -204,7 +204,7 @@ export default function OfficeCloudSyncControl({
           if (intent && [400, 401, 403, 413, 429].includes(status ?? 0) && !intent.uploadSessionId)
             clearPending(intent.idempotencyKey);
           setMessage('Auto-sync could not finish. Your local original remains unchanged; retry after connectivity or storage is restored.');
-          throw error;
+          // The panel already reports the failure; keep retries promise-safe.
         }
       });
     } finally {
@@ -223,11 +223,20 @@ export default function OfficeCloudSyncControl({
       setOnline(true);
     };
     const handleOffline = () => setOnline(false);
+    const handleResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      attempted.current = '';
+      setOnline(typeof navigator === 'undefined' || navigator.onLine);
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('focus', handleResume);
+    document.addEventListener('visibilitychange', handleResume);
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('focus', handleResume);
+      document.removeEventListener('visibilitychange', handleResume);
     };
   }, []);
 
