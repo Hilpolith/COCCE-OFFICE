@@ -964,8 +964,8 @@ export async function importXlsxFile(file: File): Promise<ImportedXlsx> {
   const worksheetXml = archive.parts.get(relationships.worksheetPath);
   if (!worksheetXml) fail('The XLSX worksheet part is missing.');
   const drawingId = worksheetDrawingId(worksheetXml);
-  const drawingParts = [...archive.parts.keys()].filter((name) => /^xl\/drawings\\/drawing\d+\.xml$/.test(name));
-  const chartParts = [...archive.parts.keys()].filter((name) => /^xl\/charts\\/chart\d+\.xml$/.test(name));
+  const drawingParts = [...archive.parts.keys()].filter((name) => /^xl\/drawings\/drawing\d+\.xml$/.test(name));
+  const chartParts = [...archive.parts.keys()].filter((name) => /^xl\/charts\/chart\d+\.xml$/.test(name));
   if ((!drawingId && (drawingParts.length || chartParts.length)) || (drawingId && drawingParts.length !== 1)) {
     fail('The XLSX package contains orphaned or unsupported chart/drawing parts.');
   }
