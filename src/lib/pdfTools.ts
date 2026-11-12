@@ -117,6 +117,17 @@ export async function extractPdfPages(source: Uint8Array, pages: number[]): Prom
   return saveBoundedPageCopy(extracted);
 }
 
+export async function removePdfPage(source: Uint8Array, pageNumber: number): Promise<Uint8Array> {
+  const original = await loadPageCopySource(source);
+  const pageCount = original.getPageCount();
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > pageCount) {
+    throw new Error(`Page number must be between 1 and ${pageCount}.`);
+  }
+  if (pageCount <= 1) throw new Error('A PDF must retain at least one page.');
+  const retainedPages = Array.from({ length: pageCount }, (_, index) => index + 1).filter((page) => page !== pageNumber);
+  return extractPdfPages(source, retainedPages);
+}
+
 export async function reorderPdfPages(source: Uint8Array, order: number[]): Promise<Uint8Array> {
   const original = await loadPageCopySource(source);
   validatePageSequence(order, original.getPageCount(), true);
