@@ -41,10 +41,10 @@ before(async () => {
     );
     create function office_private.is_active_member(p_workspace_id uuid)
       returns boolean language sql stable security definer set search_path=''
-      as $ select auth.uid() is not null and exists(
+      as $is_active_member$ select auth.uid() is not null and exists(
         select 1 from public.office_memberships m
         where m.workspace_id=p_workspace_id and m.user_id=auth.uid() and m.status='active'
-      ) $;
+      ) $is_active_member$;
     grant usage on schema auth, office_private to authenticated;
     grant execute on function auth.uid() to authenticated;
     grant execute on function office_private.is_active_member(uuid) to authenticated;
