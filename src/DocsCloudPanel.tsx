@@ -483,6 +483,22 @@ export default function DocsCloudPanel({
         );
     });
   }
+  async function insertDriveImage(file: CloudFile) {
+    if (!onInsertImage || file.sizeBytes > 12 * 1024 * 1024) return;
+    const extension = file.displayName.split('.').pop()?.toLowerCase() ?? '';
+    const mimeType = extension === 'png' ? 'image/png'
+      : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg'
+      : extension === 'webp' ? 'image/webp' : '';
+    if (!mimeType) return;
+    await run(async (api, current) => {
+      const bytes = await api.download(file, 12 * 1024 * 1024);
+      if (!current()) return;
+      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      await onInsertImage(new File([buffer], file.displayName, { type: mimeType }));
+      if (current()) setNotice(`Inserted “${file.displayName}” from verified private Drive storage.`);
+    });
+  }
+
   async function changeTrash(file: CloudFile) {
     if (
       !await confirm(
@@ -688,6 +704,10 @@ export default function DocsCloudPanel({
                       </small>
                     </div>
                     <div>
+                      {!trash && onInsertImage && /\\.(?:png|jpe?g|webp)$/i.test(f.displayName) && f.sizeBytes <= 12 * 1024 * 1024 && (
+                        <button className="button-secondary small-button" disabled={busy || hasUnsavedChanges}
+                          onClick={() => { void insertDriveImage(f); }}>Insert image</button>
+                      )}
                       {!trash && f.displayName.endsWith('.cocce-docs.json') && (
                         <button
                           className="button-secondary small-button"
