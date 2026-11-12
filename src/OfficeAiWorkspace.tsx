@@ -300,7 +300,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setDriveFileHasMore(false);
     setDriveFilesOpen(false);
     setShowDriveConsent(false);
-  }, [initialWorkspaceId, workspaces]);
+  }, [initialWorkspaceId, workspaces, workspaceId]);
 
   useEffect(() => {
     let active = true;
