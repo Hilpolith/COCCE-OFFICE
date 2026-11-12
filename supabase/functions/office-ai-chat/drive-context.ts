@@ -395,7 +395,7 @@ export function rankDriveInventoryFiles(
   limit = MAX_DRIVE_FILES,
 ): DriveInventoryItem[] {
   const ignored = new Set(['about','after','again','also','and','are','can','cloud','could','describe','does','file','files','find','from','have','help','into','list','look','me','my','please','show','tell','that','the','their','them','these','this','those','what','which','with','workspace','your']);
-  const terms = prompt.toLocaleLowerCase().normalize('NFKC').match(/[\\p{L}\\p{N}]{3,}/gu)?.filter((term) => !ignored.has(term)) ?? [];
+  const terms = prompt.toLocaleLowerCase().normalize('NFKC').match(/[a-z0-9]{3,}/g)?.filter((term) => !ignored.has(term)) ?? [];
   if (terms.length === 0) return inventory.slice(0, limit);
   const ranked = inventory.map((file, index) => {
     const searchable = (file.displayName + ' ' + file.workspaceName).toLocaleLowerCase().normalize('NFKC');

@@ -160,7 +160,7 @@ function parseXml(xml: string, label: string): Document {
 }
 
 function isKnownDirectory(name: string): boolean {
-  return new Set(['_rels/', 'docProps/', 'xl/', 'xl/_rels/', 'xl/theme/', 'xl/worksheets/', 'xl/worksheets/_rels/']).has(name);
+  return new Set(['_rels/', 'docProps/', 'xl/', 'xl/_rels/', 'xl/theme/', 'xl/worksheets/', 'xl/worksheets/_rels/', 'xl/drawings/', 'xl/drawings/_rels/', 'xl/charts/', 'xl/charts/_rels/']).has(name);
 }
 
 function isSupportedPartName(name: string): boolean {
