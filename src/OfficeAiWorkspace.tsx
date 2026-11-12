@@ -44,6 +44,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const authGeneration = useRef(0);
   const aiRequestGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
+  const lastAppliedInitialWorkspaceId = useRef(initialWorkspaceId);
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(mode === 'assistant');
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
   const [turns, setTurns] = useState<AiChatTurn[]>([]);
@@ -230,7 +231,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   }, [workspaces]);
 
   useEffect(() => {
-    if (!initialWorkspaceId || workspaceId === initialWorkspaceId || !workspaces.some((space) => space.workspace_id === initialWorkspaceId)) return;
+    if (!initialWorkspaceId || initialWorkspaceId === lastAppliedInitialWorkspaceId.current || !workspaces.some((space) => space.workspace_id === initialWorkspaceId)) return;
+    lastAppliedInitialWorkspaceId.current = initialWorkspaceId;
     aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
     setBusy(false);
@@ -245,7 +247,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setDriveFileHasMore(false);
     setDriveFilesOpen(false);
     setShowDriveConsent(false);
-  }, [initialWorkspaceId, workspaceId, workspaces]);
+  }, [initialWorkspaceId, workspaces]);
 
   useEffect(() => {
     let active = true;
