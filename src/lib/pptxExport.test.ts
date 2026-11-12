@@ -47,13 +47,22 @@ describe('PowerPoint interchange', () => {
     expect(imported.omittedImageCount).toBe(0);
   });
 
-  it('flags embedded PowerPoint images for reinsertion instead of silently losing them', async () => {
+  it('restores embedded PowerPoint images into the imported deck asset store', async () => {
     const imageBytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/kYkAAAAASUVORK5CYII='), (char) => char.charCodeAt(0));
     const readImage = async () => ({ metadata: { width: 1, height: 1 }, blob: new Blob([imageBytes], { type: 'image/png' }) });
-    const blob = await createPptxBlob({ ...deck, slides: [{ ...deck.slides[0]!, imageAssetId: 'local-image-1' }] }, readImage);
+    const blob = await createPptxBlob({ ...deck, slides: [{ ...deck.slides[0]!, imageAssetId: 'local-image-1', imageAltText: 'Launch photograph' }] }, readImage);
     const file = new File([blob], 'Image presentation.pptx', { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
-    const imported = await importPptxFile(file, null);
-    expect(imported.omittedImageCount).toBe(1);
+    const saveImage = vi.fn(async (image: Blob, deckId: string) => {
+      expect(image.type).toBe('image/png');
+      expect(image.size).toBeGreaterThan(0);
+      expect(deckId).toBeTruthy();
+      return { id: 'restored-image-1' };
+    });
+    const imported = await importPptxFile(file, null, saveImage);
+    expect(saveImage).toHaveBeenCalledOnce();
+    expect(imported.omittedImageCount).toBe(0);
+    expect(imported.deck.slides[0]?.imageAssetId).toBe('restored-image-1');
+    expect(imported.deck.slides[0]?.imageAltText).toBe('Launch photograph');
   });
 
   it('rejects empty or oversized presentation decks', async () => {
