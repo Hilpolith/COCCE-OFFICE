@@ -44,3 +44,16 @@
 .office-ai-message p{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.72;font-size:13px}
 .office-ai-thinking{display:flex;align-items:center;gap:8px;justify-self:start;padding:9px 12px;color:var(--muted);font-size:11px}
 @media(max-width:560px){.office-ai-message{max-width:96%;padding:12px}.office-ai-thread-toolbar{align-items:flex-start}}
+
+.office-ai-history{display:grid;gap:7px;margin:0 0 14px;padding:12px;border:1px solid var(--border);border-radius:16px;background:rgba(255,255,255,.035)}
+.office-ai-history-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.office-ai-history-heading>strong{font-size:11px;letter-spacing:.02em}
+.office-ai-history-hint{color:var(--muted);font-size:10px;line-height:1.5}
+.office-ai-history-row{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 7px;border:1px solid transparent;border-radius:11px}
+.office-ai-history-row.is-active{border-color:var(--border);background:rgba(255,255,255,.07)}
+.office-ai-history-open{display:grid;gap:3px;flex:1;min-width:0;text-align:left;border:0;background:transparent;color:var(--text);cursor:pointer}
+.office-ai-history-open strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:700}
+.office-ai-history-open small{color:var(--muted);font-size:9px}
+.office-ai-history-delete{width:27px;height:27px;flex:0 0 27px;border:1px solid var(--border);border-radius:9px;background:transparent;color:var(--muted);font-size:17px;line-height:1;cursor:pointer}
+.office-ai-history-delete:hover{color:#d87878;border-color:rgba(216,120,120,.4)}
+@media(max-width:560px){.office-ai-history{padding:10px}.office-ai-history-open strong{font-size:10px}}
