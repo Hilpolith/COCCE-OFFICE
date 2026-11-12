@@ -468,6 +468,8 @@ describe('bounded local XLSX interchange', () => {
     expect(line).toContain('<c:lineChart>');
     expect(bar).toContain("'Owner''s Budget'!$A$2:$A$3");
     expect(bar).toContain("'Owner''s Budget'!$B$2:$B$3");
+    expect(line).toContain("'Owner''s Budget'!$A$2:$A$3");
+    expect(line).toContain("'Owner''s Budget'!$B$2:$B$3");
     expect(bar).toContain('Revenue by month');
     expect(decoder.decode(archive['[Content_Types].xml'])).toContain('drawingml.chart+xml');
   });
