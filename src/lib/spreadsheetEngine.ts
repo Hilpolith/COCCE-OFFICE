@@ -403,8 +403,9 @@ function evaluateCall(node: Extract<Node, { kind: 'call' }>, cells: Record<strin
       const factor = 10 ** places;
       const scaled = value * factor;
       if (!Number.isFinite(scaled)) throw new FormulaFault('#NUM!');
-      if (node.name === 'ROUNDUP') return Math.sign(value) * Math.ceil(Math.abs(scaled) - Number.EPSILON) / factor;
-      if (node.name === 'ROUNDDOWN') return Math.sign(value) * Math.floor(Math.abs(scaled) + Number.EPSILON) / factor;
+      const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled));
+      if (node.name === 'ROUNDUP') return Math.sign(value) * Math.ceil(Math.abs(scaled) - tolerance) / factor;
+      if (node.name === 'ROUNDDOWN') return Math.sign(value) * Math.floor(Math.abs(scaled) + tolerance) / factor;
       return Math.round((value + Math.sign(value) * Number.EPSILON) * factor) / factor;
     }
     case 'PRODUCT': {
