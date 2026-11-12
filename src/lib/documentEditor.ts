@@ -141,6 +141,14 @@ function serializeSafeNode(node: Node, state: SanitizationState): string {
   const element = node as HTMLElement;
   const sourceTag = element.tagName.toUpperCase();
   if (DROP_CONTENT_TAGS.has(sourceTag)) return '';
+  if (sourceTag === 'IMG') {
+    const src = safeDocsImageSrc(element.getAttribute('src') ?? '');
+    if (!src) return '';
+    const alt = (element.getAttribute('alt') ?? '').slice(0, 180);
+    const rawWidth = Number(element.getAttribute('width') ?? '');
+    const width = Number.isInteger(rawWidth) && rawWidth >= 80 && rawWidth <= 1600 ? ` width="${rawWidth}"` : '';
+    return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${width}>`;
+  }
   if (sourceTag === 'TABLE') return serializeSafeTable(element, state);
   const children = Array.from(element.childNodes, (child) => serializeSafeNode(child, state)).join('');
   if (sourceTag === 'HR') return '<hr>';
@@ -265,6 +273,11 @@ function markdownInline(node: Node): string {
   const element = node as HTMLElement;
   const tag = element.tagName;
   if (tag === 'BR') return '\n';
+  if (tag === 'IMG') {
+    const src = safeDocsImageSrc(element.getAttribute('src') ?? '');
+    const alt = (element.getAttribute('alt') ?? '').replace(/[\[\]]/g, '');
+    return src ? `![${alt}](${src})` : '';
+  }
   if (tag === 'CODE') {
     const raw = element.textContent ?? '';
     const fence = '`'.repeat(Math.max(1, ...Array.from(raw.matchAll(/`+/g), (match) => match[0].length + 1)));
