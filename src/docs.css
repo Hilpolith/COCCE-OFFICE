@@ -154,3 +154,7 @@
 .office-editor-page .docs-view-controls{min-height:36px}
 @media(max-width:760px){.office-editor-page .docs-ribbon-tabs{overflow-x:auto;white-space:nowrap}.office-editor-page .docs-ribbon-tabs [role=tab]{flex:none}}
 @media print{.office-editor-page .editor-toolbar,.office-editor-page .docs-ribbon-tabs,.office-editor-page .docs-format-toolbar,.office-editor-page .docs-table-toolbar,.office-editor-page .docs-review-panel,.office-editor-page .editor-footnote{display:none!important}.office-editor-page .document-canvas{width:100%;min-height:0;margin:0;padding:0;border:0;box-shadow:none}}
+
+.office-editor-page .docs-inline-image{display:block;max-width:100%;height:auto;object-fit:contain;margin:14px auto;border-radius:5px}
+.office-editor-page .docs-image-notice{max-width:900px;margin:8px auto;padding:9px 12px;border:1px solid rgba(190,120,60,.28);border-radius:10px;background:rgba(190,120,60,.08);color:#a66b20;font-size:11px}
+.office-editor-page .rich-text-editor img{cursor:default;user-select:none}
