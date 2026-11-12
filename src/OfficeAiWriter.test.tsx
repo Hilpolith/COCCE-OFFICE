@@ -130,6 +130,7 @@ describe('Docs Writing assistant', () => {
 
   it('discards a pending excerpt result when the Docs editor switches to another document', async () => {
     let resolvePost!: (response: Response) => void;
+    let responseRead = false;
     const pendingPost = new Promise<Response>((resolve) => { resolvePost = resolve; });
     const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') return pendingPost;
@@ -145,9 +146,10 @@ describe('Docs Writing assistant', () => {
     await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
 
     rerender(<OfficeAiWriter editor={second.editor} onGoToTeam={vi.fn()} />);
-    resolvePost({ ok: true, json: async () => ({ text: 'Stale document result.' }) } as Response);
+    resolvePost({ ok: true, json: async () => { responseRead = true; return { text: 'Stale document result.' }; } } as Response);
 
-    await waitFor(() => expect(screen.queryByText('Stale document result.')).toBeNull());
+    await waitFor(() => expect(responseRead).toBe(true));
+    expect(screen.queryByText('Stale document result.')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Replace selection' })).toBeNull();
     expect(second.chain.insertContentAt).not.toHaveBeenCalled();
   });
@@ -174,8 +176,9 @@ describe('Docs Writing assistant', () => {
     await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
 
     fireEvent.change(scope, { target: { value: '22222222-2222-4222-8222-222222222222' } });
-    resolvePost({ ok: true, json: async () => ({ text: 'Old workspace result.' }) } as Response);
-    await waitFor(() => expect(screen.queryByText('Old workspace result.')).toBeNull());
+    resolvePost({ ok: true, json: async () => { responseRead = true; return { text: 'Old workspace result.' }; } } as Response);
+    await waitFor(() => expect(responseRead).toBe(true));
+    expect(screen.queryByText('Old workspace result.')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Replace selection' })).toBeNull();
     expect(chain.insertContentAt).not.toHaveBeenCalled();
   });
