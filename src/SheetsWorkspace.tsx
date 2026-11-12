@@ -312,7 +312,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
       minimum: values.length ? Math.min(...values) : null,
       maximum: values.length ? Math.max(...values) : null,
     };
-  }, [selectedRange, displayedCells]);
+  }, [selectedRange.startRow, selectedRange.endRow, selectedRange.startColumn, selectedRange.endColumn, displayedCells]);
   const rawValue = worksheet.cells[selectedAddress] ?? '';
   const historyKey = `${workbook.id}/${worksheet.id}`;
   const history = historyByWorksheet[historyKey] ?? EMPTY_SHEETS_HISTORY;
