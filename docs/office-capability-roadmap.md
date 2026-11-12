@@ -223,7 +223,7 @@ This checkpoint supersedes earlier statements in this document that monthly Clou
 - Production migration history records version `20261112074001` (`office_wallet_pin_attempt_lockout`). The source migration filename must match that version.
 - `office-cloud-files` is ACTIVE at version 10 with JWT verification enabled.
 
-The rate-limit unit test was added to `core.test.ts`, but the full Vitest/Node/PostgreSQL CI suite has not yet been verified for this change. Do not treat the unit test as passed until CI or an equivalent test run reports it.
+The rate-limit unit test was added to `core.test.ts`, but the full Vitest/Node/PostgreSQL CI suite has not yet been verified for this change. A transaction-scoped production SQL acceptance test using a synthetic auth user verified five reserved attempts, sixth-attempt rejection, successful-verification reset, and a subsequent allowed attempt; the transaction was rolled back and a follow-up query confirmed zero synthetic auth-user or attempt rows persisted. This validates the database lockout RPC, not the Edge Function's end-to-end HTTP path. Do not treat the Vitest test as passed until CI or an equivalent test run reports it.
 
 ### Release state
 
