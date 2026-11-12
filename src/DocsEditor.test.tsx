@@ -575,6 +575,39 @@ describe('Docs Find & Replace document switching', () => {
   });
 });
 
+describe('Docs portable HTML and text exports', () => {
+  it('downloads sanitized standalone HTML and readable plain text from the current editor', async () => {
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    const create = vi.fn((blob: Blob) => 'blob:synthetic-docs-export');
+    const revoke = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revoke });
+    try {
+      renderEditor();
+      fireEvent.click(screen.getByRole('button', { name: 'Export .html' }));
+      await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+      const htmlBlob = create.mock.calls[0]?.[0] as Blob;
+      const html = await htmlBlob.text();
+      expect(html).toContain('<!doctype html>');
+      expect(html).toContain('<p>Before table</p>');
+      expect(htmlBlob.type).toContain('text/html');
+      fireEvent.click(screen.getByRole('button', { name: 'Export .txt' }));
+      await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+      const textBlob = create.mock.calls[1]?.[0] as Blob;
+      expect(await textBlob.text()).toBe('Before table');
+      expect(textBlob.type).toContain('text/plain');
+      expect(anchorClick).toHaveBeenCalledTimes(2);
+    } finally {
+      if (originalCreate) Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: originalCreate });
+      else Reflect.deleteProperty(URL, 'createObjectURL');
+      if (originalRevoke) Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: originalRevoke });
+      else Reflect.deleteProperty(URL, 'revokeObjectURL');
+    }
+  });
+});
+
 describe('Docs tabbed ribbon', () => {
   it('switches functional Home, Insert, Review and View groups and applies document zoom', async () => {
     renderEditor();

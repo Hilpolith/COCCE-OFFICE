@@ -759,6 +759,30 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     }
   };
 
+  const downloadLocalText = (extension: string, mime: string, contents: string, success: string) => {
+    const safeName = (document.title || 'document').replace(/[\\\\/:*?"<>|]/g, '-').trim().slice(0, 100) || 'document';
+    const blob = new Blob([contents], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const anchor = window.document.createElement('a');
+    anchor.href = url;
+    anchor.download = safeName + '.' + extension;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTableNotice(success);
+  };
+  const exportHtml = () => {
+    if (!editor) return;
+    const title = (document.title || 'Document').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+    const safeBody = sanitizeRichTextHtmlWithWarnings(editor.getHTML()).html;
+    const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + title + '</title><style>body{font:16px/1.65 Arial,sans-serif;max-width:850px;margin:48px auto;padding:0 24px;color:#20242b}img{max-width:100%;height:auto}table{border-collapse:collapse;width:100%}td,th{border:1px solid #cbd0d8;padding:8px;text-align:left}</style></head><body><main>' + safeBody + '</main></body></html>';
+    downloadLocalText('html', 'text/html;charset=utf-8', html, 'Standalone HTML downloaded on this device.');
+  };
+  const exportPlainText = () => {
+    if (!editor) return;
+    const safeBody = sanitizeRichTextHtmlWithWarnings(editor.getHTML()).html;
+    downloadLocalText('txt', 'text/plain;charset=utf-8', richTextToPlainText(safeBody), 'Plain-text file downloaded on this device.');
+  };
+
   const exportMarkdown = async () => {
     if (!editor) {
       setTableNotice('The document editor is still loading; nothing was exported.');
@@ -790,6 +814,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         {cloudEnabled && <button type="button" className="button-secondary small-button" aria-expanded={cloudOpen} aria-controls={cloudOpen ? 'docs-cloud-area' : undefined} onClick={() => setCloudOpen((open) => !open)}>Cloud copies</button>}
         <button type="button" className="button-secondary small-button" aria-expanded={findOpen} aria-controls={findOpen ? 'docs-find-panel' : undefined} onClick={() => { setFindOpen((open) => !open); setFindNotice({ text: '', error: false }); }}><Search size={14} /> Find &amp; Replace</button>
         <button type="button" className="button-secondary small-button" disabled={!editor} onClick={exportMarkdown}><ArrowUpRight size={14} /> Export .md</button>
+        <button type="button" className="button-secondary small-button" disabled={!editor} onClick={exportHtml}>Export .html</button>
+        <button type="button" className="button-secondary small-button" disabled={!editor} onClick={exportPlainText}>Export .txt</button>
         <button type="button" className="button-secondary small-button" onClick={() => { void onExportDocx(editor?.getHTML() ?? document.richText ?? ''); }}><FileText size={14} /> Export .docx</button>
         <button type="button" className="icon-button danger-button" onClick={onDelete} aria-label="Delete document" title="Delete local document"><X size={16} /></button>
       </div>
