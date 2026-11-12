@@ -129,6 +129,19 @@ describe('COCCE Office free AI provider boundary', () => {
     expect(rpcUnavailable.calls.some((call) => call.url === OPENROUTER)).toBe(false);
   });
 
+  it('fails closed when Supabase authentication or workspace discovery is unavailable', async () => {
+    const invalidSession = harness({ authStatus: 503 });
+    const authResult = await invoke(invalidSession.handler, { body: payload(invalidSession.workspaceId) });
+    expect(authResult.statusCode).toBe(401);
+    expect(invalidSession.calls.some((call) => call.url === OPENROUTER)).toBe(false);
+
+    const workspaceUnavailable = harness({ workspaceStatus: 503 });
+    const workspaceResult = await invoke(workspaceUnavailable.handler, { body: payload(workspaceUnavailable.workspaceId) });
+    expect(workspaceResult.statusCode).toBe(503);
+    expect(workspaceResult.body.error).toBe('WORKSPACE_AI_CONTROL_UNAVAILABLE');
+    expect(workspaceUnavailable.calls.some((call) => call.url === OPENROUTER)).toBe(false);
+  });
+
   it('sends the free router only the authenticated request and never a paid fallback', async () => {
     const test = harness();
     const result = await invoke(test.handler, { body: payload(test.workspaceId) });
