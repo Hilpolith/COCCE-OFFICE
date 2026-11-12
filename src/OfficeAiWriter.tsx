@@ -87,6 +87,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
   const documentSummaryTriggerRef = useRef<HTMLButtonElement | null>(null);
   const editorRef = useRef(editor);
   editorRef.current = editor;
+  const editorRequestGeneration = useRef(0);
   const documentSummaryConfirmRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -99,6 +100,16 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       editor.off('selectionUpdate', updateSelection);
       editor.off('update', updateSelection);
     };
+  }, [editor]);
+
+  useEffect(() => {
+    editorRequestGeneration.current += 1;
+    setBusy(false);
+    setError('');
+    setNotice('');
+    setResult('');
+    setPreviewTarget(null);
+    setDocumentSummaryConfirmation(null);
   }, [editor]);
 
   useEffect(() => {
@@ -151,6 +162,8 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     });
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+      editorRequestGeneration.current += 1;
+      setBusy(false);
       setAuthStatus(session ? 'signed-in' : 'signed-out');
       setAvailability(session ? 'checking' : 'unknown');
       setWorkspaceLoading(Boolean(session));
@@ -175,6 +188,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
 
   const runAction = async (action: OfficeAiAction, instruction = '') => {
     if (!editor || busy) return;
+    const requestGeneration = editorRequestGeneration.current;
     setError('');
     setNotice('');
     setResult('');
@@ -206,6 +220,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     setAvailability('checking');
     try {
       const { data, error: sessionError } = await client.auth.getSession();
+      if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== editor) return;
       if (sessionError || !data.session?.access_token) {
         setAuthStatus('signed-out');
         setAvailability('unknown');
@@ -215,12 +230,14 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       setAuthStatus('signed-in');
       const token = data.session.access_token;
       const configured = await checkOfficeAiStatus(token);
+      if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== editor) return;
       if (!configured) {
         setAvailability('not-configured');
         setError('Cloud AI is not enabled on this deployment yet. Your document has not been sent.');
         return;
       }
       const output = await requestOfficeAi(token, payload);
+      if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== editor) return;
       if (editorRef.current !== editor) {
         setError('The document changed while COCCE AI was working. Its result was discarded and cannot be applied to another document.');
         return;
@@ -236,10 +253,11 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         editor,
       });
     } catch (requestError) {
+      if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== editor) return;
       setAvailability(requestError instanceof OfficeAiError && requestError.code === 'AI_NOT_CONFIGURED' ? 'not-configured' : 'unavailable');
       setError(readableError(requestError));
     } finally {
-      setBusy(false);
+      if (requestGeneration === editorRequestGeneration.current) setBusy(false);
     }
   };
 
@@ -273,6 +291,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       setError('The active document changed after confirmation was shown. Nothing was sent; review the current document and confirm again.');
       return;
     }
+    const requestGeneration = editorRequestGeneration.current;
     const currentTitle = documentTitle.trim() || 'Untitled document';
     const snapshotMatches = editor.state.doc.eq(pending.doc)
       && extractOfficeAiDocumentText(editor.state.doc) === pending.payload.documentText
@@ -296,6 +315,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     setAvailability('checking');
     try {
       const { data, error: sessionError } = await client.auth.getSession();
+      if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== pending.editor) return;
       if (sessionError || !data.session?.access_token) {
         setAuthStatus('signed-out');
         setAvailability('unknown');
@@ -305,6 +325,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       setAuthStatus('signed-in');
       const token = data.session.access_token;
       const configured = await checkOfficeAiStatus(token);
+      if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== pending.editor) return;
       if (!configured) {
         setAvailability('not-configured');
         setError('Cloud AI is not enabled on this deployment yet. No document text was sent.');
@@ -318,6 +339,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         return;
       }
       const output = await requestOfficeAi(token, pending.payload);
+      if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== pending.editor) return;
       if (editorRef.current !== pending.editor) {
         setError('The document changed while COCCE AI was working. Its summary was discarded and cannot be applied to another document.');
         return;
@@ -334,10 +356,11 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         sourceChars: pending.payload.documentText.length,
       });
     } catch (requestError) {
+      if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== pending.editor) return;
       setAvailability(requestError instanceof OfficeAiError && requestError.code === 'AI_NOT_CONFIGURED' ? 'not-configured' : 'unavailable');
       setError(readableError(requestError));
     } finally {
-      setBusy(false);
+      if (requestGeneration === editorRequestGeneration.current) setBusy(false);
     }
   };
 
