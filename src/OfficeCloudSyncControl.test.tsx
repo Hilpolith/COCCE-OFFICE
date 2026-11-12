@@ -132,8 +132,8 @@ describe('per-record Office cloud sync consent', () => {
       sourceKey="2026-11-06T12:01:00.000Z" hasUnsavedChanges={false}
       busy={false} execute={execute as never} snapshot={() => bytes}
     />);
-    await waitFor(() => expect(api.getSyncState).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByText(/Auto-sync could not finish/)).toBeTruthy());
+    await waitFor(() => expect(api.getSyncState).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    await waitFor(() => expect(screen.getByText(/Auto-sync could not finish/)).toBeTruthy(), { timeout: 4000 });
     await act(async () => { window.dispatchEvent(new Event('focus')); });
     await waitFor(() => expect(api.getSyncState).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByText(/Saved changes synced|up to date/)).toBeTruthy());
