@@ -154,7 +154,61 @@ function pptxSlideContent(xml: string, index: number, notesXml?: string): {
   return { title: title.slice(0, 12_000) || 'Slide ' + index, body: body.slice(0, 12_000), notes, layout, imageOmitted };
 }
 
-export async function importPptxFile(file: File, workspaceId: string | null): Promise<ImportedSlideDeck> {
+type PptxImportedImage = { bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; altText: string };
+
+function resolvePptxMediaPath(slidePath: string, target: string): string | null {
+  if (!target || target.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(target)) return null;
+  const base = slidePath.split('/').slice(0, -1);
+  for (const part of [...base, ...target.split('/')]) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      if (!base.length) return null;
+      base.pop();
+    } else {
+      base.push(part);
+    }
+  }
+  const resolved = base.join('/');
+  return resolved.startsWith('ppt/media/') && !resolved.split('/').includes('..') ? resolved : null;
+}
+
+function pptxSlideImage(
+  slideXml: string,
+  slidePath: string,
+  relationshipsXml: string | undefined,
+  files: Record<string, Uint8Array>,
+  strFromU8: (bytes: Uint8Array) => string,
+): PptxImportedImage | null {
+  const slide = parsePptxXml(slideXml);
+  const picture = slide.getElementsByTagName('p:pic')[0];
+  if (!picture) return null;
+  const embed = picture.getElementsByTagName('a:blip')[0]?.getAttribute('r:embed');
+  if (!embed || !relationshipsXml) return null;
+  const relationships = parsePptxXml(relationshipsXml);
+  const relation = Array.from(relationships.getElementsByTagName('Relationship'))
+    .find((item) => item.getAttribute('Id') === embed && item.getAttribute('TargetMode') !== 'External');
+  const target = relation?.getAttribute('Target');
+  if (!target) return null;
+  const mediaPath = resolvePptxMediaPath(slidePath, target);
+  if (!mediaPath) return null;
+  const bytes = files[mediaPath];
+  if (!bytes || bytes.byteLength < 24 || bytes.byteLength > 2_000_000) return null;
+  const extension = mediaPath.split('.').pop()?.toLowerCase();
+  const mimeType = extension === 'png' ? 'image/png'
+    : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg'
+      : extension === 'webp' ? 'image/webp' : null;
+  if (!mimeType) return null;
+  const pictureProperties = picture.getElementsByTagName('p:cNvPr')[0];
+  const altText = (pictureProperties?.getAttribute('descr') || pictureProperties?.getAttribute('name') || 'Imported PowerPoint image').slice(0, 500);
+  return { bytes, mimeType, altText };
+}
+
+export async function importPptxFile(
+  file: File,
+  workspaceId: string | null,
+  saveImage: (blob: Blob, deckId: string) => Promise<{ id: string }> = (blob, deckId) => localSlidesAssetRepository.saveImage(blob, deckId),
+  cleanupImages: (deckId: string) => Promise<unknown> = (deckId) => localSlidesAssetRepository.deleteDeckImages(deckId),
+): Promise<ImportedSlideDeck> {
   if (!file.name.toLowerCase().endsWith('.pptx')) throw new Error('Choose a .pptx PowerPoint presentation.');
   if (file.size < 22 || file.size > PPTX_MAX_COMPRESSED_BYTES) throw new Error('Choose a PowerPoint file no larger than 25 MB.');
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -163,18 +217,54 @@ export async function importPptxFile(file: File, workspaceId: string | null): Pr
   let files: Record<string, Uint8Array>;
   try { files = unzipSync(bytes); } catch { throw new Error('The PowerPoint archive could not be safely opened.'); }
   if (!files['[Content_Types].xml'] || !files['ppt/presentation.xml']) throw new Error('This file is not a supported PowerPoint presentation.');
-  const slideNames = Object.keys(files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
-    .sort((a, b) => Number(a.match(/slide(\d+)/)?.[1] ?? 0) - Number(b.match(/slide(\d+)/)?.[1] ?? 0));
+  const slideNames = Object.keys(files).filter((name) => /^ppt\\/slides\\/slide\\d+\\.xml$/.test(name))
+    .sort((a, b) => Number(a.match(/slide(\\d+)/)?.[1] ?? 0) - Number(b.match(/slide(\\d+)/)?.[1] ?? 0));
   if (slideNames.length < 1 || slideNames.length > 100) throw new Error('PowerPoint import supports 1 to 100 slides.');
-  const slides = slideNames.map((name, index) => {
-    const number = Number(name.match(/slide(\d+)/)?.[1] ?? index + 1);
+  const slideDrafts = slideNames.map((name, index) => {
+    const number = Number(name.match(/slide(\\d+)/)?.[1] ?? index + 1);
     const notes = files['ppt/notesSlides/notesSlide' + number + '.xml'];
     const parsed = pptxSlideContent(strFromU8(files[name]!), index + 1, notes ? strFromU8(notes) : undefined);
+    const relationshipsPath = 'ppt/slides/_rels/slide' + number + '.xml.rels';
+    const image = pptxSlideImage(strFromU8(files[name]!), name, files[relationshipsPath] ? strFromU8(files[relationshipsPath]!) : undefined, files, strFromU8);
     return {
       id: 'pptx-slide-' + (index + 1), title: parsed.title, body: parsed.body, notes: parsed.notes, layout: parsed.layout,
-      ...(parsed.imageOmitted ? { imageOmitted: true, imageAltText: 'This slide contains an embedded image. Reinsert the image after importing this text/layout draft.' } : {}),
+      image,
+      imageOmitted: parsed.imageOmitted && !image,
     };
   });
-  const title = file.name.replace(/\.pptx$/i, '').slice(0, 300) || 'Imported PowerPoint';
-  return importDeck(JSON.stringify({ format: 'cocce-office-slides', version: 2, title, theme: 'violet', slides }), workspaceId);
+  const title = file.name.replace(/\\.pptx$/i, '').slice(0, 300) || 'Imported PowerPoint';
+  const imported = importDeck(JSON.stringify({
+    format: 'cocce-office-slides', version: 2, title, theme: 'violet',
+    slides: slideDrafts.map(({ image, ...slide }) => ({
+      id: slide.id, title: slide.title, body: slide.body, notes: slide.notes, layout: slide.layout,
+      ...(slide.imageOmitted ? { imageOmitted: true, imageAltText: 'An embedded PowerPoint image could not be safely imported.' } : {}),
+      ...(image ? { imageAltText: image.altText } : {}),
+    })),
+  }), workspaceId);
+  let installedBytes = 0;
+  let installedCount = 0;
+  try {
+    const slides = [...imported.deck.slides];
+    for (let index = 0; index < slideDrafts.length; index += 1) {
+      const image = slideDrafts[index]?.image;
+      if (!image) continue;
+      if (installedCount >= 8 || installedBytes + image.bytes.byteLength > 12_000_000) {
+        imported.omittedImageCount += 1;
+        continue;
+      }
+      const blob = new Blob([image.bytes], { type: image.mimeType });
+      try {
+        const saved = await saveImage(blob, imported.deck.id);
+        slides[index] = { ...slides[index]!, imageAssetId: saved.id, imageAltText: image.altText };
+        installedCount += 1;
+        installedBytes += image.bytes.byteLength;
+      } catch {
+        imported.omittedImageCount += 1;
+      }
+    }
+    return { ...imported, deck: { ...imported.deck, slides } };
+  } catch (error) {
+    await cleanupImages(imported.deck.id).catch(() => undefined);
+    throw error;
+  }
 }
