@@ -57,3 +57,58 @@
 .office-ai-history-delete{width:27px;height:27px;flex:0 0 27px;border:1px solid var(--border);border-radius:9px;background:transparent;color:var(--muted);font-size:17px;line-height:1;cursor:pointer}
 .office-ai-history-delete:hover{color:#d87878;border-color:rgba(216,120,120,.4)}
 @media(max-width:560px){.office-ai-history{padding:10px}.office-ai-history-open strong{font-size:10px}}
+
+
+/* visionOS-inspired private chat window: translucent sidebar + focused conversation surface */
+.office-ai-page-chat{max-width:1240px;padding:18px 12px 96px}
+.office-ai-page-chat .office-ai-hero{display:none}
+.office-ai-chat-shell{display:grid;grid-template-columns:minmax(220px,278px) minmax(0,1fr);grid-template-areas:"heading heading" "context context" "history answer" "history compose" "footnote footnote";gap:0;padding:18px;border-radius:30px;background:linear-gradient(145deg,rgba(255,255,255,.13),rgba(255,255,255,.035)),var(--surface-glass);border:1px solid rgba(255,255,255,.2);box-shadow:inset 0 1px rgba(255,255,255,.32),0 24px 70px rgba(0,0,0,.2);backdrop-filter:blur(38px) saturate(155%);-webkit-backdrop-filter:blur(38px) saturate(155%);overflow:hidden;min-height:min(780px,calc(100dvh - 150px))}
+.office-ai-chat-shell>.office-ai-shell-heading{grid-area:heading;padding:4px 8px 15px;border-bottom:1px solid rgba(255,255,255,.13)}
+.office-ai-chat-shell>.office-ai-context{grid-area:context;display:flex;align-items:center;gap:12px;margin:12px 8px 14px}
+.office-ai-chat-shell>.office-ai-context>label:first-child{max-width:260px;min-width:180px}
+.office-ai-chat-shell>.office-ai-context select{min-height:38px;border-radius:999px;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.17);backdrop-filter:blur(20px)}
+.office-ai-chat-shell .office-ai-history{grid-area:history;align-content:start;align-self:stretch;max-height:none;min-height:510px;margin:0;padding:14px 12px 14px 4px;border:0;border-right:1px solid rgba(255,255,255,.14);border-radius:0;background:transparent;overflow-y:auto}
+.office-ai-chat-shell .office-ai-history-heading{padding:3px 5px 10px}
+.office-ai-chat-shell .office-ai-history-heading>strong{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.office-ai-chat-shell .office-ai-history-row{padding:9px;border-radius:14px;transition:background .18s ease,border-color .18s ease}
+.office-ai-chat-shell .office-ai-history-row:hover,.office-ai-chat-shell .office-ai-history-row.is-active{background:rgba(255,255,255,.105);border-color:rgba(255,255,255,.13);box-shadow:inset 0 1px rgba(255,255,255,.12)}
+.office-ai-chat-shell .office-ai-history-open strong{font-size:11px;font-weight:650}
+.office-ai-chat-shell .office-ai-history-open small{font-size:9px}
+.office-ai-chat-shell .office-ai-history-delete{opacity:.55;border-color:transparent}
+.office-ai-chat-shell .office-ai-history-delete:hover{opacity:1;background:rgba(255,110,110,.12)}
+.office-ai-chat-shell .office-ai-answer{grid-area:answer;min-height:510px;max-height:none;overflow:auto;margin:0 0 0 16px;padding:18px 18px 22px;border:1px solid rgba(255,255,255,.12);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));box-shadow:inset 0 1px rgba(255,255,255,.1)}
+.office-ai-chat-shell .office-ai-thread-toolbar{position:sticky;top:-18px;z-index:2;margin:-18px -18px 14px;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,.1);background:rgba(25,29,44,.34);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-radius:20px 20px 0 0}
+.office-ai-presence-dot{display:inline-block;width:7px;height:7px;margin-right:6px;border-radius:50%;background:#70d9ae;box-shadow:0 0 12px rgba(112,217,174,.7)}
+.office-ai-chat-shell .office-ai-thread{gap:18px;padding:12px 4px}
+.office-ai-chat-shell .office-ai-message{position:relative;max-width:min(84%,720px);padding:14px 17px;border-radius:21px;box-shadow:inset 0 1px rgba(255,255,255,.15),0 8px 24px rgba(0,0,0,.08)}
+.office-ai-chat-shell .office-ai-message-user{border-color:rgba(168,157,255,.28);border-bottom-right-radius:8px;background:linear-gradient(145deg,rgba(142,128,244,.24),rgba(105,116,190,.12))}
+.office-ai-chat-shell .office-ai-message-assistant{border-color:rgba(255,255,255,.14);border-bottom-left-radius:8px;background:linear-gradient(145deg,rgba(255,255,255,.105),rgba(255,255,255,.035))}
+.office-ai-chat-shell .office-ai-message-label{font-size:9px;letter-spacing:.09em}
+.office-ai-chat-shell .office-ai-message-assistant .office-ai-message-label{color:#c9c0ff}
+.office-ai-chat-shell .office-ai-message p{font-size:13px;line-height:1.78}
+.office-ai-chat-shell .office-ai-empty{min-height:420px}
+.office-ai-empty-orb{display:grid;place-items:center;width:58px;height:58px;border:1px solid rgba(255,255,255,.25);border-radius:21px;background:linear-gradient(145deg,rgba(255,255,255,.22),rgba(255,255,255,.045));box-shadow:inset 0 1px rgba(255,255,255,.38),0 12px 35px rgba(110,100,210,.18);color:#c9c0ff}
+.office-ai-suggestions{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin-top:8px}
+.office-ai-suggestions span{padding:8px 11px;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(255,255,255,.055);color:var(--muted);font-size:9px}
+.office-ai-chat-shell .office-ai-compose{grid-area:compose;align-self:end;margin:12px 0 0 16px;padding:9px 10px 9px 17px;border:1px solid rgba(255,255,255,.2);border-radius:25px;background:linear-gradient(145deg,rgba(255,255,255,.13),rgba(255,255,255,.055));box-shadow:inset 0 1px rgba(255,255,255,.22),0 12px 30px rgba(0,0,0,.11);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px)}
+.office-ai-chat-shell .office-ai-compose textarea{min-height:44px;max-height:150px;resize:none}
+.office-ai-chat-shell .office-ai-compose button{width:44px;height:44px;border-radius:50%;background:linear-gradient(145deg,#b9afff,#7770dc);box-shadow:inset 0 1px rgba(255,255,255,.65),0 8px 22px rgba(100,87,211,.32);transition:transform .18s ease,filter .18s ease}
+.office-ai-chat-shell .office-ai-compose button:not(:disabled):hover{transform:scale(1.06);filter:brightness(1.08)}
+.office-ai-chat-shell .office-ai-footnote{grid-area:footnote;margin:12px 8px 0}
+.office-ai-chat-shell .office-ai-state,.office-ai-chat-shell .office-ai-error{grid-column:1/-1}
+.office-ai-chat-shell .office-ai-history-hint{display:block;padding:7px 5px}
+@media(max-width:760px){
+ .office-ai-page-chat{padding:8px 4px 90px}
+ .office-ai-chat-shell{grid-template-columns:minmax(0,1fr);grid-template-areas:"heading" "context" "history" "answer" "compose" "footnote";padding:11px;border-radius:23px;min-height:calc(100dvh - 125px)}
+ .office-ai-chat-shell>.office-ai-shell-heading{padding:5px 5px 12px}
+ .office-ai-chat-shell>.office-ai-context{align-items:stretch;flex-direction:column;margin:10px 4px}
+ .office-ai-chat-shell>.office-ai-context>label:first-child{max-width:none;width:100%}
+ .office-ai-chat-shell .office-ai-history{min-height:0;max-height:190px;margin:0 0 10px;padding:8px 3px 10px;border-right:0;border-bottom:1px solid rgba(255,255,255,.14);overflow:auto}
+ .office-ai-chat-shell .office-ai-history-row{padding:7px 8px}
+ .office-ai-chat-shell .office-ai-answer{min-height:340px;margin:0;padding:13px;border-radius:18px}
+ .office-ai-chat-shell .office-ai-thread-toolbar{top:-13px;margin:-13px -13px 10px;padding:10px 13px}
+ .office-ai-chat-shell .office-ai-message{max-width:96%;padding:12px 14px}
+ .office-ai-chat-shell .office-ai-compose{margin:10px 0 0;padding:7px 8px 7px 13px}
+ .office-ai-chat-shell .office-ai-footnote{margin:10px 4px 0}
+}
+@media(prefers-reduced-motion:reduce){.office-ai-chat-shell *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
