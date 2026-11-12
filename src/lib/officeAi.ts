@@ -156,6 +156,27 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
+/** Convert Supabase FunctionsHttpError responses into the safe message returned by Office AI. */
+export async function officeAiInvokeError(error: unknown): Promise<OfficeAiError> {
+  const fallback = error instanceof Error ? error.message : 'COCCE AI could not complete the request.';
+  const context = error && typeof error === 'object'
+    ? (error as { context?: unknown }).context
+    : null;
+  if (context && typeof context === 'object'
+    && 'clone' in context && typeof context.clone === 'function') {
+    const response = context as Response;
+    const payload = asRecord(await response.clone().json().catch(() => null));
+    const code = typeof payload?.error === 'string' ? payload.error : 'AI_REQUEST_FAILED';
+    if (typeof payload?.message === 'string' && payload.message.trim()) {
+      return new OfficeAiError(code, payload.message.trim());
+    }
+    if (typeof payload?.error === 'string') {
+      return new OfficeAiError(code, `COCCE AI request failed (${code}, HTTP ${response.status}).`);
+    }
+  }
+  return new OfficeAiError('AI_REQUEST_FAILED', fallback);
+}
+
 export async function checkOfficeAiStatus(accessToken: string, fetcher: typeof fetch = fetch): Promise<boolean> {
   const response = await fetcher('/api/office-ai', {
     method: 'GET',
