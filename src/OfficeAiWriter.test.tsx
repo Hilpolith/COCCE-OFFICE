@@ -152,6 +152,34 @@ describe('Docs Writing assistant', () => {
     expect(second.chain.insertContentAt).not.toHaveBeenCalled();
   });
 
+  it('discards a pending excerpt result when the selected AI workspace changes', async () => {
+    let resolvePost!: (response: Response) => void;
+    const pendingPost = new Promise<Response>((resolve) => { resolvePost = resolve; });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') return pendingPost;
+      return { ok: true, json: async () => ({ configured: true }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetcher);
+    mocks.listWorkspaces.mockResolvedValue([
+      { workspace_id: '11111111-1111-4111-8111-111111111111', name: 'First workspace', role: 'owner', created_at: '2026-11-09T00:00:00Z' },
+      { workspace_id: '22222222-2222-4222-8222-222222222222', name: 'Second workspace', role: 'owner', created_at: '2026-11-09T00:00:00Z' },
+    ]);
+    const { editor, chain } = makeEditor();
+    render(<OfficeAiWriter editor={editor} onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    const scope = screen.getByLabelText('AI workspace scope');
+    fireEvent.change(scope, { target: { value: '11111111-1111-4111-8111-111111111111' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
+    await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
+
+    fireEvent.change(scope, { target: { value: '22222222-2222-4222-8222-222222222222' } });
+    resolvePost({ ok: true, json: async () => ({ text: 'Old workspace result.' }) } as Response);
+    await waitFor(() => expect(screen.queryByText('Old workspace result.')).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Replace selection' })).toBeNull();
+    expect(chain.insertContentAt).not.toHaveBeenCalled();
+  });
+
   it('does not send a full-document summary confirmation after the editor switches documents', async () => {
     const fetcher = mockFetch();
     const first = makeEditor();
