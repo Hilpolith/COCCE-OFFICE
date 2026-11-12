@@ -31,6 +31,7 @@ import { createPdfAnnotatedCopy, fingerprintPdfBytes } from './lib/pdfAnnotatedC
 import {
   assertPdfMergeInputLimits, extractPdfPages, MAX_PDF_MERGE_INPUTS, MAX_PDF_MERGE_TOTAL_INPUT_BYTES,
   MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles, parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
+  insertImageOnPdfPage, MAX_PDF_INSERT_IMAGE_BYTES,
 } from './lib/pdfTools';
 import './pdf.css';
 
@@ -105,6 +106,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const [activeAnnotationId, setActiveAnnotationId] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const annotationBundleInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pageStageRef = useRef<HTMLDivElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
@@ -584,6 +586,33 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     );
   };
 
+  const onInsertImageFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const imageFile = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    const file = selectedFile;
+    const page = currentPage;
+    const fingerprint = sourceFingerprint;
+    if (!imageFile || !file) return;
+    if (imageFile.size < 1 || imageFile.size > MAX_PDF_INSERT_IMAGE_BYTES) {
+      setError(`Choose a PNG or JPEG image no larger than ${formatBytes(MAX_PDF_INSERT_IMAGE_BYTES)}.`);
+      return;
+    }
+    if (imageFile.type !== 'image/png' && imageFile.type !== 'image/jpeg') {
+      setError('PDF image insertion supports PNG and JPEG files only.');
+      return;
+    }
+    if (!await confirmLocalPdfPageCopy(`Insert “${imageFile.name}” centered on page ${page} of “${file.name}” in a new PDF copy?`)) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const snapshot = await readVerifiedPdfSnapshot(file, fingerprint);
+      const imageBytes = new Uint8Array(await imageFile.arrayBuffer());
+      const output = await insertImageOnPdfPage(snapshot.bytes, page, imageBytes, imageFile.type);
+      await assertPdfSnapshotStillCurrent(snapshot);
+      await savePdfCopy(outputName(file.name, `page-${page}-image`), output, `Inserted a centered image on page ${page} in a separate local PDF copy. The original PDF and its annotation sidecar were not changed.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not insert the selected image into a PDF copy.'); }
+    finally { setBusy(false); }
+  };
+
   const exportRemoveCurrentPage = async () => {
     const file = selectedFile;
     const document = pdfDocument;
@@ -864,6 +893,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
                   <button className="button-tertiary" onClick={() => void exportAnnotationBackup()} disabled={busy || !annotations.length || !sourceFingerprint}><ArrowDownToLine size={13} /> Export backup</button>
                   <button className="button-tertiary" onClick={() => annotationBundleInputRef.current?.click()} disabled={busy || !sourceFingerprint}><Upload size={13} /> Import backup</button>
                   <input ref={annotationBundleInputRef} type="file" accept="application/json,.json" className="visually-hidden" aria-label="Choose local PDF annotation backup JSON" onChange={onAnnotationBundleInput} />
+                  <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" className="visually-hidden" aria-label="Choose PNG or JPEG image to insert into PDF" onChange={onInsertImageFile} />
                 </div>
               </section>
               <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => changeSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button>{searchTerm && <button className="button-tertiary pdf-search-clear" onClick={clearSearch} aria-label="Clear PDF search" title="Clear search"><X size={14} /> Clear</button>}</div>
@@ -873,6 +903,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
                 <div className="pdf-tool-card pdf-annotated-copy-card"><div><strong>Flatten local marks into a separate copy</strong><small>This writes verified highlights, underlines, and strike-throughs into page content. They will not be editable PDF annotation objects; comments and note text are excluded.</small><small className="pdf-annotated-copy-status" role="status">{annotatedCopyStatus}</small></div><button className="button-secondary" onClick={() => void exportAnnotatedCopy()} disabled={annotatedCopyDisabled}>{busy ? 'Working…' : 'Create annotated copy'}</button><small className="pdf-annotated-copy-warning">This browser-only operation does not change the source. It may not preserve digital signatures or advanced form behavior.</small></div>
                 <div className="pdf-tool-card"><div><strong>Rotate current page</strong><small>Apply a 90° rotation to page {currentPage} in a saved copy.</small></div><button className="button-tertiary" onClick={exportRotatedPage} disabled={pageCopyDisabled}><RotateCw size={14} /> Rotate copy</button></div>
                 <div className="pdf-tool-card"><div><strong>Remove current page</strong><small>Create a separate copy without page {currentPage}. The last remaining page cannot be removed.</small></div><button className="button-tertiary" onClick={exportRemoveCurrentPage} disabled={pageCopyDisabled || !pdfDocument || pdfDocument.numPages <= 1}><Trash2 size={14} /> Remove page</button></div>
+                <div className="pdf-tool-card"><div><strong>Insert an image</strong><small>Center a PNG or JPEG image on page {currentPage}. Images are limited to {formatBytes(MAX_PDF_INSERT_IMAGE_BYTES)}.</small></div><button className="button-tertiary" onClick={() => imageInputRef.current?.click()} disabled={pageCopyDisabled}><FileImage size={14} /> Insert image</button></div>
                 <div className="pdf-tool-card pdf-tool-range"><div><strong>Extract pages</strong><small>Enter individual page numbers or inclusive ranges, such as 1-3,5.</small></div><div className="pdf-tool-controls"><input aria-label="Pages to extract" value={pageRange} onChange={(event) => setPageRange(event.target.value)} /><button className="button-tertiary" onClick={exportExtract} disabled={pageCopyDisabled}>Extract copy</button></div></div>
                 <div className="pdf-tool-card pdf-tool-range"><div><strong>Reorder pages</strong><small>Move the current page in the order list, then save the reordered copy.</small></div><div className="pdf-tool-controls"><button className="button-tertiary" onClick={() => movePageInOrder(-1)} disabled={busy || pageOrder.indexOf(currentPage) <= 0}>Move earlier</button><button className="button-tertiary" onClick={() => movePageInOrder(1)} disabled={busy || pageOrder.indexOf(currentPage) < 0 || pageOrder.indexOf(currentPage) >= pageOrder.length - 1}>Move later</button><button className="button-secondary" onClick={() => void exportReordered()} disabled={pageCopyDisabled || pageOrder.length < 2}>Save order</button></div></div>
               </section>
