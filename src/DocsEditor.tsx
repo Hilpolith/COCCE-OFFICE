@@ -60,9 +60,11 @@ const DocsImage = TiptapNode.create({
     return [{ tag: 'img[src]' }];
   },
   renderHTML({ HTMLAttributes }) {
+    const rawWidth = Number(HTMLAttributes.width);
+    const widthStyle = Number.isInteger(rawWidth) && rawWidth >= 80 && rawWidth <= 1600 ? `${rawWidth}px` : '100%';
     return ['img', mergeAttributes(HTMLAttributes, {
       class: 'docs-inline-image',
-      style: 'max-width:100%;height:auto;display:block;margin:14px auto',
+      style: `width:${widthStyle};max-width:100%;height:auto;display:block;margin:14px auto`,
       loading: 'lazy',
       decoding: 'async',
     })];
@@ -465,7 +467,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         bold: false, italic: false, underline: false, heading1: false, heading2: false, heading3: false,
         strike: false, paragraph: false, bulletList: false, orderedList: false, blockquote: false,
         canUndo: false, canRedo: false, empty: true, tableActive: false, tableRows: 0, tableColumns: 0,
-        tableCount: 0, tableTextChars: 0, tableHeaderRow: false, hasTextSelection: false, selectedCells: 0,
+        tableCount: 0, tableTextChars: 0, tableHeaderRow: false, hasTextSelection: false, selectedCells: 0, imageActive: false, imageWidth: null,
       };
       const activeTable = activeDocsTable(activeEditor.state.selection);
       const usage = inspectDocsTableUsage(activeEditor.state.doc);
@@ -845,6 +847,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <span className="docs-format-group" aria-label="Insert" hidden={activeRibbonTab !== 'insert'}>
         <FormattingButton label="Insert link" icon={<Link2 size={16}/>} onClick={insertLink} />
         <FormattingButton label="Insert image" icon={<ImagePlus size={16}/>} disabled={!editor} onClick={() => imageInputRef.current?.click()} />
+        {editorState.imageActive && <label className="docs-format-select"><span>Image width</span><select aria-label="Image width" value={String(editorState.imageWidth ?? 'auto')} onChange={(event) => editor?.chain().focus().updateAttributes('docsImage', { width: event.target.value === 'auto' ? null : Number(event.target.value) }).run()}><option value="auto">Auto</option><option value="320">Small</option><option value="640">Medium</option><option value="960">Large</option><option value="1280">Full</option></select></label>}
         <FormattingButton label="Horizontal rule" icon={<Minus size={16}/>} onClick={() => editor?.chain().focus().setHorizontalRule().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
