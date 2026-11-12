@@ -140,7 +140,7 @@ describe('Cloud Drive workspace', () => {
     mocks.cloudApi.list.mockResolvedValue([workbook]);
     render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: /^XLSX budget\\.xlsx/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^XLSX budget\.xlsx/ }));
     expect(await screen.findByText('Summary')).toBeTruthy();
     expect(screen.getByText('Department')).toBeTruthy();
     expect(screen.getByText('Operations')).toBeTruthy();
@@ -155,7 +155,7 @@ describe('Cloud Drive workspace', () => {
     mocks.importXlsxFile.mockRejectedValue(new Error('The workbook contains unsupported worksheet content.'));
     render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: /^XLSX broken\\.xlsx/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^XLSX broken\.xlsx/ }));
     expect(await screen.findByText(/unsupported worksheet content/i)).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy();
@@ -166,7 +166,7 @@ describe('Cloud Drive workspace', () => {
     mocks.cloudApi.list.mockResolvedValue([presentation]);
     render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: /^PPTX quarterly\\.pptx/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^PPTX quarterly\.pptx/ }));
     expect(await screen.findByText('Quarterly review')).toBeTruthy();
     expect(screen.getByText('Revenue increased.')).toBeTruthy();
     fireEvent.click(screen.getByText('Speaker notes'));
@@ -181,7 +181,7 @@ describe('Cloud Drive workspace', () => {
     mocks.importPptxFile.mockRejectedValue(new Error('The PowerPoint archive could not be safely opened.'));
     render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: /^PPTX broken\\.pptx/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^PPTX broken\.pptx/ }));
     expect(await screen.findByText(/PowerPoint archive could not be safely opened/i)).toBeTruthy();
     expect(screen.queryByText('Slide 1')).toBeNull();
     expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy();
