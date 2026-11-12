@@ -212,8 +212,7 @@
 .docs-source-actions>span{color:var(--faint);font-size:8px}
 .docs-source-actions>div{display:flex;gap:7px}
 .docs-source-mode .docs-ribbon-tabs,.docs-source-mode .docs-format-toolbar,.docs-source-mode .docs-table-toolbar,.docs-source-mode .docs-table-limit-copy,.docs-source-mode .docs-review-panel,.docs-source-mode .docs-find-panel{display:none!important}
-.docs-source-mode .docs-workbench-layout{grid-template-columns:minmax(0,1fr)!important}
-.docs-source-mode .docs-workbench-layout>.office-workbench-rail{display:none!important}
+.docs-source-mode .docs-workbench-layout{grid-template-columns:minmax(0,1fr) minmax(278px,320px)!important}
 .docs-source-mode .docs-workbench-layout>.office-workbench-editor{grid-column:1!important}
 @media(max-width:620px){.docs-source-editor{padding:12px;border-radius:13px}.docs-source-textarea{min-height:55vh;padding:11px;font-size:11px}.docs-source-actions{align-items:stretch;flex-direction:column}.docs-source-actions>div>*{flex:1}.docs-source-actions>div{width:100%}}
 @media(forced-colors:active){.docs-source-editor,.docs-source-mode-tabs,.docs-source-textarea,.docs-source-local{background:Canvas;color:CanvasText;border-color:ButtonText}.docs-source-mode-tabs button[aria-pressed=true]{background:Highlight;color:HighlightText}}
@@ -225,3 +224,10 @@
 .office-ai-rollback-button{margin-left:auto;padding:5px 8px;border:1px solid color-mix(in srgb,var(--success) 32%,var(--border));border-radius:9px;background:color-mix(in srgb,var(--success) 8%,transparent);color:var(--success);font-size:9px;font-weight:750}
 .office-ai-rollback-button:hover{background:color-mix(in srgb,var(--success) 15%,transparent)}
 @media(forced-colors:active){.office-ai-rollback-button{background:Canvas;color:CanvasText;border-color:ButtonText}}
+
+.office-ai-source-paused{display:grid;justify-items:start;gap:10px;padding:16px;border:1px solid var(--border);border-radius:17px;background:linear-gradient(145deg,rgba(255,255,255,.07),transparent 55%),var(--surface-soft)}
+.office-ai-source-paused-icon{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--border);border-radius:13px;background:var(--surface);color:var(--muted)}
+.office-ai-source-paused>.eyebrow{color:var(--warning);font-size:8px;font-weight:850;letter-spacing:.1em}
+.office-ai-source-paused strong{color:var(--text);font-size:12px;letter-spacing:-.02em}
+.office-ai-source-paused p{margin:0;color:var(--muted);font-size:10px;line-height:1.65}
+@media(max-width:900px){.docs-source-mode .docs-workbench-layout{grid-template-columns:minmax(0,1fr)!important}}

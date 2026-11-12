@@ -870,7 +870,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
     {cloudEnabled && cloudOpen && onRestoreCloudCopy && <div id="docs-cloud-area"><DocsCloudPanel key={document.id} document={document} hasUnsavedChanges={hasUnsavedChanges} onRestore={onRestoreCloudCopy} onInsertImage={insertImageFile} onGoToTeam={onGoToTeam} /></div>}
 
-    <OfficeWorkbenchLayout className="docs-workbench-layout" rail={<OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} defaultExpanded />}>
+    <OfficeWorkbenchLayout className="docs-workbench-layout" rail={sourceMode ? <div className="office-ai-source-paused" role="status"><span className="office-ai-source-paused-icon"><LockKeyhole size={16} /></span><span className="eyebrow">AI PAUSED</span><strong>Apply or discard source edits</strong><p>COCCE AI resumes when this HTML or Markdown draft is applied to the rich-text document. This prevents the assistant from working on stale content.</p></div> : <OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} defaultExpanded />}>
       <div className="docs-editor-main">
     <div className="docs-ribbon-tabs" role="tablist" aria-label="Document ribbon">
       <button type="button" role="tab" aria-selected={activeRibbonTab === 'home'} className={activeRibbonTab === 'home' ? 'is-active' : ''} onClick={() => setActiveRibbonTab('home')}>Home</button>
