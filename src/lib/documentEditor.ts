@@ -351,7 +351,7 @@ function markdownBlock(node: Node): string {
 /** Export supported local formatting; fall back to escaped text when markup is unusable. */
 function markdownInlineToHtml(source: string): string {
   const tokens: string[] = [];
-  const tokenized = source.replace(/(!?)\\[([^\\]]+)\\]\\(([^)\\s]+)\\)/g, (_match, imageMarker: string, label: string, target: string) => {
+  const tokenized = source.replace(/(!?)\[([^\]]+)\]\(([^)\s]+)\)/g, (_match, imageMarker: string, label: string, target: string) => {
     let html: string;
     if (imageMarker === '!') {
       const src = safeDocsImageSrc(target);
@@ -365,16 +365,16 @@ function markdownInlineToHtml(source: string): string {
     return token;
   });
   let html = escapeHtml(tokenized)
-    .replace(/`([^`\\n]+)`/g, '<code>$1</code>')
-    .replace(/\\*\\*([^*\\n]+)\\*\\*/g, '<strong>$1</strong>')
-    .replace(/~~([^~\\n]+)~~/g, '<del>$1</del>')
-    .replace(/(^|[^*])\\*([^*\\n]+)\\*(?!\\*)/g, '$1<em>$2</em>');
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
   tokens.forEach((token, index) => { html = html.replace(`COCCEMARKDOWNTOKEN${index}END`, token); });
   return html;
 }
 
 function markdownTableCells(line: string): string[] {
-  return line.trim().replace(/^\\|/, '').replace(/\\|$/, '').split('|').map((cell) => cell.trim());
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
 }
 
 /** Convert a bounded, common Markdown subset to safe editable Docs HTML. */
@@ -382,31 +382,31 @@ export function markdownToRichHtml(markdown: string): SanitizedRichText {
   if (typeof markdown !== 'string' || markdown.length > 1_000_000) {
     return { html: '', warnings: ['Markdown source is limited to 1,000,000 characters.'] };
   }
-  const lines = markdown.replace(/\\r\\n?/g, '\\n').split('\\n');
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
   const blocks: string[] = [];
   let index = 0;
   while (index < lines.length) {
     const line = lines[index]!;
     if (!line.trim()) { index += 1; continue; }
-    const fence = /^\\s*```/.exec(line);
+    const fence = /^\s*```/.exec(line);
     if (fence) {
       const code: string[] = [];
       index += 1;
-      while (index < lines.length && !/^\\s*```\\s*$/.test(lines[index]!)) code.push(lines[index++]!);
+      while (index < lines.length && !/^\s*```\s*$/.test(lines[index]!)) code.push(lines[index++]!);
       if (index < lines.length) index += 1;
-      blocks.push(`<pre><code>${escapeHtml(code.join('\\n'))}</code></pre>`);
+      blocks.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
       continue;
     }
-    const heading = /^(#{1,3})\\s+(.+)$/.exec(line);
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
     if (heading) { const level = heading[1]!.length; blocks.push(`<h${level}>${markdownInlineToHtml(heading[2]!)}</h${level}>`); index += 1; continue; }
-    if (/^\\s*(?:---+|\\*\\*\\*|___+)\\s*$/.test(line)) { blocks.push('<hr>'); index += 1; continue; }
-    if (/^\\s*>/.test(line)) {
+    if (/^\s*(?:---+|\*\*\*|___+)\s*$/.test(line)) { blocks.push('<hr>'); index += 1; continue; }
+    if (/^\s*>/.test(line)) {
       const quote: string[] = [];
-      while (index < lines.length && /^\\s*>/.test(lines[index]!)) quote.push(lines[index++]!.replace(/^\\s*>\\s?/, ''));
+      while (index < lines.length && /^\s*>/.test(lines[index]!)) quote.push(lines[index++]!.replace(/^\s*>\s?/, ''));
       blocks.push(`<blockquote><p>${quote.map(markdownInlineToHtml).join('<br>')}</p></blockquote>`);
       continue;
     }
-    if (line.trim().startsWith('|') && index + 1 < lines.length && /^\\s*\\|?\\s*:?-{3,}:?\\s*(?:\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$/.test(lines[index + 1]!)) {
+    if (line.trim().startsWith('|') && index + 1 < lines.length && /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1]!)) {
       const header = markdownTableCells(line);
       index += 2;
       const rows: string[][] = [];
@@ -415,13 +415,13 @@ export function markdownToRichHtml(markdown: string): SanitizedRichText {
       blocks.push(`<table><tbody>${cells(header, 'th')}${rows.map((row) => cells(row, 'td')).join('')}</tbody></table>`);
       continue;
     }
-    const listMatch = /^\\s*([-+*]|\\d+\\.)\\s+(.+)$/.exec(line);
+    const listMatch = /^\s*([-+*]|\d+\.)\s+(.+)$/.exec(line);
     if (listMatch) {
-      const ordered = /^\\d+\\.$/.test(listMatch[1]!);
+      const ordered = /^\d+\.$/.test(listMatch[1]!);
       const items: string[] = [];
       while (index < lines.length) {
-        const item = /^\\s*([-+*]|\\d+\\.)\\s+(.+)$/.exec(lines[index]!);
-        if (!item || /^\\d+\\.$/.test(item[1]!) !== ordered) break;
+        const item = /^\s*([-+*]|\d+\.)\s+(.+)$/.exec(lines[index]!);
+        if (!item || /^\d+\.$/.test(item[1]!) !== ordered) break;
         items.push(`<li><p>${markdownInlineToHtml(item[2]!)}</p></li>`);
         index += 1;
       }
@@ -429,9 +429,9 @@ export function markdownToRichHtml(markdown: string): SanitizedRichText {
       continue;
     }
     const paragraph: string[] = [];
-    while (index < lines.length && lines[index]!.trim() && !/^(?:#{1,3}\\s|\\s*(?:>|[-+*]\\s|\\d+\\.\\s)|\\s*(?:---+|\\*\\*\\*|___+)\\s*$)/.test(lines[index]!)
-      && !(lines[index]!.trim().startsWith('|') && index + 1 < lines.length && /^\\s*\\|?\\s*:?-{3,}:?\\s*(?:\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$/.test(lines[index + 1]!))
-      && !/^\\s*```/.test(lines[index]!)) paragraph.push(lines[index++]!);
+    while (index < lines.length && lines[index]!.trim() && !/^(?:#{1,3}\s|\s*(?:>|[-+*]\s|\d+\.\s)|\s*(?:---+|\*\*\*|___+)\s*$)/.test(lines[index]!)
+      && !(lines[index]!.trim().startsWith('|') && index + 1 < lines.length && /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1]!))
+      && !/^\s*```/.test(lines[index]!)) paragraph.push(lines[index++]!);
     if (paragraph.length) blocks.push(`<p>${paragraph.map(markdownInlineToHtml).join('<br>')}</p>`);
     else index += 1;
   }
