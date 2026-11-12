@@ -753,7 +753,10 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const insertImage = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (file) await insertImageFile(file);
+    if (file) {
+      try { await insertImageFile(file); }
+      catch { /* The editor displays the specific insertion error inline. */ }
+    }
   };
 
   const exportMarkdown = async () => {
