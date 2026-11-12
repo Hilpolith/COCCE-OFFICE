@@ -373,6 +373,10 @@ describe('COCCE AI workspace context', () => {
       makeFile('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'docs/credentials.yaml'),
       makeFile('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'certs/server.pem'),
       makeFile('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'signing/office.keystore'),
+      makeFile('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'exports/passwords.csv'),
+      makeFile('ffffffff-ffff-4fff-8fff-ffffffffffff', 'auth/tokens.json'),
+      makeFile('12121212-1212-4121-8121-121212121212', 'infra/service_account.json'),
+      makeFile('13131313-1313-4131-8131-131313131313', 'ssh/id_ecdsa'),
     ]) });
     render(<OfficeAiWorkspace initialWorkspaceId={workspaceId} />);
     await screen.findByRole('combobox', { name: 'Workspace' });
@@ -388,6 +392,10 @@ describe('COCCE AI workspace context', () => {
     expect(screen.queryByText('docs/credentials.yaml')).toBeNull();
     expect(screen.queryByText('certs/server.pem')).toBeNull();
     expect(screen.queryByText('signing/office.keystore')).toBeNull();
+    expect(screen.queryByText('exports/passwords.csv')).toBeNull();
+    expect(screen.queryByText('auth/tokens.json')).toBeNull();
+    expect(screen.queryByText('infra/service_account.json')).toBeNull();
+    expect(screen.queryByText('ssh/id_ecdsa')).toBeNull();
   });
 
 });
