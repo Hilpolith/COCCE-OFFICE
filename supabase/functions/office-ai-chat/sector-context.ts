@@ -48,7 +48,10 @@ export async function loadSectorWorkItems(
     if (!isUuid(workspaceId)) return [];
     const workspaceName = safeText(workspace.name, 80) || "Office workspace";
     const profile = await client.rpc("office_industry_get_space", { p_workspace_id: workspaceId });
-    if (profile.error) throw new Error("An authorised industry workspace profile could not be read.");
+    if (profile.error) {
+      if ((profile.error as { code?: string }).code === "P0002") return [];
+      throw new Error("An authorised industry workspace profile could not be read.");
+    }
     const profileRows = Array.isArray(profile.data) ? profile.data : profile.data ? [profile.data] : [];
     const industry = safeText((profileRows[0] as Record<string, unknown> | undefined)?.industry_id, 40);
     if (!INDUSTRIES.has(industry)) return [];
