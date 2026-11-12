@@ -18,6 +18,14 @@ describe('local Docs content conversion and safety', () => {
     expect(sanitizeRichTextHtml('<p onclick="bad()">Hi <b style="color:red">safe</b><img src="x" onerror="bad()"></p><script>bad()</script>'))
       .toBe('<p>Hi <strong>safe</strong></p>');
   });
+  it('preserves bounded embedded PNG, JPEG and WebP images without unsafe attributes or remote fetches', () => {
+    const png = 'data:image/png;base64,iVBORw0KGgo=';
+    const safe = sanitizeRichTextHtml(`<p>Before</p><img src="${png}" alt="Chart" width="640" onerror="alert(1)"><img src="https://tracker.example/pixel.png"><img src="data:image/svg+xml;base64,PHN2Zz4="></img>`);
+    expect(safe).toBe(`<p>Before</p><img src="${png}" alt="Chart" width="640">`);
+    expect(sanitizeRichTextHtml(`<img src="${'data:image/png;base64,' + 'A'.repeat(1_800_001)}">`)).toBe('');
+    expect(richTextToPlainText(safe)).toBe('Before');
+  });
+
   it('preserves safe font, colour, highlight, alignment and links while removing unsafe styles and URLs', () => {
     const html = '<p style="text-align:center;position:fixed"><span style="font-family:Arial;font-size:14pt;color:#ff0000;background-image:url(javascript:bad)">Hello</span><mark style="background-color:#fff2a8"> highlighted</mark> <a href="javascript:alert(1)">unsafe</a> <a href="https://example.com">safe link</a></p>';
     const safe = sanitizeRichTextHtml(html);
