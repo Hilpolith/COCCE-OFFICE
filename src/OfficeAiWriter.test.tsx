@@ -137,7 +137,7 @@ describe('Docs Writing assistant', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
     await screen.findByText('A preview edit.');
     fireEvent.click(screen.getByRole('button', { name: 'Replace selection' }));
-    const rollback = await screen.findByRole('button', { name: 'Roll back AI edit' });
+    const rollback = await screen.findByRole('button', { name: 'Roll back AI edit' }) as HTMLButtonElement;
     expect(rollback.disabled).toBe(false);
     fireEvent.click(rollback);
     expect(chain.undo).toHaveBeenCalledTimes(1);
