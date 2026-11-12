@@ -26,6 +26,11 @@ function renderOfficeAiMarkdown(source: string): ReactNode {
     if (link) return <a key={key} href={link[2]} target="_blank" rel="noopener noreferrer">{link[1]}</a>;
     return <Fragment key={key}>{part}</Fragment>;
   });
+  const tableCells = (line: string) => line.trim().replace(/^\\|/, '').replace(/\\|$/, '').split('|').map((cell) => cell.trim());
+  const isTableSeparator = (line: string) => {
+    const cells = tableCells(line);
+    return cells.length >= 2 && cells.length <= 10 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+  };
   while (index < lines.length) {
     const line = lines[index] ?? '';
     if (!line.trim()) { index += 1; continue; }
@@ -42,6 +47,16 @@ function renderOfficeAiMarkdown(source: string): ReactNode {
       blocks.push(<Tag key={blocks.length}>{inline(heading[2]!)}</Tag>); index += 1; continue;
     }
     if (/^\s*(?:---+|\*\*\*|___)\s*$/.test(line)) { blocks.push(<hr key={blocks.length} />); index += 1; continue; }
+    if (index + 1 < lines.length && line.includes('|') && isTableSeparator(lines[index + 1]!)) {
+      const headers = tableCells(line).slice(0, 10);
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length && lines[index]!.includes('|') && rows.length < 40) {
+        rows.push(tableCells(lines[index++]!).slice(0, headers.length));
+      }
+      blocks.push(<div className="office-ai-table-wrap" key={blocks.length}><table className="office-ai-table"><thead><tr>{headers.map((header, key) => <th key={key}>{inline(header)}</th>)}</tr></thead><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{headers.map((_, columnIndex) => <td key={columnIndex}>{inline(row[columnIndex] ?? '')}</td>)}</tr>)}</tbody></table></div>);
+      continue;
+    }
     if (/^\s*>\s?/.test(line)) {
       const quote: string[] = [];
       while (index < lines.length && /^\s*>\s?/.test(lines[index]!)) quote.push(lines[index++]!.replace(/^\s*>\s?/, ''));
