@@ -133,6 +133,22 @@ describe('COCCE AI workspace context', () => {
     expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
   });
 
+  it('requires per-request consent before sending industry work queue records to the AI provider', async () => {
+    render(<OfficeAiWorkspace mode="assistant" />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    fireEvent.click(screen.getByLabelText(/Industry work queue context/));
+    const composer = screen.getByRole('textbox', { name: 'Ask across your workspace' }) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'Summarise the industry work items and due dates.' } });
+    fireEvent.submit(composer.closest('form')!);
+    expect(await screen.findByRole('heading', { name: 'Let COCCE AI inspect your industry work queue for this answer?' })).toBeTruthy();
+    expect(mocks.invoke.mock.calls.some((call) => call[1]?.body?.includeSectorRecords === true)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Share sector context' }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith('office-ai-chat', expect.objectContaining({
+      body: expect.objectContaining({ action: 'chat', includeSectorRecords: true, workspaceId: '*' }),
+    })));
+    expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
+  });
+
   it('sends on Enter and preserves multiline drafting on Shift+Enter', async () => {
     render(<OfficeAiWorkspace mode="chat" />);
     await screen.findByRole('combobox', { name: 'Workspace' });
