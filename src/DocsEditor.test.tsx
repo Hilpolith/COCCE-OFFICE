@@ -640,7 +640,9 @@ describe('Docs HTML and Markdown source modes', () => {
   it('edits Markdown locally, previews it, and applies it to the rich-text document only on approval', async () => {
     const { onPatch } = renderEditor();
     fireEvent.click(screen.getByRole('tab', { name: 'View' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit Markdown source' }));
+    const editMarkdown = await screen.findByRole('button', { name: 'Edit Markdown source' }) as HTMLButtonElement;
+    await waitFor(() => expect(editMarkdown.disabled).toBe(false));
+    fireEvent.click(editMarkdown);
     const source = await screen.findByRole('textbox', { name: 'Markdown source' });
     fireEvent.change(source, { target: { value: '# Quarterly report\n\nRevenue grew **18%**.\n\n- East\n- West' } });
     expect(onPatch).not.toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('Quarterly report') }));
@@ -655,12 +657,15 @@ describe('Docs HTML and Markdown source modes', () => {
   it('sanitizes HTML source before applying it and leaves the source untouched when discarded', async () => {
     const { onPatch } = renderEditor();
     fireEvent.click(screen.getByRole('tab', { name: 'View' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit HTML source' }));
+    const editHtml = await screen.findByRole('button', { name: 'Edit HTML source' }) as HTMLButtonElement;
+    await waitFor(() => expect(editHtml.disabled).toBe(false));
+    fireEvent.click(editHtml);
     const source = await screen.findByRole('textbox', { name: 'HTML source' });
     fireEvent.change(source, { target: { value: '<h1>Safe heading</h1><script>bad()</script><img src="https://example.com/track.png" onerror="bad()">' } });
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(onPatch).not.toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('Safe heading') }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit HTML source' }));
+    await waitFor(() => expect(editHtml.disabled).toBe(false));
+    fireEvent.click(editHtml);
     const secondSource = await screen.findByRole('textbox', { name: 'HTML source' });
     fireEvent.change(secondSource, { target: { value: '<h1>Safe heading</h1><script>bad()</script><img src="https://example.com/track.png" onerror="bad()">' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply to document' }));
