@@ -579,7 +579,7 @@ describe('Docs portable HTML and text exports', () => {
   it('downloads sanitized standalone HTML and readable plain text from the current editor', async () => {
     const originalCreate = URL.createObjectURL;
     const originalRevoke = URL.revokeObjectURL;
-    const create = vi.fn((blob: Blob) => 'blob:synthetic-docs-export');
+    const create = vi.fn(() => 'blob:synthetic-docs-export');
     const revoke = vi.fn();
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create });
