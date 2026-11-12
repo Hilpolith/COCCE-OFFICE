@@ -292,7 +292,9 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 }) {
   const confirm = useFrostedConfirm();
   const patchRef = useRef(onPatch);
-  const [cloudOpen, setCloudOpen] = useState(false);\n  const imageInputRef = useRef<HTMLInputElement | null>(null);\n  const [imageNotice, setImageNotice] = useState('');
+  const [cloudOpen, setCloudOpen] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const [imageNotice, setImageNotice] = useState('');
   const [activeRibbonTab, setActiveRibbonTab] = useState<'home' | 'insert' | 'review' | 'view'>('home');
   const [pageZoom, setPageZoom] = useState('100%');
   const cloudEnabled = import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true' && Boolean(onRestoreCloudCopy);
@@ -488,7 +490,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         tableTextChars: usage.textChars,
         tableHeaderRow: activeTable?.headerRow ?? false,
         hasTextSelection: !(selection instanceof CellSelection) && !selection.empty
-          && activeEditor.state.doc.textBetween(selection.from, selection.to, '\n').trim().length > 0,
+          && activeEditor.state.doc.textBetween(selection.from, selection.to, '
+').trim().length > 0,
         selectedCells,
       };
     },
@@ -534,7 +537,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     const selection = editor.state.selection;
     const quote = selection.empty || selection instanceof CellSelection
       ? ''
-      : editor.state.doc.textBetween(selection.from, selection.to, '\n');
+      : editor.state.doc.textBetween(selection.from, selection.to, '
+');
     if (!quote.trim()) {
       showReviewCommentNotice('Select text in the document before adding a review comment.', true);
       return;
@@ -553,7 +557,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     if (!editor || !commentDraft) return;
     const scope = reviewCommentScopeRef.current;
     if (commentDraft.scopeKey !== scope.key || !editor.state.doc.eq(commentDraft.document)
-      || editor.state.doc.textBetween(commentDraft.from, commentDraft.to, '\n') !== commentDraft.quote) {
+      || editor.state.doc.textBetween(commentDraft.from, commentDraft.to, '
+') !== commentDraft.quote) {
       showReviewCommentNotice('The selected text changed. Select it again before saving this comment.', true);
       return;
     }
@@ -763,7 +768,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   };
 
   return <div className="page editor-page office-editor-page">
-    <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Choose an image to insert" onChange={(event) => void insertImage(event)} />\n    <div className="editor-toolbar">
+    <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Choose an image to insert" onChange={(event) => void insertImage(event)} />
+    <div className="editor-toolbar">
       <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
       <div className="editor-actions">
         <span className={`autosave-label ${hasUnsavedChanges ? 'autosave-failed' : ''}`} role="status">
@@ -836,7 +842,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Insert" hidden={activeRibbonTab !== 'insert'}>
-        <FormattingButton label="Insert link" icon={<Link2 size={16}/>} onClick={insertLink} />\n        <FormattingButton label="Insert image" icon={<ImagePlus size={16}/>} disabled={!editor} onClick={() => imageInputRef.current?.click()} />
+        <FormattingButton label="Insert link" icon={<Link2 size={16}/>} onClick={insertLink} />
+        <FormattingButton label="Insert image" icon={<ImagePlus size={16}/>} disabled={!editor} onClick={() => imageInputRef.current?.click()} />
         <FormattingButton label="Horizontal rule" icon={<Minus size={16}/>} onClick={() => editor?.chain().focus().setHorizontalRule().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
@@ -852,7 +859,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <span className="docs-format-hint">Local rich text</span>
     </div>
 
-    {imageNotice && <p className="docs-image-notice" role="alert">{imageNotice}</p>}\n    <div className="docs-table-toolbar glass-card" role="toolbar" aria-label="Table editing">
+    {imageNotice && <p className="docs-image-notice" role="alert">{imageNotice}</p>}
+    <div className="docs-table-toolbar glass-card" role="toolbar" aria-label="Table editing">
       <div className="docs-table-insert-controls">
         <span className="docs-table-insert-label"><Table2 size={15} /> Insert table</span>
         <label>Rows <input aria-label="New table rows" type="number" min="1" max={DOCS_TABLE_LIMITS.maxRows} value={insertRows} onChange={(event) => setInsertRows(event.target.value)} /></label>
