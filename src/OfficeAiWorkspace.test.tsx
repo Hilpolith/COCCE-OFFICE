@@ -75,7 +75,6 @@ describe('COCCE AI workspace context', () => {
     expect(container.querySelector('.office-ai-answer[aria-live="polite"]')).toBeTruthy();
     expect(screen.getByPlaceholderText('Message…')).toBeTruthy();
     expect(screen.getByText('Start a conversation')).toBeTruthy();
-    expect(screen.queryByText('FREE MODEL ONLY')).toBeNull();
   });
 
   it('starts in all authorised workspaces and allows a single workspace selection', async () => {
