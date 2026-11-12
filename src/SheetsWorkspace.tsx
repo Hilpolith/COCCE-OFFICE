@@ -291,6 +291,25 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
     }
     return values;
   }, [worksheet]);
+  const selectedNumericStats = useMemo(() => {
+    const values: number[] = [];
+    for (let row = selectedRange.startRow; row <= selectedRange.endRow; row += 1) {
+      for (let column = selectedRange.startColumn; column <= selectedRange.endColumn; column += 1) {
+        const raw = displayedCells[cellAddress(row, column)] ?? '';
+        if (!raw.trim()) continue;
+        const value = Number(raw.replace(/,/g, '').trim());
+        if (Number.isFinite(value)) values.push(value);
+      }
+    }
+    const sum = values.reduce((total, value) => total + value, 0);
+    return {
+      count: values.length,
+      sum,
+      average: values.length ? sum / values.length : null,
+      minimum: values.length ? Math.min(...values) : null,
+      maximum: values.length ? Math.max(...values) : null,
+    };
+  }, [selectedRange, displayedCells]);
   const rawValue = worksheet.cells[selectedAddress] ?? '';
   const historyKey = `${workbook.id}/${worksheet.id}`;
   const history = historyByWorksheet[historyKey] ?? EMPTY_SHEETS_HISTORY;
@@ -629,6 +648,9 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
       <div className="sheet-range-tools" role="toolbar" aria-label="Spreadsheet formula tools">
         <button type="button" className="button-secondary" aria-label="Fill formula" title={`Fill one supported seed formula down or right; ranges are limited to ${MAX_SHEETS_FORMULA_FILL_CELLS} visible cells`} onClick={applyFormulaFill}><FunctionSquare size={15} /> Fill formula</button>
         <span>Copies the first cell's formula through one selected row or column (up to {MAX_SHEETS_FORMULA_FILL_CELLS} cells), translating relative A1 references and keeping $ anchors. Cross-sheet, out-of-grid, unsupported, or malformed references are refused; populated targets require confirmation.</span>
+      </div>
+      <div className="sheet-range-tools sheet-analysis-tools" aria-label="Selected range quick analysis">
+        <strong>Quick analysis</strong><span>{selectedNumericStats.count} numeric cells</span><span>Sum: {selectedNumericStats.sum.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span><span>Average: {selectedNumericStats.average === null ? '—' : selectedNumericStats.average.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span><span>Min: {selectedNumericStats.minimum === null ? '—' : selectedNumericStats.minimum.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span><span>Max: {selectedNumericStats.maximum === null ? '—' : selectedNumericStats.maximum.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
       </div>
       <div className="sheet-range-tools sheet-chart-tools" role="toolbar" aria-label="Spreadsheet chart creation">
         <label className="sheet-chart-type"><span>Chart type</span><select value={chartType} onChange={(event) => setChartType(event.target.value as OfficeSheetChartType)}><option value="bar">Bar</option><option value="line">Line</option></select></label>
