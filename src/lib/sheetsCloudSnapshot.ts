@@ -2,6 +2,7 @@ import {
   addWorkbook,
   addWorksheet,
   updateWorkbook,
+  type OfficeSheetChart,
   type OfficeWorkbook,
   type PreviewState,
 } from './localStore';
@@ -18,7 +19,7 @@ export const SHEETS_CLOUD_MAX_CELL_CHARS = 16_384;
 export const SHEETS_CLOUD_MAX_TITLE_CHARS = 200;
 export const SHEETS_CLOUD_MAX_SHEET_NAME_CHARS = 31;
 const FORMAT = 'cocce-office-sheets-copy' as const;
-const VERSION = 1 as const;
+const VERSION = 2 as const;
 const ENVELOPE_KEYS = [
   'format',
   'version',
@@ -27,11 +28,14 @@ const ENVELOPE_KEYS = [
   'worksheets',
 ] as const;
 const DATA_KEYS = ['title', 'activeWorksheetIndex', 'worksheets'] as const;
-const SHEET_KEYS = ['name', 'cells'] as const;
+const SHEET_KEYS_V1 = ['name', 'cells'] as const;
+const SHEET_KEYS_V2 = ['name', 'cells', 'charts'] as const;
+const CHART_KEYS = ['id', 'title', 'type', 'range', 'createdAt'] as const;
 
 export type SheetsCloudWorksheet = {
   name: string;
   cells: Record<string, string>;
+  charts?: OfficeSheetChart[];
 };
 export type SheetsCloudSnapshot = {
   title: string;
@@ -125,9 +129,29 @@ function validateSnapshotData(value: unknown): SheetsCloudSnapshot {
 
   let totalChars = 0;
   const worksheets = value.worksheets.map((entry) => {
-    if (!isRecord(entry) || !exactKeys(entry, SHEET_KEYS) || !isRecord(entry.cells))
+    if (!isRecord(entry)
+      || (!exactKeys(entry, SHEET_KEYS_V1) && !exactKeys(entry, SHEET_KEYS_V2))
+      || !isRecord(entry.cells))
       fail('a worksheet contains unknown or missing fields');
     const name = validateSheetName(entry.name);
+    let charts: OfficeSheetChart[] | undefined;
+    if (entry.charts !== undefined) {
+      if (!Array.isArray(entry.charts) || entry.charts.length > 20) fail('a worksheet contains too many charts');
+      charts = entry.charts.map((chart) => {
+        if (!isRecord(chart) || !exactKeys(chart, CHART_KEYS)) fail('a chart contains unknown or missing fields');
+        const id = validateText(chart.id, 'chart ID', 128);
+        const title = validateText(chart.title, 'chart title', 80);
+        const range = validateText(chart.range, 'chart range', 16);
+        const createdAt = validateText(chart.createdAt, 'chart creation time', 40);
+        if (!id || hasControlCharacters(id) || !title.trim() || hasControlCharacters(title)
+          || (chart.type !== 'bar' && chart.type !== 'line')
+          || !/^([A-L])([1-9]|1\\d|2[0-4]):([A-L])([1-9]|1\\d|2[0-4])$/.test(range)
+          || !Number.isFinite(Date.parse(createdAt))) fail('a chart contains invalid data');
+        const match = /^([A-L])([1-9]|1\\d|2[0-4]):([A-L])([1-9]|1\\d|2[0-4])$/.exec(range)!;
+        if (match[3] <= match[1] || Number(match[4]) <= Number(match[2])) fail('a chart range must span at least two rows and columns');
+        return { id, title, type: chart.type, range, createdAt };
+      });
+    }
     const cellEntries = Object.entries(entry.cells);
     if (cellEntries.length > SHEET_VISIBLE_ROWS * SHEET_VISIBLE_COLUMNS)
       fail('a worksheet contains more populated cells than the visible grid');
@@ -143,7 +167,7 @@ function validateSnapshotData(value: unknown): SheetsCloudSnapshot {
         fail(`workbook text exceeds ${SHEETS_CLOUD_MAX_TOTAL_CHARS.toLocaleString()} characters`);
       cells[address] = cell;
     }
-    return { name, cells };
+    return { name, cells, ...(charts === undefined ? {} : { charts }) };
   });
 
   return {
@@ -196,7 +220,7 @@ export function createSheetsCloudSnapshot(workbook: OfficeWorkbook): Uint8Array 
   const snapshot = validateSnapshotData({
     title: workbook.title,
     activeWorksheetIndex,
-    worksheets: workbook.worksheets.map(({ name, cells }) => ({ name, cells })),
+    worksheets: workbook.worksheets.map(({ name, cells, charts }) => ({ name, cells, ...(charts === undefined ? {} : { charts }) })),
   });
   const encoded = JSON.stringify(makeEnvelope(snapshot));
   const byteLength = utf8Length(encoded);
@@ -213,6 +237,7 @@ export function parseSheetsCloudSnapshot(bytes: Uint8Array): SheetsCloudSnapshot
     worksheets: envelope.worksheets.map((worksheet) => ({
       name: worksheet.name,
       cells: { ...worksheet.cells },
+      ...(worksheet.charts === undefined ? {} : { charts: worksheet.charts.map((chart) => ({ ...chart })) }),
     })),
   };
 }
@@ -262,6 +287,7 @@ export function restoreSheetsCloudCopy(
     id: worksheetIds[index]!,
     name: worksheet.name,
     cells: { ...worksheet.cells },
+    ...(worksheet.charts === undefined ? {} : { charts: worksheet.charts.map((chart) => ({ ...chart })) }),
   }));
   next = updateWorkbook(next, created.id, {
     title,
