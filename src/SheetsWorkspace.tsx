@@ -641,18 +641,22 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         const max = Math.max(0, ...entries.map((entry) => entry.value));
         const span = max - min || 1;
         const zero = (0 - min) / span * 100;
-        const linePoints = entries.map((entry, index) => {
+        const lineValues = entries.map((entry) => entry.value);
+        const lineMin = Math.min(...lineValues);
+        const lineMax = Math.max(...lineValues);
+        const lineCoordinates = entries.map((entry, index) => {
           const x = 24 + (index / Math.max(1, entries.length - 1)) * 552;
-          const y = 178 - ((entry.value - Math.min(...entries.map((item) => item.value))) / (Math.max(...entries.map((item) => item.value)) - Math.min(...entries.map((item) => item.value)) || 1)) * 136;
+          const y = 178 - ((entry.value - lineMin) / (lineMax - lineMin || 1)) * 136;
           return `${x},${y}`;
-        }).join(' ');
+        });
+        const linePoints = lineCoordinates.join(' ');
         return <section className="sheet-chart-card" key={chart.id}>
           <header><div><strong>{chart.title}</strong><small>{chart.type.toUpperCase()} · {chart.range} · {entries.length} plotted rows</small></div><button type="button" className="button-secondary" onClick={() => deleteChart(chart.id)} aria-label={`Delete chart ${chart.title}`}><Trash2 size={14} /> Remove</button></header>
           {!entries.length ? <p className="sheet-chart-empty">No valid numeric values remain in this chart range.</p> : chart.type === 'bar' ? <div className="sheet-chart-bars">{entries.map((entry, index) => {
             const width = Math.abs(entry.value) / span * 100;
             const left = entry.value >= 0 ? zero : zero - width;
             return <div className="sheet-chart-bar-row" key={`${entry.label}-${index}`}><span title={entry.label}>{entry.label}</span><div className="sheet-chart-bar-track"><i style={{ left: `${left}%`, width: `${width}%` }} /></div><strong>{entry.value.toLocaleString()}</strong></div>;
-          })}</div> : <div className="sheet-chart-line-wrap"><svg viewBox="0 0 600 210" role="img" aria-label={`${chart.title} line chart`}><line x1="24" y1="178" x2="576" y2="178" className="sheet-chart-axis" /><polyline points={linePoints} className="sheet-chart-line" />{entries.map((entry,index) => { const points=linePoints.split(' '); const [cx,cy]=points[index].split(','); return <circle key={index} cx={cx} cy={cy} r="4" className="sheet-chart-point"><title>{entry.label}: {entry.value}</title></circle>; })}</svg><div className="sheet-chart-line-labels">{entries.map((entry,index)=><span key={index} title={entry.label}>{entry.label}</span>)}</div></div>}
+          })}</div> : <div className="sheet-chart-line-wrap"><svg viewBox="0 0 600 210" role="img" aria-label={`${chart.title} line chart`}><line x1="24" y1="178" x2="576" y2="178" className="sheet-chart-axis" /><polyline points={linePoints} className="sheet-chart-line" />{entries.map((entry,index) => { const [cx,cy]=lineCoordinates[index].split(','); return <circle key={index} cx={cx} cy={cy} r="4" className="sheet-chart-point"><title>{entry.label}: {entry.value}</title></circle>; })}</svg><div className="sheet-chart-line-labels">{entries.map((entry,index)=><span key={index} title={entry.label}>{entry.label}</span>)}</div></div>}
         </section>;
       })}
       <div className="sheet-grid-scroll" role="region" aria-label="Spreadsheet grid; scroll horizontally and vertically to see cells">
