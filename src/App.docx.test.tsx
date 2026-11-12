@@ -60,6 +60,27 @@ describe('Docs local DOCX import UI', () => {
     expect(network).not.toHaveBeenCalled();
   });
 
+  it('imports Markdown as a new local rich-text draft without changing existing documents', async () => {
+    const network = vi.spyOn(globalThis, 'fetch');
+    const file = new File(['# Imported Markdown\n\n**Formatted** content\n\n- first\n- second'], 'Imported Markdown.md', { type: 'text/markdown' });
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import HTML / MD / TXT' }));
+    fireEvent.change(screen.getByLabelText('Choose an HTML, Markdown or text file'), { target: { files: [file] } });
+    await screen.findByRole('alertdialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Import file' }));
+    await waitFor(() => expect((screen.getByRole('textbox', { name: 'Document title' }) as HTMLInputElement).value).toBe('Imported Markdown'));
+    const content = screen.getByRole('textbox', { name: 'Document content' });
+    expect(content.querySelector('h1')?.textContent).toBe('Imported Markdown');
+    expect(content.querySelector('strong')?.textContent).toBe('Formatted');
+    expect(content.querySelectorAll('ul li')).toHaveLength(2);
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).documents as typeof existing[];
+    expect(saved).toHaveLength(2);
+    expect(saved.find((document) => document.id === existing.id)?.content).toBe(existing.content);
+    expect(network).not.toHaveBeenCalled();
+  });
+
   it('exports the active local document through the editor toolbar', async () => {
     const createObjectURL = vi.fn((_blob: Blob) => 'blob:synthetic-docx');
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
