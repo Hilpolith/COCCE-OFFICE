@@ -30,7 +30,7 @@ import { pdfTextMarkToViewportLine } from './lib/pdfTextMarks';
 import { createPdfAnnotatedCopy, fingerprintPdfBytes } from './lib/pdfAnnotatedCopy';
 import {
   assertPdfMergeInputLimits, extractPdfPages, MAX_PDF_MERGE_INPUTS, MAX_PDF_MERGE_TOTAL_INPUT_BYTES,
-  MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles, parsePageRange, reorderPdfPages, rotatePdfPage,
+  MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles, parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
 } from './lib/pdfTools';
 import './pdf.css';
 
@@ -584,6 +584,19 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     );
   };
 
+  const exportRemoveCurrentPage = async () => {
+    const file = selectedFile;
+    const document = pdfDocument;
+    const page = currentPage;
+    const fingerprint = sourceFingerprint;
+    if (!file || !document) return;
+    void runSinglePdfPageCopy(
+      file, fingerprint, `Remove page ${page} from “${file.name}” in a new copy?`, `page-${page}-removed`,
+      (source) => removePdfPage(source, page),
+      `Saved a separate local PDF copy without page ${page}. The original PDF and its annotation sidecar were not changed.`,
+    );
+  };
+
   const exportExtract = async () => {
     const file = selectedFile;
     const document = pdfDocument;
@@ -856,9 +869,10 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
               <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => changeSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button>{searchTerm && <button className="button-tertiary pdf-search-clear" onClick={clearSearch} aria-label="Clear PDF search" title="Clear search"><X size={14} /> Clear</button>}</div>
               {(searchHits.length > 0 || searchTruncated) && <div className="pdf-search-results" aria-label="PDF search results"><div className="pdf-search-heading"><strong>{searchHits.length} match{searchHits.length === 1 ? '' : 'es'}{searchTruncated ? ' (first 2,000 shown)' : ''}</strong>{searchHits.length > 0 && <div className="pdf-search-navigation"><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex - 1)} aria-label="Previous search match" title="Previous match"><ArrowLeft size={14} /></button><span aria-live="polite" aria-atomic="true">{currentSearchIndex + 1} / {searchHits.length} · Page {searchHits[currentSearchIndex]?.page ?? currentPage}</span><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex + 1)} aria-label="Next search match" title="Next match"><ArrowRight size={14} /></button></div>}</div>{searchHits.map((hit, index) => <button key={`${hit.page}-${hit.offset}`} className={index === currentSearchIndex ? 'pdf-search-result-active' : ''} aria-current={index === currentSearchIndex ? 'true' : undefined} onClick={() => navigateToSearchHit(index)}><span>Match {index + 1} · Page {hit.page}</span><small>{hit.excerpt}</small></button>)}{searchTruncated && <small className="pdf-search-truncated">Search stopped at 2,000 matches.</small>}</div>}
               <section className="pdf-edit-tools"><div className="pdf-tools-heading"><div><span className="eyebrow">COPY-BASED PAGE TOOLS</span><h2>Create a new PDF copy</h2></div><span className="pdf-original-badge">Original stays unchanged</span></div>
-                <p className="pdf-page-copy-note" role="note">Rotate, extract, reorder, and merge re-read selected files and verify their bytes before saving a separate local copy. Each source and output is limited to {formatBytes(MAX_LOCAL_FILE_BYTES)}; page copies are limited to {MAX_PDF_PAGE_OPERATION_PAGES} pages. Merges accept up to {MAX_PDF_MERGE_INPUTS} PDFs, {formatBytes(MAX_PDF_MERGE_TOTAL_INPUT_BYTES)} combined source bytes, and {MAX_PDF_PAGE_OPERATION_PAGES} total pages. Digital signatures and some embedded PDF features or metadata may not be preserved. For these four actions, Office sidecar annotations and comments are not copied; the separate “Flatten local marks” action below can include only verified visual marks, while comments and note text stay excluded. Source files and sidecars stay unchanged; nothing is uploaded.{pageCopyLimitMessage ? ` ${pageCopyLimitMessage}` : ''}</p>
+                <p className="pdf-page-copy-note" role="note">Rotate, remove, extract, reorder, and merge re-read selected files and verify their bytes before saving a separate local copy. Each source and output is limited to {formatBytes(MAX_LOCAL_FILE_BYTES)}; page copies are limited to {MAX_PDF_PAGE_OPERATION_PAGES} pages. Merges accept up to {MAX_PDF_MERGE_INPUTS} PDFs, {formatBytes(MAX_PDF_MERGE_TOTAL_INPUT_BYTES)} combined source bytes, and {MAX_PDF_PAGE_OPERATION_PAGES} total pages. Digital signatures and some embedded PDF features or metadata may not be preserved. For these four actions, Office sidecar annotations and comments are not copied; the separate “Flatten local marks” action below can include only verified visual marks, while comments and note text stay excluded. Source files and sidecars stay unchanged; nothing is uploaded.{pageCopyLimitMessage ? ` ${pageCopyLimitMessage}` : ''}</p>
                 <div className="pdf-tool-card pdf-annotated-copy-card"><div><strong>Flatten local marks into a separate copy</strong><small>This writes verified highlights, underlines, and strike-throughs into page content. They will not be editable PDF annotation objects; comments and note text are excluded.</small><small className="pdf-annotated-copy-status" role="status">{annotatedCopyStatus}</small></div><button className="button-secondary" onClick={() => void exportAnnotatedCopy()} disabled={annotatedCopyDisabled}>{busy ? 'Working…' : 'Create annotated copy'}</button><small className="pdf-annotated-copy-warning">This browser-only operation does not change the source. It may not preserve digital signatures or advanced form behavior.</small></div>
                 <div className="pdf-tool-card"><div><strong>Rotate current page</strong><small>Apply a 90° rotation to page {currentPage} in a saved copy.</small></div><button className="button-tertiary" onClick={exportRotatedPage} disabled={pageCopyDisabled}><RotateCw size={14} /> Rotate copy</button></div>
+                <div className="pdf-tool-card"><div><strong>Remove current page</strong><small>Create a separate copy without page {currentPage}. The last remaining page cannot be removed.</small></div><button className="button-tertiary" onClick={exportRemoveCurrentPage} disabled={pageCopyDisabled || !pdfDocument || pdfDocument.numPages <= 1}><Trash2 size={14} /> Remove page</button></div>
                 <div className="pdf-tool-card pdf-tool-range"><div><strong>Extract pages</strong><small>Enter individual page numbers or inclusive ranges, such as 1-3,5.</small></div><div className="pdf-tool-controls"><input aria-label="Pages to extract" value={pageRange} onChange={(event) => setPageRange(event.target.value)} /><button className="button-tertiary" onClick={exportExtract} disabled={pageCopyDisabled}>Extract copy</button></div></div>
                 <div className="pdf-tool-card pdf-tool-range"><div><strong>Reorder pages</strong><small>Move the current page in the order list, then save the reordered copy.</small></div><div className="pdf-tool-controls"><button className="button-tertiary" onClick={() => movePageInOrder(-1)} disabled={busy || pageOrder.indexOf(currentPage) <= 0}>Move earlier</button><button className="button-tertiary" onClick={() => movePageInOrder(1)} disabled={busy || pageOrder.indexOf(currentPage) < 0 || pageOrder.indexOf(currentPage) >= pageOrder.length - 1}>Move later</button><button className="button-secondary" onClick={() => void exportReordered()} disabled={pageCopyDisabled || pageOrder.length < 2}>Save order</button></div></div>
               </section>
