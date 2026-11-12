@@ -7,11 +7,13 @@ import { createOfficeCloudApi, OFFICE_CLOUD_MAX_FILE_BYTES } from './lib/officeC
 import type { CloudFile, CloudUsage, CloudStoragePlan, CloudStorageSubscription, CloudStorageHistoryEvent } from './lib/officeCloudFiles';
 import { formatFileSize } from './lib/driveStore';
 import { importDocxFile, MAX_DOCX_FILE_BYTES, DOCX_MIME } from './lib/docxInterchange';
+import { importXlsxFile, MAX_XLSX_FILE_BYTES, XLSX_MIME } from './lib/xlsxInterchange';
+import type { ImportedXlsx } from './lib/xlsxInterchange';
 import { AlertCircle, ArrowDownToLine, AudioLines, Building2, Check, Cloud, File as FileIcon, FileImage, FileText, FileVideo, FolderOpen, LoaderCircle, RefreshCw, RotateCcw, Trash2, Upload, X } from 'lucide-react';
 import './drive.css';
 
 type Category = 'all' | 'documents' | 'images' | 'video' | 'audio' | 'other';
-type Preview = { file: CloudFile; blob: Blob; url: string; docxHtml?: string; docxWarnings?: string[] };
+type Preview = { file: CloudFile; blob: Blob; url: string; docxHtml?: string; docxWarnings?: string[]; xlsx?: ImportedXlsx };
 const extension = (name: string) => name.includes('.') ? name.split('.').pop()!.slice(0, 8).toUpperCase() : 'FILE';
 function mimeOf(file: CloudFile) {
   const name = file.displayName.toLowerCase();
@@ -36,6 +38,29 @@ function categoryOf(file: CloudFile): Exclude<Category, 'all'> {
   if (mime.startsWith('audio/')) return 'audio';
   if (mime === 'application/pdf' || mime.startsWith('text/') || /\.(docx?|xlsx?|pptx?|odt|ods|odp|rtf)$/.test(file.displayName.toLowerCase())) return 'documents';
   return 'other';
+}
+function xlsxColumnLabel(index: number): string {
+  let value = index + 1;
+  let label = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    value = Math.floor((value - 1) / 26);
+  }
+  return label;
+}
+function xlsxPreviewBounds(cells: Record<string, string>) {
+  let rows = 1;
+  let columns = 1;
+  for (const address of Object.keys(cells)) {
+    const match = /^([A-Z]+)([1-9]\d*)$/.exec(address);
+    if (!match) continue;
+    let column = 0;
+    for (const char of match[1]!) column = column * 26 + char.charCodeAt(0) - 64;
+    rows = Math.max(rows, Math.min(24, Number(match[2])));
+    columns = Math.max(columns, Math.min(12, column));
+  }
+  return { rows, columns };
 }
 function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -280,6 +305,18 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
         }
         let docxHtml: string | undefined;
         let docxWarnings: string[] | undefined;
+        let xlsx: ImportedXlsx | undefined;
+        if (/\.xlsx$/i.test(file.displayName)) {
+          if (blob.size > MAX_XLSX_FILE_BYTES) {
+            setNotice('This XLSX exceeds the 5 MiB safe in-app preview limit. Use Download to open the full verified file.');
+          } else {
+            try {
+              xlsx = await importXlsxFile(new globalThis.File([blob], file.displayName, { type: XLSX_MIME }));
+            } catch (cause) {
+              setNotice(cause instanceof Error ? cause.message : 'This XLSX cannot be previewed safely. Download the verified original.');
+            }
+          }
+        }
         if (/\.docx$/i.test(file.displayName)) {
           if (blob.size > MAX_DOCX_FILE_BYTES) {
             setNotice('This DOCX exceeds the 5 MiB safe in-app preview limit. Use Download to open the full verified file.');
@@ -293,7 +330,7 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
             }
           }
         }
-        setPreview({ file, blob, url: URL.createObjectURL(blob), ...(docxHtml ? { docxHtml } : {}), ...(docxWarnings?.length ? { docxWarnings } : {}) });
+        setPreview({ file, blob, url: URL.createObjectURL(blob), ...(docxHtml ? { docxHtml } : {}), ...(docxWarnings?.length ? { docxWarnings } : {}), ...(xlsx ? { xlsx } : {}) });
       } else { saveBlob(blob, file.displayName); setNotice(`Downloaded ${file.displayName} after cloud integrity verification.`); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'The cloud file could not be downloaded.'); }
     finally { setBusy(false); }
@@ -461,6 +498,6 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       })}</div>
       : <div className="drive-empty glass-card"><FolderOpen size={24}/><h3>{query ? 'No matching files' : trash ? 'Workspace trash is empty' : 'Your cloud Drive is ready'}</h3><p>{query ? 'Try another search.' : 'Upload files to make a private, integrity-checked workspace copy. Local files are never uploaded automatically.'}</p></div>}
     {hasMore && !loading && <div className="drive-cloud-load-more"><button type="button" className="button-secondary" onClick={() => void loadMore()} disabled={loadingMore || busy}>{loadingMore ? 'Loading more…' : 'Load more files'}</button></div>}
-    {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.docxWarnings?.length ? <p className="drive-feedback">{preview.docxWarnings.join(' ')}</p> : null}{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.docxHtml ? <iframe className="drive-preview-pdf drive-preview-docx" title={preview.file.displayName} sandbox="" srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"></head><body style="font:15px/1.7 system-ui,sans-serif;color:#202433;padding:28px;max-width:850px;margin:auto">${preview.docxHtml}</body></html>`}/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? previewText || 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
+    {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.docxWarnings?.length ? <p className="drive-feedback">{preview.docxWarnings.join(' ')}</p> : null}{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.xlsx ? <div className="drive-preview-sheet-wrap"><div className="drive-preview-sheet-heading"><strong>{preview.xlsx.sheetName}</strong><small>Read-only import preview · formulas shown as stored, not recalculated</small></div>{preview.xlsx.warnings.length ? <p className="drive-feedback">{preview.xlsx.warnings.join(' ')}</p> : null}<table className="drive-preview-sheet"><thead><tr><th scope="col">#</th>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).columns }, (_, column) => <th scope="col" key={column}>{xlsxColumnLabel(column)}</th>)}</tr></thead><tbody>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).rows }, (_, row) => <tr key={row}><th scope="row">{row + 1}</th>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).columns }, (_, column) => <td key={column}>{preview.xlsx!.cells[`${xlsxColumnLabel(column)}${row + 1}`] ?? ''}</td>)}</tr>)}</tbody></table></div> : preview.docxHtml ? <iframe className="drive-preview-pdf drive-preview-docx" title={preview.file.displayName} sandbox="" srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"></head><body style="font:15px/1.7 system-ui,sans-serif;color:#202433;padding:28px;max-width:850px;margin:auto">${preview.docxHtml}</body></html>`}/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? previewText || 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
   </section>;
 }
