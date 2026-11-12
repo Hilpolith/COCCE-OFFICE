@@ -175,6 +175,27 @@ describe('Cloud Drive workspace', () => {
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(presentation);
   });
 
+  it('renders a supported embedded PPTX image in a temporary preview without persisting it', async () => {
+    const presentation = { ...cloudFile, displayName: 'illustrated.pptx', sizeBytes: 8192 };
+    mocks.cloudApi.list.mockResolvedValue([presentation]);
+    mocks.importPptxFile.mockImplementationOnce(async (_file: File, _workspaceId: string, saveImage: (blob: Blob, deckId: string) => Promise<{ id: string }>) => {
+      const saved = await saveImage(new Blob(['preview image'], { type: 'image/png' }), 'preview-deck');
+      return {
+        deck: { id: 'preview-deck', workspaceId: 'workspace-1', title: 'Illustrated', theme: 'violet', slides: [{ id: 'slide-image', title: 'Image slide', body: 'Caption', notes: '', layout: 'title-content', imageAssetId: saved.id, imageAltText: 'Product chart' }] },
+        omittedImageCount: 0,
+      };
+    });
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview-image');
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
+    await chooseWorkspace();
+    fireEvent.click(await screen.findByRole('button', { name: /^PPTX illustrated\\.pptx/ }));
+    const image = await screen.findByRole('img', { name: 'Product chart' });
+    expect(image.getAttribute('src')).toBe('blob:preview-image');
+    expect(mocks.cloudApi.download).toHaveBeenCalledWith(presentation);
+    expect(createObjectURL).toHaveBeenCalled();
+    createObjectURL.mockRestore();
+  });
+
   it('does not render malformed PPTX content and preserves the original download action', async () => {
     const presentation = { ...cloudFile, displayName: 'broken.pptx', sizeBytes: 128 };
     mocks.cloudApi.list.mockResolvedValue([presentation]);
