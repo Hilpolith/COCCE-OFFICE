@@ -22,7 +22,7 @@ const AI_DRIVE_TEXT_EXTENSIONS = new Set([
 const AI_DRIVE_SENSITIVE_SEGMENT = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|secrets|credential|credentials|password|token|private[-_]?key)(?:[._-]|$)/i;
 
 function isSensitiveDriveFileName(value: string): boolean {
-  return value.normalize('NFC').replaceAll('\\\\', '/').split('/').some((segment) => AI_DRIVE_SENSITIVE_SEGMENT.test(segment));
+  return value.normalize('NFC').replaceAll('\\', '/').split('/').some((segment) => AI_DRIVE_SENSITIVE_SEGMENT.test(segment));
 }
 
 export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspaceId, initialPrompt }: { mode?: 'assistant' | 'chat'; initialWorkspaceId?: string; initialPrompt?: string } = {}) {
