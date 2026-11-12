@@ -126,7 +126,9 @@ export default function OfficeStories({
           sizeBytes: sync.sizeBytes, sha256Hex: sync.sha256Hex, createdAt: sync.updatedAt,
         };
         const bytes = await cloud.download(file);
-        const url = URL.createObjectURL(new Blob([bytes], { type: story.media_content_type }));
+        const mediaBuffer = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(mediaBuffer).set(bytes);
+        const url = URL.createObjectURL(new Blob([mediaBuffer], { type: story.media_content_type }));
         viewerUrlRef.current = url;
         setViewerUrl(url);
       }
