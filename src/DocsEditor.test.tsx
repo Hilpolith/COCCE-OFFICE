@@ -642,7 +642,7 @@ describe('Docs HTML and Markdown source modes', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Markdown source' }));
     const source = await screen.findByRole('textbox', { name: 'Markdown source' });
-    fireEvent.change(source, { target: { value: '# Quarterly report\\n\\nRevenue grew **18%**.\\n\\n- East\\n- West' } });
+    fireEvent.change(source, { target: { value: '# Quarterly report\n\nRevenue grew **18%**.\n\n- East\n- West' } });
     expect(onPatch).not.toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('Quarterly report') }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply to document' }));
     const content = await screen.findByRole('textbox', { name: 'Document content' });
