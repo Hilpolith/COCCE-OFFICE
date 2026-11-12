@@ -181,3 +181,17 @@
 .office-ai-panel .office-ai-action-button,.office-ai-panel .office-ai-primary-button{border-radius:11px}
 @media(max-width:620px){.office-ai-disclosure-status{gap:5px;font-size:8px}.office-ai-provider-pill{font-size:6px;padding:4px 5px}}
 @media(forced-colors:active){.office-ai-provider-pill{background:Canvas;color:CanvasText;border-color:ButtonText}}
+
+.office-ai-diff-review{display:grid;gap:8px;margin-top:8px}
+.office-ai-diff-block{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:12px;background:var(--surface-soft)}
+.office-ai-diff-block>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border)}
+.office-ai-diff-block>div>span{font-size:8px;font-weight:850;letter-spacing:.1em}
+.office-ai-diff-block>div>small{overflow:hidden;color:var(--faint);font-size:8px;text-overflow:ellipsis;white-space:nowrap}
+.office-ai-diff-block pre{max-height:190px;margin:0;padding:10px;overflow:auto;color:var(--text);font:inherit;font-size:10px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.office-ai-diff-before>div>span{color:var(--muted)}
+.office-ai-diff-after{border-color:color-mix(in srgb,var(--success) 32%,var(--border));background:color-mix(in srgb,var(--success) 5%,var(--surface))}
+.office-ai-diff-after>div{border-bottom-color:color-mix(in srgb,var(--success) 18%,var(--border))}
+.office-ai-diff-after>div>span{color:var(--success)}
+.office-ai-diff-after pre{color:var(--text)}
+@media(max-width:620px){.office-ai-diff-block pre{max-height:150px}}
+@media(forced-colors:active){.office-ai-diff-block,.office-ai-diff-after{background:Canvas;color:CanvasText;border-color:ButtonText}.office-ai-diff-block>div{border-color:ButtonText}.office-ai-diff-after>div>span{color:Highlight}}

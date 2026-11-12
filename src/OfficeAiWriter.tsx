@@ -507,10 +507,13 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
 
       {result && previewTarget && <section className="office-ai-result" aria-labelledby="office-ai-result-title">
         <div className="office-ai-result-heading"><div><span className="eyebrow">PREVIEW</span><h3 id="office-ai-result-title">Review AI result</h3></div><button className="office-ai-icon-button" aria-label="Discard AI preview" onClick={() => { setResult(''); setPreviewTarget(null); }}><X size={16} /></button></div>
-        {previewTarget.kind === 'selection' && <details className="office-ai-source"><summary>Sent excerpt ({previewTarget.selectedText.length.toLocaleString()} chars)</summary><pre>{previewTarget.selectedText}</pre></details>}
+        {previewTarget.kind === 'selection' && <div className="office-ai-diff-review" aria-label="Before and after text comparison">
+          <div className="office-ai-diff-block office-ai-diff-before"><div><span>BEFORE</span><small>Original selection · {previewTarget.selectedText.length.toLocaleString()} characters</small></div><pre>{previewTarget.selectedText}</pre></div>
+          <div className="office-ai-diff-block office-ai-diff-after"><div><span>AI PROPOSAL</span><small>Review this revision before replacing</small></div><pre>{result}</pre></div>
+        </div>}
         {previewTarget.kind === 'document-summary' && <p className="office-ai-document-source">Based on the full document you confirmed. The document is unchanged until you insert this preview.</p>}
-        <pre className="office-ai-result-text">{result}</pre>
-        <div className="office-ai-result-footer"><span className="office-ai-help">Review before applying. Nothing is inserted automatically.</span><button className="office-ai-primary-button" onClick={applyResult}><Check size={15} />{previewTarget.kind === 'selection' ? 'Replace selection' : previewTarget.kind === 'draft' ? 'Insert at cursor' : 'Insert summary'}</button></div>
+        {previewTarget.kind !== 'selection' && <pre className="office-ai-result-text">{result}</pre>}
+        <div className="office-ai-result-footer"><span className="office-ai-help">Review before applying. Nothing changes until you approve. Use Undo (Ctrl/Cmd+Z) to roll back an applied edit.</span><button className="office-ai-primary-button" onClick={applyResult}><Check size={15} />{previewTarget.kind === 'selection' ? 'Replace selection' : previewTarget.kind === 'draft' ? 'Insert at cursor' : 'Insert summary'}</button></div>
       </section>}
 
       <p className="office-ai-footnote">AI results stay in preview until you apply them.</p>
