@@ -62,7 +62,7 @@ test('sector work queue context is opt-in, membership-checked, bounded and exclu
   assert.match(sector, /office_industry_list_work_items/);
   assert.match(sector, /MAX_WORKSPACES = 20/);
   assert.match(sector, /MAX_ITEMS_PER_WORKSPACE = 8/);
-  assert.match(sector, /notes and personal identifiers are excluded/i);
+  assert.match(sector, /excludes notes, people IDs/i);
   assert.doesNotMatch(sector, /assignee_user_id:/);
   assert.match(sectorTest, /omits notes and personal identifiers/);
 });
