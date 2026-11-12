@@ -2,9 +2,9 @@ import { DOCS_TABLE_LIMITS, docsTableGridViolation } from './docsTableLimits';
 
 const ALLOWED_TAGS = new Set([
   'P', 'H1', 'H2', 'H3', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'DEL',
-  'BR', 'HR', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'CODE', 'SPAN', 'MARK', 'A', 'SUB', 'SUP',
+  'BR', 'HR', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'CODE', 'SPAN', 'MARK', 'A', 'SUB', 'SUP', 'IMG',
 ]);
-const DROP_CONTENT_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'SVG', 'MATH', 'TEMPLATE', 'IMG']);
+const DROP_CONTENT_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'SVG', 'MATH', 'TEMPLATE']);
 const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'LI', 'BLOCKQUOTE', 'PRE', 'TABLE', 'HR']);
 const FALLBACK_BLOCK_TAGS = new Set(['DIV', 'H4', 'H5', 'H6', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'ADDRESS', 'MAIN', 'FIGURE', 'FIGCAPTION', 'TBODY', 'THEAD', 'TR', 'TD', 'TH']);
 const TAG_ALIASES: Record<string, string> = { B: 'STRONG', I: 'EM', S: 'DEL' };
@@ -28,6 +28,11 @@ function safeCssColor(value: string): string | null {
   if (/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(color)) return color;
   if (/^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(color)) return color;
   return null;
+}
+
+function safeDocsImageSrc(value: string): string | null {
+  if (value.length > 1_800_000) return null;
+  return /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/]+=*$/i.test(value) ? value : null;
 }
 
 function safeDocsHref(value: string): string | null {
