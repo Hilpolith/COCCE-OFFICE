@@ -371,6 +371,8 @@ describe('COCCE AI workspace context', () => {
       makeFile('99999999-9999-4999-8999-999999999999', 'keys/private-key.pem'),
       makeFile('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'finance/password-export.csv'),
       makeFile('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'docs/credentials.yaml'),
+      makeFile('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'certs/server.pem'),
+      makeFile('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'signing/office.keystore'),
     ]) });
     render(<OfficeAiWorkspace initialWorkspaceId={workspaceId} />);
     await screen.findByRole('combobox', { name: 'Workspace' });
@@ -384,6 +386,8 @@ describe('COCCE AI workspace context', () => {
     expect(screen.queryByText('keys/private-key.pem')).toBeNull();
     expect(screen.queryByText('finance/password-export.csv')).toBeNull();
     expect(screen.queryByText('docs/credentials.yaml')).toBeNull();
+    expect(screen.queryByText('certs/server.pem')).toBeNull();
+    expect(screen.queryByText('signing/office.keystore')).toBeNull();
   });
 
 });
