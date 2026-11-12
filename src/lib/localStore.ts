@@ -102,6 +102,16 @@ function isDocument(value: unknown): value is OfficeDocument {
     && (candidate.workspaceId === null || typeof candidate.workspaceId === 'string');
 }
 
+function isValidSheetChartRange(value: string): boolean {
+  const match = /^([A-L])([1-9]|1\d|2[0-4]):([A-L])([1-9]|1\d|2[0-4])$/.exec(value);
+  if (!match) return false;
+  const startColumn = match[1].charCodeAt(0) - 64;
+  const startRow = Number(match[2]);
+  const endColumn = match[3].charCodeAt(0) - 64;
+  const endRow = Number(match[4]);
+  return endColumn > startColumn && endRow > startRow;
+}
+
 function isWorksheet(value: unknown): value is OfficeWorksheet {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<OfficeWorksheet>;
@@ -111,7 +121,7 @@ function isWorksheet(value: unknown): value is OfficeWorksheet {
   return cellsValid && (charts === undefined || (Array.isArray(charts) && charts.length <= 20 && charts.every((chart) =>
     !!chart && typeof chart.id === 'string' && typeof chart.title === 'string' && chart.title.length > 0 && chart.title.length <= 80
     && (chart.type === 'bar' || chart.type === 'line')
-    && /^([A-L](?:[1-9]|1\d|2[0-4])):([A-L](?:[1-9]|1\d|2[0-4]))$/.test(chart.range)
+    && isValidSheetChartRange(chart.range)
     && typeof chart.createdAt === 'string')));
 }
 
@@ -292,7 +302,7 @@ export function addWorksheetChart(
   if (!workbook || !worksheet || (worksheet.charts?.length ?? 0) >= 20
     || typeof input.title !== 'string' || input.title.trim().length < 1 || input.title.trim().length > 80
     || !['bar', 'line'].includes(input.type)
-    || !/^([A-L](?:[1-9]|1\d|2[0-4])):([A-L](?:[1-9]|1\d|2[0-4]))$/.test(input.range)) return state;
+    || !isValidSheetChartRange(input.range)) return state;
   const chart: OfficeSheetChart = {
     id: makeId(),
     title: input.title.trim(),
