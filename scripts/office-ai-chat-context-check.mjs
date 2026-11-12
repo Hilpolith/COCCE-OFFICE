@@ -33,6 +33,9 @@ test('COCCE AI supports bounded multi-turn chat without persisting private chat 
 
 test('selected Drive file context remains bounded and pinned to Bunny', () => {
   assert.match(edge, /loadSelectedDriveFiles/);
+  assert.match(edge, /loadDriveInventory/);
+  assert.match(edge, /includeDriveInventory/);
+  assert.match(drive, /export async function loadDriveInventory/);
   assert.match(drive, /MAX_DRIVE_FILES = 3/);
   assert.match(drive, /MAX_DRIVE_FILE_BYTES = 512 \* 1024/);
   assert.match(drive, /MAX_DRIVE_CONTEXT_CHARS = 20_000/);
@@ -42,6 +45,7 @@ test('selected Drive file context remains bounded and pinned to Bunny', () => {
 
 test('selected Drive content requires per-request external provider consent', () => {
   assert.match(aiUi, /showDriveConsent/);
+  assert.match(aiUi, /Let COCCE AI inspect your cloud files for this answer/);
   assert.match(aiUi, /Share selected Drive content with COCCE AI/);
   assert.match(aiUi, /OpenRouter's free-model router/);
   assert.match(aiUi, /Send selected content/);
