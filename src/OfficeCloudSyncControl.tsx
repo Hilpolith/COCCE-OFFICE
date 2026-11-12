@@ -56,6 +56,7 @@ export default function OfficeCloudSyncControl({
   const busyRef = useRef(false);
   const attempted = useRef('');
   const syncNowRef = useRef<(manual: boolean) => Promise<void>>(async () => {});
+  const resumeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     executeRef.current = execute;
@@ -228,13 +229,23 @@ export default function OfficeCloudSyncControl({
       attempted.current = '';
       const connected = typeof navigator === 'undefined' || navigator.onLine;
       setOnline(connected);
-      if (connected) window.setTimeout(() => { void syncNowRef.current(false); }, 0);
+      if (resumeTimerRef.current !== null) window.clearTimeout(resumeTimerRef.current);
+      if (connected) {
+        resumeTimerRef.current = window.setTimeout(() => {
+          resumeTimerRef.current = null;
+          void syncNowRef.current(false);
+        }, 0);
+      }
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('focus', handleResume);
     document.addEventListener('visibilitychange', handleResume);
     return () => {
+      if (resumeTimerRef.current !== null) {
+        window.clearTimeout(resumeTimerRef.current);
+        resumeTimerRef.current = null;
+      }
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('focus', handleResume);
