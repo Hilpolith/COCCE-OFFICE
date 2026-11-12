@@ -152,7 +152,10 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
     setStoragePinAction(null);
     setWalletPin('');
     setAutoRenewChoice(false);
-  }, [workspaceId]);
+    setPreview(null);
+    setPreviewText('');
+    setBusy(false);
+  }, [workspaceId, userId]);
 
   useEffect(() => {
     if (!initialWorkspaceId || !workspaces.some((row) => row.workspace_id === initialWorkspaceId) || workspaceId === initialWorkspaceId) return;
