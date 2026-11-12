@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent, ReactNode } from 'react';
 import {
   ArrowDownToLine, ArrowUpRight, Check, File, FileAudio, FileImage, FileText,
@@ -64,9 +64,11 @@ export default function DriveWorkspace({
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const [actorId, setActorId] = useState('');
   const actorIdRef = useRef(actorId);
-  actorIdRef.current = actorId;
   const officeWorkspaceIdRef = useRef(officeWorkspaceId);
-  officeWorkspaceIdRef.current = officeWorkspaceId;
+  useLayoutEffect(() => {
+    actorIdRef.current = actorId;
+    officeWorkspaceIdRef.current = officeWorkspaceId;
+  }, [actorId, officeWorkspaceId]);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [showTrash, setShowTrash] = useState(false);
   const [fileCategory, setFileCategory] = useState<DriveCategory>('all');
@@ -84,7 +86,7 @@ export default function DriveWorkspace({
   const loadSequence = useRef(0);
 
   useEffect(() => {
-    if (!client) { setActorId(''); return undefined; }
+    if (!client) return undefined;
     let active = true;
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
       if (active) setActorId(session?.user.id ?? '');
