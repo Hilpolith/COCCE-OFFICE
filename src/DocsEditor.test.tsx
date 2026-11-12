@@ -639,7 +639,7 @@ describe('Docs tabbed ribbon', () => {
     renderEditor();
     expect(screen.getByText(/2 words/)).toBeTruthy();
     const content = screen.getByRole('textbox', { name: 'Document content' });
-    fireEvent.input(content, { target: { textContent: 'A revised local draft with six words' } });
+    pastePlainText(content, 'A revised local draft with six words');
     await waitFor(() => expect(screen.getByText(/7 words/)).toBeTruthy());
   });
 
