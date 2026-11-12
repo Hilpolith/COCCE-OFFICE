@@ -1,279 +1,1249 @@
-I’ll treat this as a full COCCE Office recovery and completion project, not just a deployment fix.
+# COCCE OFFICE — MASTER COMPLETION DIRECTIVE
+## Full Production Implementation, Integration, Testing and Deployment
 
-Your operating rules are clear:
+**Repository:** https://github.com/Hilpolith/COCCE-OFFICE  
+**Production:** https://cocce-office.vercel.app  
+**Branch:** `main` ONLY  
+**Owner:** HILPOLITH ROTHSCHILD  
+**Project:** COCCE Office — VisionOS-inspired enterprise management and productivity ecosystem.
 
-* `main` is the only working branch. All future implementation commits go directly to `main`.
+---
 
-* Only `Hilpolith/COCCE-OFFICE` may be modified. No other COCCE repositories or applications.
+# 1. YOUR MISSION
 
-* No unnecessary preview branches, duplicate implementations, or abandoned work.
+You are responsible for completing the entire COCCE Office application.
 
-* Cloud storage, offline synchronization, wallet billing, and document editing must work as integrated product features—not merely appear in the UI.
+This is not a request for another audit, a roadmap, a list of recommendations, a prototype, or a partial implementation.
 
-* The six GenOffice screenshots are the visual reference for the document-writing experience.
+I want you to CONTINUE FROM THE EXISTING IMPLEMENTATION, inspect what has already been completed, identify what remains, implement every outstanding capability, integrate all components, test everything, fix discovered problems, and deliver a fully functional production application.
 
-I also recovered earlier task history. Some work was completed, some was only partially implemented, and some was explicitly left unfinished. I’ll distinguish those rather than treating previous progress reports as proof of completion.
+**Your objective is 100% completion of the agreed scope.**
 
-### 1\. Production build recovery
+Do not stop after completing one milestone.
 
-Changes committed to main
+Do not stop after writing a plan.
 
-I inspected the actual source and found why the original TypeScript error occurred.
+Do not stop because one feature is difficult.
 
-The University overview component received a `data` property it no longer used. I removed the obsolete property from its declaration and its caller.
+Do not repeatedly ask me for permission to continue implementing requirements already authorized in this directive.
 
-The first correction exposed a second TypeScript mismatch at the caller, so I corrected that too.
+Do not declare features complete merely because their buttons, database tables, UI components, or RPC functions exist.
 
-Main-branch commits
+A feature is complete only when its entire workflow works, its security is verified, and its relevant tests pass.
 
-First correction
+Work progressively and continuously until the entire application is completed.
 
-Committed
+# 2. STRICT PROJECT BOUNDARIES
 
-`6cbf7beedb99a4965f8ca467ab60ea1698f74d44`
+Only work on:
 
-Follow-up correction
+`Hilpolith/COCCE-OFFICE`
 
-Committed
+Rules:
 
-`5e995a4feb7b4250cf068790f6447f60c63e708c`
+1. Work exclusively on the existing `main` branch.
+2. Do not create feature branches.
+3. Do not work on unrelated COCCE repositories.
+4. Do not rebuild the application from scratch.
+5. Preserve existing working functionality.
+6. Preserve existing Supabase schemas, authentication, RLS policies, and data.
+7. Do not introduce unnecessary dependencies.
+8. Do not disable tests to make CI pass.
+9. Do not weaken security to make features work.
+10. Do not change Vercel project settings, deployment configuration, domains, or unrelated production applications.
+11. Do not modify COCCE Super App wallet transactions or its production wallet implementation.
 
-Latest Vercel deployment
+You may inspect the public COCCE Super App repository strictly as a read-only compatibility reference:
 
-Deployment `dpl_2zk1ffTkUb931NqL7sNffTCEz9gc`
+https://github.com/Hilpolith/COCCE_Super_App
 
-QUEUED — awaiting build
+All actual implementation work must remain in COCCE-OFFICE.
 
-[https://cocce-office-2aqw9olly-hilpolithrothschild-7822s-projects.vercel.app](https://cocce-office-2aqw9olly-hilpolithrothschild-7822s-projects.vercel.app?utm_source=chatgpt.com)
+# 3. ESTABLISHED CURRENT STATUS — START HERE
 
-The first correction's deployment exposed the caller mismatch. I have not yet confirmed that the second correction builds successfully. I will not call this deployment fixed until its build and production checks pass.
+The following findings were established during previous implementation sessions. Treat them as the starting baseline, not as proof that everything remains unchanged. Verify each item against the live repository, Supabase and latest CI results.
 
-### 2\. Recovered task ledger
+## A. Wallet and cloud storage billing
 
-This is the distinction between earlier implementation claims and the actual remaining product work.
+**Previously implemented and verified:**
 
-| Workstream              | Previously reported state                       | Remaining work                                              |
-| ----------------------- | ----------------------------------------------- | ----------------------------------------------------------- |
-| VisionOS interface      | Major redesign committed                        | Full-screen and device-by-device QA                         |
-| Ten industry workspaces | Foundations and dashboards implemented          | Complete specialist workflows and validation                |
-| COCCE AI                | Edge Function and chat implemented              | Full authorized workspace context, files and tools          |
-| Chats                   | Dock, screen and database foundation            | Attachments, voice, actions and end-to-end testing          |
-| Authentication          | OAuth callback implementation on another branch | Merge, configure allowed callback, real Google sign-in test |
-| Bunny storage           | Private Cloud Drive foundations                 | Dedicated Office storage proxy and migration                |
-| Cloud synchronization   | Explicit cloud-copy operations                  | Automatic two-way offline/online synchronization            |
-| Wallet billing          | Not verified as complete                        | Exact Super App transaction and refund-safe quota billing   |
-| Document writers        | Functional but limited editors                  | GenOffice-inspired editing interface                        |
-| Sheets                  | Bounded XLSX functionality                      | Broader spreadsheet compatibility                           |
-| Slides                  | Local presentation editing                      | PPTX support and richer presentation tools                  |
-| PDF                     | Viewing and annotation                          | Direct editing, OCR and secure document workflows           |
-| Security                | RLS and workspace checks in several modules     | Complete table/function policy audit and integration tests  |
+- COCCE Office storage plans exist.
+- Storage subscription tables and RPC functions exist.
+- Storage purchase and renewal operations exist.
+- Storage billing configuration in Supabase was confirmed enabled.
+- Price approval was recorded.
+- Wallet-security approval was recorded.
+- The existing purchase RPC checks the latest COCCE wallet balance.
+- Insufficient balances are rejected.
+- Successful purchases create negative `wallet_transactions.amount` entries.
+- The deduction and subscription creation happen within the same database transaction.
+- The existing COCCE wallet ledger is used.
+- No independent Office wallet or alternative coin system has been introduced.
 
-The existing roadmap explicitly documents the limitations of Docs, Sheets, Slides, PDF, AI and Cloud Drive. Those limitations must not be presented as completed features.
+**Outstanding verification:**
 
-### 3\. Authentication recovery
+- Complete the Wallet PIN authorization implementation.
+- Verify the actual authenticated PIN workflow.
+- Verify biometric authorization compatibility where supported.
+- Verify purchases and renewals.
+- Verify insufficient balance handling.
+- Verify duplicate submissions and concurrent purchase protection.
+- Verify rollback when any part of a purchase fails.
+- Verify that no client can bypass authorization or manipulate the purchase amount.
+- Perform a real authenticated end-to-end purchase using an authorized test account, if available.
+- Verify the actual wallet balance and ledger afterward.
 
-I found an existing draft PR, #1, containing 13 commits for Office authentication.
+Do not claim an end-to-end purchase has passed without executing it.
 
-It could not be cleanly merged: GitHub reported `mergeable: false`, and it was based on an older main commit.
+## B. Wallet PIN compatibility reference
 
-Rather than force-merging it, I ported its relevant changes directly into `main`:
+The existing COCCE Super App contains the shared coin-spending authorization method:
 
-* Dedicated `/auth/callback` route.
+`_authorizeCoinSpend()`
 
-* Office-only callback URL selection.
+Its established behaviour:
 
-* Local development callback support.
+1. Checks whether biometric authorization is enabled.
+2. Otherwise retrieves `profiles.wallet_pin_hash`.
+3. Requests the user's four-digit Wallet PIN.
+4. Compares the entered PIN against the stored value.
+5. Authorizes the spending operation only after successful verification.
 
-* Session restoration after OAuth.
+Use this implementation as the compatibility reference.
 
-* Account-panel completion after sign-in.
+Implement secure server-side PIN verification in COCCE Office.
 
-* Redirect tests.
+Requirements:
 
-* Vercel SPA rewrite for the callback.
+- Use the existing authenticated user's profile.
+- Never expose the stored PIN or PIN hash to the browser.
+- Never log entered PINs or hashes.
+- Do not store PINs in local storage.
+- Do not introduce another PIN system.
+- Validate PIN format.
+- Use secure comparison and appropriate verification methods compatible with the existing stored format.
+- Protect against brute-force attempts with appropriate rate limits and lockout controls.
+- Ensure only the authenticated account owner can authorize their spending.
+- Ensure failed verification cannot execute a purchase.
+- Ensure the same authorization requirements apply to purchases and renewals.
 
-I closed the obsolete draft PR after porting its changes. The old Git branches still exist; I have not deleted them because the available GitHub operations do not expose branch deletion.
+Do not modify the Super App's wallet transactions.
 
-Important: The shared Supabase Auth redirect allowlist still needs the Office callback URL added. I have not changed shared authentication settings because that could affect COCCE Super App.
+## C. Latest CI findings
 
-### 4\. Remaining implementation order
+The last reported commit pushed to `main` was:
 
-This is the order I will use to complete the outstanding work.
+`ee2a0f1`
 
-* Deployment and repository discipline
+It corrected two CI test assumptions:
 
-    * Resolve the remaining build issues.
+1. An AI test expected an outdated prompt expression.
+2. A cloud-storage boundary test matched an explanatory comment instead of an actual wallet operation.
 
-    * Verify all tests.
+The preceding validation had 163 passing checks and two failures.
 
-    * Establish `main` as the sole working branch.
+The corrected implementation was pushed, but the latest validation result was still pending in the last report.
 
-    * Remove obsolete branches where supported.
+**Your first action must be to inspect the latest GitHub Actions status and establish the actual current production code state.**
 
-    * Verify the actual production URL.
+Do not assume `ee2a0f1` is the latest commit. Check `main` and all newer commits.
 
-* Cloud Drive and local synchronization
+## D. Existing COCCE Office architecture
 
-    * Cloud becomes the primary working location.
+Previous implementation work established:
 
-    * Local cache supports offline access.
+- Supabase authentication and database integration.
+- Ten specialist management sectors.
+- Existing sector-specific schemas and RLS policies.
+- A workspace creation and membership architecture.
+- A COCCE Office AI implementation.
+- A cloud-storage service.
+- A VisionOS-inspired application shell and dock.
+- Existing document, spreadsheet, presentation and PDF editor foundations.
+- An existing capability roadmap.
 
-    * Automatically synchronize pending changes when connectivity returns.
+Previously reported validation included:
 
-    * Handle conflicts, interrupted uploads and retries.
+- 1,052 Vitest tests.
+- 127/127 test files.
+- 238 sector-related tables with RLS enabled.
+- Previous successful production TypeScript and Vite builds.
 
-    * Preserve private workspace permissions.
+These are historical results. Re-run current validation instead of presenting historical results as current.
 
-* COCCE Coin storage billing
+# 4. FIRST TASK — COMPLETE REPOSITORY AUDIT
 
-    * First 5 GB free per user/workspace according to the agreed quota model.
+Before changing code, inspect:
 
-    * Paid storage above 5 GB.
+1. Current `main` commit and working tree.
+2. Latest GitHub Actions runs.
+3. `docs/office-capability-roadmap.md`.
+4. All ten sector workspace implementations.
+5. Authentication and onboarding.
+6. Workspace creation and membership.
+7. Spaces and Documents.
+8. Drive and cloud storage.
+9. AI Chat and AI integrations.
+10. Database migrations and current Supabase schema.
+11. Existing RPC functions.
+12. All RLS policies.
+13. Wallet and billing implementation.
+14. Document editors.
+15. Offline and synchronization implementation.
+16. Tests and CI configuration.
+17. Current production deployment and build status.
 
-    * Charge directly against the existing `wallet_transactions` balance.
+Identify which features are:
 
-    * Reuse the Super App Ads/boost payment principles.
+- Fully implemented and tested.
+- Implemented but incompletely tested.
+- Partially implemented.
+- UI-only.
+- Backend-only.
+- Missing.
+- Broken.
 
-    * Add idempotency, insufficient-balance handling, refunds and transaction history.
+Produce an internal task checklist and immediately begin implementation.
 
-    * Prevent quota bypass through concurrent uploads.
+Do not spend the entire session writing another audit.
 
-* Bunny.net architecture
+# 5. PRIORITY ONE — COMPLETE WALLET PIN AND STORAGE BILLING
 
-    * Dedicated Office storage service.
+This is the first implementation milestone.
 
-    * Preserve private access, workspace membership verification and integrity checks.
+Complete the full authenticated Wallet PIN workflow.
 
-    * Revision history.
+Implement and test:
 
-    * Use the existing Bunny secrets.
+- PIN verification.
+- Biometric compatibility where supported.
+- Purchase authorization.
+- Renewal authorization.
+- Secure server-side verification.
+- Failure handling.
+- Rate limiting.
+- Atomic wallet deductions.
+- Duplicate transaction prevention.
+- Balance consistency.
+- Subscription creation.
+- Subscription renewal.
+- Subscription expiration.
+- Insufficient balance handling.
+- Transaction rollback.
+- Purchase history.
+- Storage entitlement updates.
 
-    * Keep Super App storage and upload services untouched.
+Preserve the existing wallet transaction architecture exactly.
 
-* GenOffice-inspired document suite
+**Non-negotiable:** COCCE Office must use the existing COCCE wallet and existing wallet ledger.
 
-    * Word-style document editor.
+COCCE Coin retains its existing value of 1 coin = 1 TZS.
 
-    * Spreadsheet editor.
+Never create an independent Office wallet.
 
-    * PowerPoint-style presentation editor.
+Never modify the Super App wallet transaction architecture.
 
-    * PDF workspace.
+Ensure that the amount displayed to users matches the amount actually charged by the server.
 
-    * Contextual AI assistant.
+# 6. PRIORITY TWO — COMPLETE COCCE CLOUD DRIVE
 
-    * Responsive desktop and mobile interfaces.
+The cloud storage system must operate as a real cloud drive, not merely a file-upload interface.
 
-* COCCE AI and Chats
+Implement and verify:
 
-    * Permission-aware access to Drive, Spaces and Teams.
+### File operations
 
-    * Document-aware AI.
+- Upload files.
+- Download files.
+- Preview supported files.
+- Rename files.
+- Move files.
+- Copy files.
+- Delete files.
+- Restore deleted files where supported.
+- Organize folders.
+- Search files.
+- Sort and filter.
+- Manage file metadata.
+- Display storage usage.
+- Display available capacity.
+- Handle large files.
+- Handle interrupted uploads.
+- Handle failed downloads.
 
-    * Attachments and rich messages.
+### Storage plans
 
-    * Voice functionality.
+Connect the existing storage subscription and billing architecture.
 
-    * Real workspace actions with confirmation and audit history.
+The following previously discussed plans must be verified against the actual pricing configuration:
 
-* Ten specialist management systems
+| Storage | Monthly price |
+|---|---:|
+| 5 GB | 2,000 TZS |
+| 25 GB | 5,000 TZS |
+| 100 GB | 12,000 TZS |
+| 250 GB | 25,000 TZS |
+| 1 TB | 60,000 TZS |
+| 2 TB | 100,000 TZS |
 
-    * Government
+Do not overwrite an existing approved pricing configuration without verifying it.
 
-    * School
+### Bunny.net integration
 
-    * University
+Preserve secure private storage access.
 
-    * Business
+The intended storage organization is:
 
-    * Accounting
+`coccesuperapp/cocce-office/`
 
-    * Manufacturing
+The existing Office implementation uses `cocce-kyc` and S3-compatible signed uploads, while the Super App uses the standard Bunny Storage API.
 
-    * Healthcare
+Inspect the current configuration and determine the safest migration path.
 
-    * NGO
+Requirements:
 
-    * Hospitality
+- Use Bunny.net for Office file storage.
+- Preserve private-file access.
+- Preserve workspace membership checks.
+- Preserve authorization and signed upload/download flows.
+- Preserve integrity verification.
+- Preserve revision history.
+- Keep Bunny credentials in Supabase secrets or an appropriately secured server-side environment.
+- Never expose Bunny API credentials in frontend code.
+- Never use unrestricted public upload URLs.
+- Never weaken RLS or workspace authorization.
+- Avoid breaking existing stored files during migration.
+- Provide backward compatibility or a safe migration procedure where required.
+
+Do not migrate production storage until the new authenticated service has passed security and regression testing.
+
+# 7. PRIORITY THREE — AUTOMATIC CLOUD SYNCHRONIZATION AND OFFLINE OPERATION
+
+The existing synchronization implementation is partial.
+
+Complete it.
 
-    * Institutions
+The application should support:
 
-    Each needs specialist workflows, permissions, reporting, validations and integration testing.
-
-* Final security and quality audit
-
-    * RLS across all exposed tables.
-
-    * Edge Function authorization.
-
-    * Storage access controls.
-
-    * Regression tests.
-
-    * Performance and responsive testing.
-
-    * Production verification.
-
-### 5\. GenOffice visual direction
-
-The screenshots establish a much clearer target than simply making the existing editor prettier.
-
-![Modernizing Word Online’s UX platform | by Christian Gonzalez | Web Dev @ Microsoft | Medium](https://images.openai.com/static-rsc-4/CwTY-g1ahXLWGVKDBMZ3zPZTLjtU9fpoDGxfYXtRirvn4ZYhLqO34ngVng6JfBZhRSD54917m5qAI3Kj3K6obUabVL44bvxYJTO9K4YE-MbcKnA3BNF_KkrzQwhCikQHgGrpEz1vg_UADEfrENM4ZH3mcTa6xqlQGMMMX4M7_B-u66FgApS1fJtCm6EmBhM0?purpose=fullsize)
-
-Documents
-
-Ribbon toolbar, document page, contextual AI panel.
-
-![Excel online là gì? Cách sử dụng excel online đơn giản và miễn phí - TOTOLINK Việt Nam](https://images.openai.com/static-rsc-4/XH4cFHvOPwQQbV-ty2GMlxPU3MasXwe4XkpmreqrF4QMupOp4As6Y97grXVYX5mMfBMoOi_fEvvfFe0S8Qg4lRoqNl3Lj5A2YhWS9KfKop0y-f8V1twElY7p2pLhNKmVV6pA_o4GogwsgNaUZ35uWLlqQBGqOLYCq3sQtxFvoRUkGXwKBJkdnYmp0g8Srm5U?purpose=fullsize)
-
-Sheets
-
-Formula bar, spreadsheet grid, analysis assistant.
-
-![Nextcloud Hub 26 Spring: Built together, designed for the future - 📰 News - Nextcloud community](https://images.openai.com/static-rsc-4/yX79RkfqYOSoYebMjWq2oPBsZac8bI2iu3lTKlhXVMCR5XItvA72gE1aoeKlI4mRUnhDHbws_Xi8BnRdpRYPH6z4QnZ6he4o1kwXAIDmkzXk1CboOJ7kuKnwMQEltV4ZthUWwGdwpnsN4vTiLhB-VM3l5Ak47NUa0PjfZvpLE7hAIVQB2YjsoNday0lOpwCG?purpose=fullsize)
-
-Slides
-
-Slide thumbnails, editing canvas, design assistant.
-
-![Annotate, Highlight PDF Easily - Best PDF Annotator](https://images.openai.com/static-rsc-4/AzrUD0cLU4nWi6y6Eaz66htQvdJsk7JmMIsH2hK7Bkrp2uk_DjeCpxwtPPfWXjpCiXUBcJLF2lk5RpJmaIDsloUxKPETWWuqKtXM2gy_Bk2_Q2sQMnjzQJKoxLx0arTsEXCe2kukjVG7WzkITQCIPt_Jr9LJ9KB_rt3iFzMtc7wq5CIGi1NdpxajdUq44hri?purpose=fullsize)
-
-PDF
-
-Page navigation, annotations, document assistant.
-
-The target is a coherent suite with a shared AI side panel, native-feeling toolbars, document canvas and proper desktop/mobile adaptation—not four unrelated interfaces.
-
-### 6\. Current verified position
-
-Latest main commit
-
-Confirmed
-
-`3c4d0f688116cb240e8e3b96878b466b0f8bc8ba`
-
-Latest production deployment
-
-QUEUED
-
-Exact matching deployment: `dpl_FVqJUeK5d6ed2tPvFUuLrK885jLv`
-
-Previous production build
-
-READY
-
-Commit `5e995a4feb7b4250cf068790f6447f60c63e708c`
-
-Build succeeded with 2,479 modules transformed. One chunk-size warning remains.
-
-Live URL verification
-
-Incomplete
-
-The web access check could not reach the production URLs. I will not claim that the latest commit is confirmed live.
-
-I have made actual commits directly to `main`, not another working branch. However, the full Cloud Drive, wallet billing and GenOffice editor rebuild are not yet complete.
-
-My priority is to finish the underlying functionality before declaring any of these workstreams complete.
-
-I will keep the existing deployment monitor active while continuing the implementation.
+- Automatic synchronization.
+- Background synchronization where supported.
+- Manual synchronization.
+- Offline document editing.
+- Local persistence.
+- Pending changes.
+- Synchronization queues.
+- Retry after network failure.
+- Conflict detection.
+- Conflict resolution.
+- Revision history.
+- Last synchronized timestamps.
+- Upload and download progress.
+- Recovery after browser refresh.
+- Recovery after application restart.
+- Safe handling of concurrent edits.
+- Cross-device synchronization.
+
+Do not silently overwrite newer versions of files.
+
+Use reliable synchronization and conflict-resolution logic.
+
+Users should understand whether their work is saved locally, synchronized, or awaiting synchronization.
+
+# 8. PRIORITY FOUR — COMPLETE ALL OFFICE EDITORS
+
+The existing editor foundations must be transformed into fully usable productivity applications.
+
+## A. COCCE Docs
+
+Implement:
+
+- Rich-text editing.
+- Formatting.
+- Font selection.
+- Font sizes.
+- Headings.
+- Paragraph styles.
+- Lists.
+- Numbering.
+- Alignment.
+- Indentation.
+- Tables.
+- Headers and footers.
+- Page breaks.
+- Page layouts.
+- Margins.
+- Links.
+- Images.
+- Image resizing.
+- Image positioning.
+- Image insertion from Drive.
+- Image insertion from device.
+- Drag-and-drop image insertion.
+- Undo and redo.
+- Autosave.
+- Version history.
+- Export to PDF.
+- Export to DOCX.
+- Import supported document formats.
+- Printing.
+
+**Image insertion is an explicitly outstanding requirement.**
+
+It must actually work, including saving and reopening documents without losing inserted images.
+
+## B. COCCE Sheets
+
+Implement:
+
+- Spreadsheet grid.
+- Cell editing.
+- Row and column operations.
+- Cell formatting.
+- Number formats.
+- Formulas.
+- Formula evaluation.
+- Functions.
+- Sorting.
+- Filtering.
+- Cell references.
+- Multiple worksheets.
+- Sheet renaming.
+- Copy and paste.
+- Undo and redo.
+- Autosave.
+- CSV import/export.
+- XLSX import/export.
+- PDF export.
+- Charts.
+- Basic data analysis.
+
+Verify formulas and calculations rather than merely displaying formula strings.
+
+## C. COCCE Slides
+
+Implement:
+
+- Presentation creation.
+- Multiple slides.
+- Slide layouts.
+- Text elements.
+- Image elements.
+- Shapes.
+- Backgrounds.
+- Element positioning.
+- Resizing.
+- Alignment.
+- Layer ordering.
+- Themes.
+- Slide duplication.
+- Slide deletion.
+- Slide reordering.
+- Presentation mode.
+- Autosave.
+- Import and export.
+- PDF export.
+- PPTX export.
+
+## D. COCCE PDF
+
+Implement:
+
+- PDF viewing.
+- Page navigation.
+- Zoom.
+- Search.
+- Text selection.
+- Text annotations where supported.
+- Highlighting.
+- Comments.
+- Page rotation.
+- Page reordering.
+- Page deletion.
+- Page insertion.
+- Image insertion.
+- Document merging.
+- Export and download.
+- Secure storage integration.
+
+Do not claim PDF editing is complete if the application only provides a PDF viewer.
+
+# 9. PRIORITY FIVE — COMPLETE THE TEN MANAGEMENT SYSTEMS
+
+COCCE Office must become a comprehensive enterprise productivity platform.
+
+Complete all ten specialist workspaces.
+
+Each system must have functional interfaces, real database operations, appropriate authorization, reporting, analytics, document management and relevant workflows.
+
+## 1. Government and Public Administration
+
+Implement:
+
+- Departments.
+- Ministries and administrative units.
+- Staff management.
+- Citizen records where appropriate.
+- Public service workflows.
+- Case management.
+- Correspondence.
+- Official documents.
+- Approvals.
+- Procurement workflows.
+- Budget management.
+- Revenue and expenditure tracking.
+- Meetings.
+- Reports.
+- Audit trails.
+- Role-based permissions.
+
+## 2. School Management
+
+Implement:
+
+- Student registration.
+- Admissions.
+- Classes.
+- Subjects.
+- Teachers.
+- Timetables.
+- Attendance.
+- Examinations.
+- Results.
+- Grading.
+- Fees.
+- Payments.
+- Parent communication.
+- Report cards.
+- Academic calendars.
+- Discipline records.
+- School reports.
+
+## 3. University Management
+
+Implement:
+
+- Student admissions.
+- Faculties.
+- Departments.
+- Programmes.
+- Courses.
+- Course registration.
+- Lecturers.
+- Timetables.
+- Examinations.
+- Results.
+- Transcripts.
+- Student accounts.
+- Fees.
+- Scholarships.
+- Research administration.
+- Graduation.
+- Academic reporting.
+
+## 4. Business Management
+
+Implement:
+
+- CRM.
+- Customers.
+- Suppliers.
+- Products.
+- Inventory.
+- Sales.
+- Purchases.
+- Orders.
+- Invoices.
+- Payments.
+- Employees.
+- Projects.
+- Tasks.
+- Expenses.
+- Profit and loss.
+- Business analytics.
+
+## 5. Accounting Management
+
+Implement:
+
+- Chart of accounts.
+- General ledger.
+- Journal entries.
+- Accounts payable.
+- Accounts receivable.
+- Invoices.
+- Receipts.
+- Bank reconciliation.
+- Cash flow.
+- Budgets.
+- Financial statements.
+- Tax reporting support.
+- Audit trails.
+- Financial reports.
+
+Use appropriate accounting controls and balanced journal entries.
+
+## 6. Manufacturing Management
+
+Implement:
+
+- Raw materials.
+- Inventory.
+- Suppliers.
+- Bills of materials.
+- Production planning.
+- Work orders.
+- Manufacturing operations.
+- Quality control.
+- Equipment.
+- Maintenance.
+- Labour.
+- Production costs.
+- Finished goods.
+- Warehouse operations.
+- Production reports.
+
+## 7. Healthcare Management
+
+Implement:
+
+- Patient registration.
+- Appointments.
+- Clinical workflows.
+- Medical records.
+- Departments.
+- Healthcare personnel.
+- Prescriptions.
+- Laboratory workflows.
+- Billing.
+- Insurance records.
+- Inventory.
+- Pharmacy operations.
+- Reporting.
+- Access controls.
+- Audit trails.
+
+Healthcare data must receive strict privacy and authorization protections.
+
+## 8. NGO Management
+
+Implement:
+
+- Projects.
+- Programmes.
+- Beneficiaries.
+- Donors.
+- Donations.
+- Grants.
+- Budgets.
+- Activities.
+- Field operations.
+- Monitoring and evaluation.
+- Impact reporting.
+- Procurement.
+- Staff and volunteers.
+- Compliance reporting.
+
+## 9. Hospitality Management
+
+Implement:
+
+- Reservations.
+- Guests.
+- Rooms.
+- Check-in.
+- Check-out.
+- Housekeeping.
+- Restaurant operations.
+- Menus.
+- Orders.
+- Payments.
+- Inventory.
+- Staff.
+- Events.
+- Revenue management.
+- Occupancy reporting.
+
+## 10. Institutions Management
+
+Implement a configurable system for institutions that do not fit neatly into the other nine categories.
+
+Support:
+
+- Institutional structures.
+- Departments.
+- Personnel.
+- Membership.
+- Assets.
+- Operations.
+- Workflows.
+- Approvals.
+- Documents.
+- Budgets.
+- Reports.
+- Permissions.
+- Customisable modules.
+
+### Important requirements for all ten sectors
+
+Do not create ten attractive dashboards with nonfunctional buttons.
+
+Every module must connect to real data operations.
+
+Verify:
+
+- Create.
+- Read.
+- Update.
+- Delete where permitted.
+- Search.
+- Filtering.
+- Pagination.
+- Validation.
+- Permissions.
+- RLS.
+- Reporting.
+- Export.
+- Audit history.
+- Error handling.
+
+Use the existing schemas wherever possible.
+
+Only create migrations when genuinely necessary.
+
+All migrations must be safe, reversible where practical, and compatible with existing production data.
+
+# 10. PRIORITY SIX — COMPLETE COCCE AI AND AI CHAT
+
+The existing AI implementation must evolve into a workspace-aware enterprise assistant.
+
+Previous work established an `office-ai-chat` Supabase Edge Function with JWT verification and a previously selected OpenRouter model:
+
+`google/gemma-4-31b-it:free`
+
+Verify the current configuration and actual model availability. Do not assume historical configuration remains valid.
+
+Use the existing secure server-side architecture and Supabase secrets.
+
+## AI Chat
+
+Implement a fully functional dedicated AI Chat destination.
+
+It must support:
+
+- New conversations.
+- Conversation history.
+- Persistent messages.
+- Streaming responses where supported.
+- Context-aware assistance.
+- File attachments.
+- Document understanding.
+- Document summarization.
+- Question answering.
+- Conversation search.
+- Conversation management.
+- Appropriate error handling.
+
+## Workspace-wide intelligence
+
+COCCE AI must be able to access information from all resources the current user is authorized to access.
+
+Integrate:
+
+- Spaces.
+- Documents.
+- Drive files.
+- Teams.
+- Workspace members.
+- Projects.
+- Tasks.
+- Sector data.
+- Reports.
+- Relevant conversations.
+
+Implement permission-aware retrieval.
+
+The AI must never access information from an unauthorized workspace or another user's private files.
+
+## AI document operations
+
+Enable users to ask AI to:
+
+- Create documents.
+- Edit documents.
+- Summarize documents.
+- Generate reports.
+- Analyze spreadsheets.
+- Generate spreadsheet formulas.
+- Create presentations.
+- Extract information from PDFs.
+- Compare files.
+- Search workspace documents.
+- Generate meeting summaries.
+- Draft correspondence.
+- Create tasks from conversations.
+
+AI-generated changes must be reviewable and saved through the existing authorized application workflows.
+
+## AI automations
+
+Implement actual automations, not just chat suggestions.
+
+Support:
+
+- Task creation.
+- Workflow execution.
+- Document generation.
+- Report generation.
+- Approval assistance.
+- Data analysis.
+- Scheduled operations where supported.
+- User-authorized actions.
+- Execution history.
+- Failure reporting.
+
+Never allow AI to bypass normal permissions, approval requirements or wallet authorization.
+
+COCCE AI and AI Chat must be separate, accessible dock destinations.
+
+# 11. PRIORITY SEVEN — GENOFFICE-INSPIRED PRODUCTIVITY EXPERIENCE
+
+Build a cohesive, premium productivity environment inspired by modern office suites.
+
+The target is a complete application experience, not a collection of disconnected pages.
+
+Implement:
+
+- Unified document creation.
+- Recent documents.
+- Templates.
+- Document organization.
+- Shared workspaces.
+- Team collaboration.
+- Comments.
+- Notifications.
+- Version history.
+- Document permissions.
+- Sharing controls.
+- Import/export.
+- Search across the application.
+- Unified productivity workflows.
+
+Ensure the ten specialist management systems integrate naturally with the core Office environment.
+
+# 12. PRIORITY EIGHT — COMPLETE THE VISIONOS / LIQUID GLASS INTERFACE
+
+The existing interface needs a consistent, premium redesign.
+
+The visual direction is:
+
+**Apple VisionOS + iOS 26 Liquid Glass + premium enterprise productivity.**
+
+The interface must look sophisticated, modern, lightweight and polished.
+
+Avoid:
+
+- Chalky flat colour backgrounds.
+- Generic dashboard templates.
+- Excessive gradients.
+- Childish designs.
+- Excessive buttons.
+- Unnecessary square cards.
+- Inconsistent spacing.
+- Oversized typography.
+- Cluttered navigation.
+
+Implement a consistent design system across:
+
+- Authentication.
+- Onboarding.
+- Workspace selection.
+- Workspace creation.
+- Dashboards.
+- Spaces.
+- Documents.
+- Drive.
+- AI Chat.
+- COCCE AI.
+- All ten management systems.
+- Dialogues.
+- Popovers.
+- Notifications.
+- Toasts.
+- Context menus.
+- Settings.
+- Profile.
+- Billing.
+- Storage management.
+
+### Visual requirements
+
+- Realistic glass textures.
+- Subtle transparency.
+- Background blur.
+- Layered depth.
+- Refined shadows.
+- Translucent floating surfaces.
+- Premium icons.
+- Rounded squircle surfaces.
+- Elegant pill navigation.
+- Consistent interaction feedback.
+- High-quality typography.
+- Responsive layouts.
+- Smooth transitions.
+
+Use scalable visual assets or appropriately generated glass textures where they improve the result.
+
+Do not simulate glass merely by applying random coloured backgrounds.
+
+### Navigation
+
+Preserve and refine the floating navigation concept.
+
+The dock should provide clear access to:
+
+- Spaces.
+- Documents.
+- Drive.
+- AI Chat.
+- COCCE AI.
+- Profile.
+
+Keep the interface minimal.
+
+Avoid duplicating destinations unnecessarily.
+
+### Responsiveness
+
+The application must work properly on:
+
+- Android phones.
+- iPhones.
+- Tablets.
+- Laptops.
+- Desktop computers.
+- Large displays.
+
+Pay particular attention to small-screen layouts.
+
+Do not allow navigation, modals, tables, editors or toolbars to overflow on mobile.
+
+Preserve acceptable performance on low-powered devices.
+
+# 13. AUTHENTICATION AND WORKSPACE SECURITY
+
+Audit and complete:
+
+- Login.
+- Registration.
+- Password recovery.
+- Session persistence.
+- Google authentication.
+- Authentication callbacks.
+- Workspace creation.
+- Workspace selection.
+- Workspace invitations.
+- Membership management.
+- Roles and permissions.
+- Profile management.
+- Session expiration.
+- Secure logout.
+
+Google sign-in should return users to COCCE Office rather than unexpectedly opening the installed COCCE Super App on Android.
+
+Preserve the existing `cocce-kyc` setup.
+
+Do not migrate authentication architecture without a verified need.
+
+Verify all security boundaries on both frontend and backend.
+
+# 14. DATABASE AND ARCHITECTURE REQUIREMENTS
+
+Inspect the complete Supabase database.
+
+Verify:
+
+- All migrations.
+- All tables.
+- All relationships.
+- Foreign keys.
+- Indexes.
+- Functions.
+- Triggers.
+- RLS policies.
+- Storage authorization.
+- RPC permissions.
+- Authentication requirements.
+
+Previously reported architecture contained 238 sector-related tables with RLS enabled.
+
+Revalidate every relevant table and policy.
+
+Having RLS enabled is not sufficient: verify that the policies actually enforce the correct access boundaries.
+
+Avoid:
+
+- Duplicate tables.
+- Duplicate business logic.
+- Unnecessary migrations.
+- Destructive schema changes.
+- Insecure service-role usage.
+- Exposed secrets.
+- Client-side authorization as the only security mechanism.
+
+Keep the system maintainable and modular.
+
+# 15. TESTING — NO FALSE COMPLETION CLAIMS
+
+Testing is mandatory throughout implementation.
+
+Do not postpone all testing until the end.
+
+After each major implementation:
+
+1. Run relevant unit tests.
+2. Run integration tests.
+3. Run regression tests.
+4. Run TypeScript checks.
+5. Run production builds.
+6. Run database tests where available.
+7. Run security and authorization tests.
+8. Fix discovered problems.
+9. Repeat failed tests.
+
+At the end, run the complete available CI suite.
+
+### Required test categories
+
+**Wallet**
+- Valid PIN.
+- Invalid PIN.
+- Missing PIN.
+- Biometric path.
+- Insufficient balance.
+- Successful purchase.
+- Successful renewal.
+- Duplicate purchase.
+- Concurrent purchase.
+- Failed transaction rollback.
+- Unauthorized purchase.
+
+**Storage**
+- Upload.
+- Download.
+- Rename.
+- Delete.
+- Restore.
+- Permissions.
+- Workspace isolation.
+- Signed URLs.
+- Integrity.
+- Subscription limits.
+
+**Editors**
+- Create.
+- Edit.
+- Save.
+- Reopen.
+- Autosave.
+- Export.
+- Import.
+- Images.
+- Formulas.
+- Presentation rendering.
+- PDF operations.
+
+**Management systems**
+- CRUD.
+- Validation.
+- RLS.
+- Permissions.
+- Reporting.
+- Audit history.
+
+**AI**
+- Authentication.
+- Model availability.
+- Streaming.
+- Context retrieval.
+- Workspace isolation.
+- File permissions.
+- Tool execution.
+- Error handling.
+- Persistent history.
+
+**UI**
+- Mobile.
+- Desktop.
+- Tablet.
+- Navigation.
+- Dialogues.
+- Accessibility.
+- Loading states.
+- Empty states.
+- Error states.
+
+Do not delete, skip or weaken existing tests.
+
+Do not use mock data to claim production functionality.
+
+Use isolated test accounts and test workspaces for destructive or financial tests.
+
+# 16. DEPLOYMENT AND PRODUCTION VERIFICATION
+
+Work on the existing production repository and `main` branch.
+
+Check whether Vercel automatically deploys from GitHub.
+
+Do not modify Vercel configuration or unrelated projects.
+
+Before pushing:
+
+- Review the diff.
+- Check for accidental secrets.
+- Check for unrelated changes.
+- Run relevant tests.
+- Ensure migrations are safe.
+- Verify the build.
+
+After pushing:
+
+- Inspect GitHub Actions.
+- Verify deployment status.
+- Verify production build.
+- Test critical production workflows where safely possible.
+- Confirm no existing functionality was broken.
+
+Do not claim deployment succeeded merely because a commit was pushed.
+
+Do not claim production is complete if CI is still running or failing.
+
+# 17. EXECUTION RULES — DO NOT STOP PREMATURELY
+
+These instructions are especially important.
+
+I have already authorized you to complete the entire project.
+
+Therefore:
+
+- Do not ask me whether to continue after each milestone.
+- Do not stop after producing an audit.
+- Do not stop after implementing Wallet PIN.
+- Do not stop after fixing CI.
+- Do not stop after implementing document editors.
+- Do not stop after implementing one management system.
+- Do not stop after making the interface attractive.
+- Do not stop after deploying one feature.
+- Do not leave known incomplete functionality simply because it is outside the first milestone.
+
+When one milestone is complete, immediately continue to the next.
+
+If a tool or environment limitation prevents one operation, use another available supported method.
+
+If GitHub connectivity fails, retry appropriately and use available GitHub integrations.
+
+If a local build environment is unavailable, establish what can be validated through the available repository, CI, database and deployment tools. Do not pretend unavailable tests passed.
+
+If one feature depends on another, implement the dependency first.
+
+If you discover bugs, fix them.
+
+If a migration is necessary, implement it safely and verify it.
+
+If a feature already exists and works, do not rewrite it unnecessarily.
+
+Preserve existing user data and production functionality.
+
+**Your responsibility is to finish the actual application, not merely report what should be done.**
+
+# 18. PROGRESS REPORTING
+
+Provide concise progress updates approximately every three minutes during extended execution, or at meaningful implementation milestones if the platform cannot send timed updates.
+
+Each update should include:
+
+- What was inspected.
+- What was implemented.
+- Files or components changed.
+- Tests executed.
+- Test results.
+- Commit hash, if pushed.
+- Remaining work.
+- Current blockers, if any.
+
+Do not send repetitive messages without meaningful progress.
+
+Maintain one continuously updated completion checklist.
+
+Do not mark a feature complete until implementation and verification are both finished.
+
+# 19. FINAL ACCEPTANCE CRITERIA
+
+COCCE Office will only be considered fully completed when:
+
+1. Wallet PIN authorization works securely.
+2. Existing COCCE wallet deductions work correctly.
+3. Storage purchases and renewals work end to end.
+4. Cloud Drive operations work.
+5. Bunny storage integration is secure and verified.
+6. Automatic cloud synchronization works.
+7. Offline operation works with reliable recovery.
+8. Docs is fully usable, including image insertion.
+9. Sheets is fully usable, including formulas and export.
+10. Slides is fully usable, including presentation and export.
+11. PDF editing workflows work.
+12. All ten specialist management systems have functional workflows.
+13. COCCE AI has permission-aware workspace intelligence.
+14. AI Chat works independently.
+15. AI automations execute authorized operations.
+16. GenOffice-inspired productivity workflows are integrated.
+17. VisionOS Liquid Glass is consistently implemented.
+18. Authentication and workspace security are verified.
+19. Database and RLS security tests pass.
+20. Regression tests pass.
+21. Production build succeeds.
+22. GitHub CI passes.
+23. Production deployment is verified.
+24. No existing Super App wallet behaviour has been modified.
+25. No unrelated COCCE repositories or Vercel projects have been changed.
+
+# 20. BEGIN EXECUTION NOW
+
+Start by inspecting the latest state of:
+
+`https://github.com/Hilpolith/COCCE-OFFICE`
+
+Check the current `main` commit, CI results, roadmap, migrations, Supabase implementation and production state.
+
+Use the previous findings in this directive to avoid repeating completed work.
+
+Then immediately implement the highest-priority outstanding work and continue through every remaining milestone.
+
+I do not want another proposed roadmap.
+
+I want the existing COCCE Office application completed.
+
+**Continue working until all acceptance criteria are satisfied.**
+
+At the end, provide an honest final report containing:
+
+- Final commit hash.
+- Complete list of implemented features.
+- Database migrations applied.
+- Security improvements.
+- Wallet PIN verification results.
+- Actual storage purchase and renewal test results.
+- Editor functionality and test results.
+- Status of all ten management systems.
+- AI Chat and automation verification.
+- UI and responsiveness verification.
+- Total tests passed and failed.
+- Production build result.
+- GitHub Actions result.
+- Production deployment URL and verification.
+- Any remaining limitations, if genuinely unavoidable.
+
+Do not report 100% completion unless every acceptance criterion has actually been met and verified.
+
+**COCCE OFFICE MUST BE DELIVERED AS A COMPLETE, FUNCTIONAL, SECURE AND PRODUCTION-READY PRODUCT.**
+
+Proceed now.
