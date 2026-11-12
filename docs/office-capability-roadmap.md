@@ -372,3 +372,17 @@ Images are embedded in the local rich-text document. This implementation does no
 - The composer now sends on Enter and preserves multiline text on Shift+Enter; both paths use the same submit validation and request handler.
 - The latest focused run passed 12/12 AI Chat component tests and 8/8 glass-boundary tests (20 total), followed by a successful TypeScript/Vite production build.
 - Latest main commit: `7adfdbb` for the keyboard test, with subsequent roadmap documentation committed separately. The last READY production deployment is still `7de27e8`; newer Vercel builds are currently rejected by the account's build-rate limit. Do not claim the latest chat changes are live until a deployment for the newer commit reaches READY.
+
+
+---
+
+## 2026-11-12 — People chat spatial UI and audio waveform tranche
+
+- Redesigned the regular People & Teams Chats page separately from AI Chat. The layout now uses a three-surface conversation workbench: workspace people/contacts, a conversation rail for direct and group threads, and a focused message canvas. On small screens, the conversation rail becomes a horizontal strip and the message composer remains usable without horizontal page overflow.
+- The real server-backed conversation panel is now the primary Chats surface. Existing direct/group creation, membership and authorization, presence, realtime/polling, replies, edits, deletes, read receipts and Bunny-backed attachment workflows remain the source of truth.
+- Added live microphone analyser visualization while recording, waveform extraction from decoded audio, playback progress highlighting on the waveform, and native audio controls. Recording is stopped and microphone tracks/audio contexts are cleaned up on conversation changes and component disposal; a recording is not uploaded into a different chat after navigation.
+- Added bounded waveform helpers and unit coverage for silence/empty buffers, peak normalization, live analyser bins, and invalid bar counts.
+- GenOffice UI reference reviewed: its real product screenshots show a paper-like Docs canvas beside a document-aware AI panel, and the official product description emphasizes real DOCX/XLSX/PPTX formats, reviewable AI edits and local document workflows. COCCE Docs now places its existing COCCE AI writer rail beside the page canvas on desktop, stacks it below the editor on mobile, and refines the ribbon/paper treatment. This is an inspiration adaptation; no third-party UI screenshots or assets were copied into production.
+- Reference links: https://genoffice.ai/ and https://github.com/genspark-ai/genoffice; visionOS chat inspiration: https://www.macrumors.com/2023/11/14/telegram-demos-visionos-app/.
+- Focused checks in the implementation sandbox passed 28 tests (glass ownership, collaboration component, AI Chat regression and waveform helpers) and TypeScript/Vite build passed. The complete suite was attempted but the disposable build sandbox terminated during execution; rerun CI/full test suite before release.
+- Stories are not yet implemented in the existing Office collaboration schema/API. The chat backend supports direct, group and channel conversations plus media attachments; do not represent ephemeral stories as working until a dedicated workspace-scoped story data model, expiry policy, media authorization and UI have been implemented and tested.
