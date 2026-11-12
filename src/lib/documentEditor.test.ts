@@ -26,6 +26,12 @@ describe('local Docs content conversion and safety', () => {
     expect(richTextToPlainText(safe)).toBe('Before');
   });
 
+  it('reopens image-only rich-text documents instead of replacing them with empty legacy text', () => {
+    const image = 'data:image/webp;base64,UklGRg==';
+    expect(initialDocumentHtml('', `<img src="${image}" alt="Only image">`)).toBe(`<img src="${image}" alt="Only image">`);
+    expect(richTextToMarkdown(`<img src="${image}" alt="Only image">`)).toBe(`![Only image](${image})`);
+  });
+
   it('preserves safe font, colour, highlight, alignment and links while removing unsafe styles and URLs', () => {
     const html = '<p style="text-align:center;position:fixed"><span style="font-family:Arial;font-size:14pt;color:#ff0000;background-image:url(javascript:bad)">Hello</span><mark style="background-color:#fff2a8"> highlighted</mark> <a href="javascript:alert(1)">unsafe</a> <a href="https://example.com">safe link</a></p>';
     const safe = sanitizeRichTextHtml(html);
