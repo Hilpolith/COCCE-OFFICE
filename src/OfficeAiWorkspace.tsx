@@ -264,7 +264,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
         .from('office_ai_messages')
         .select('role,content')
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
+        .order('sequence_no', { ascending: true })
         .limit(100);
       if (messagesError) throw messagesError;
       setTurns((data ?? []).map((row: { role: 'user' | 'assistant'; content: string }) => ({ role: row.role, content: row.content })));
