@@ -178,7 +178,6 @@ function pptxSlideImage(
   slidePath: string,
   relationshipsXml: string | undefined,
   files: Record<string, Uint8Array>,
-  strFromU8: (bytes: Uint8Array) => string,
 ): PptxImportedImage | null {
   const slide = parsePptxXml(slideXml);
   const picture = slide.getElementsByTagName('p:pic')[0];
@@ -226,7 +225,7 @@ export async function importPptxFile(
     const notes = files['ppt/notesSlides/notesSlide' + number + '.xml'];
     const parsed = pptxSlideContent(strFromU8(files[name]!), index + 1, notes ? strFromU8(notes) : undefined);
     const relationshipsPath = 'ppt/slides/_rels/slide' + number + '.xml.rels';
-    const image = pptxSlideImage(strFromU8(files[name]!), name, files[relationshipsPath] ? strFromU8(files[relationshipsPath]!) : undefined, files, strFromU8);
+    const image = pptxSlideImage(strFromU8(files[name]!), name, files[relationshipsPath] ? strFromU8(files[relationshipsPath]!) : undefined, files);
     return {
       id: 'pptx-slide-' + (index + 1), title: parsed.title, body: parsed.body, notes: parsed.notes, layout: parsed.layout,
       image,
