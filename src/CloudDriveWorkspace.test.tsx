@@ -98,6 +98,25 @@ describe('Cloud Drive workspace', () => {
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(cloudFile);
   });
 
+  it('discards a pending private-file preview when the active workspace changes', async () => {
+    const secondWorkspace = { ...workspace, workspace_id: 'workspace-2', name: 'Research' };
+    mocks.listWorkspaces.mockResolvedValue([workspace, secondWorkspace]);
+    let resolveDownload!: (bytes: Uint8Array) => void;
+    const pendingDownload = new Promise<Uint8Array>((resolve) => { resolveDownload = resolve; });
+    mocks.cloudApi.download.mockReturnValueOnce(pendingDownload);
+    render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" managedByGlobalWorkspace />);
+    await screen.findByText('brief.txt');
+    fireEvent.click(screen.getByRole('button', { name: /^TXT brief/ }));
+    await waitFor(() => expect(mocks.cloudApi.download).toHaveBeenCalledWith(cloudFile));
+
+    window.dispatchEvent(new CustomEvent('cocce-office:workspace-changed', { detail: { workspaceId: 'workspace-2' } }));
+    await screen.findByText('Research');
+    resolveDownload(new TextEncoder().encode('private content from the previous workspace'));
+    await waitFor(() => expect(mocks.cloudApi.download).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText('private content from the previous workspace')).toBeNull();
+  });
+
   it('renders a sandboxed DOCX reading preview after verified download', async () => {
     const docxFile = { ...cloudFile, displayName: 'brief.docx' };
     mocks.cloudApi.list.mockResolvedValue([docxFile]);
