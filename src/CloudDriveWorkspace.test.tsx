@@ -189,7 +189,7 @@ describe('Cloud Drive workspace', () => {
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
-    fireEvent.click(await screen.findByRole('button', { name: /^PPTX illustrated\\.pptx/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^PPTX illustrated\.pptx/ }));
     const image = await screen.findByRole('img', { name: 'Product chart' });
     expect(image.getAttribute('src')).toBe('blob:preview-image');
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(presentation);
