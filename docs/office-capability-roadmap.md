@@ -238,3 +238,67 @@ The rate-limit unit test was added to `core.test.ts`, but the full Vitest/Node/P
 - The production Bunny storage zone remains `cocce-kyc` with the existing S3-compatible signed-upload implementation. The requested `coccesuperapp/cocce-office/` migration has not been performed; production files have not been redirected.
 - Biometric authorization has not been implemented or verified in the Office web flow.
 - The editor and sector limitations documented above remain; this checkpoint does not claim full Office-format parity or 100% product completion.
+
+
+---
+
+## 2026-11-12 — persistent AI history and Docs image insertion
+
+### COCCE AI conversation persistence
+
+Implemented and applied three production migrations:
+
+- `office_ai_chat_persistence` — creates private workspace-scoped conversation and message tables, indexes, RLS policies and authenticated RPCs.
+- `office_ai_chat_delete_hard` — owner-only conversation deletion physically removes the conversation and cascades its messages.
+- `office_ai_message_order` — adds a database identity sequence so user/assistant messages inserted in the same transaction are restored in deterministic order.
+
+The UI now:
+- Lists the latest 30 saved conversations for the selected workspace.
+- Opens saved conversations and restores up to 100 messages in sequence order.
+- Starts a new conversation without deleting previous history.
+- Saves each user/assistant exchange atomically through `office_ai_save_exchange`.
+- Supports owner-only deletion.
+- Keeps all-workspace (`*`) questions temporary; a single selected workspace is required for persistent history.
+- Clears in-memory private chat state when the account or workspace changes.
+
+Security boundaries:
+- RLS is enabled on both tables.
+- Authenticated clients have SELECT only; they have no direct INSERT, UPDATE or DELETE grants.
+- Anonymous users have no SELECT grant.
+- Writes/deletion are handled by security-definer RPCs with pinned empty search paths, authenticated owner checks, active workspace membership and workspace AI-enabled checks.
+- Conversation and message reads are scoped to the authenticated owner and active workspace membership.
+
+Production PostgreSQL acceptance was executed in rollback-protected transactions with synthetic users and a synthetic workspace. It verified authenticated create/save, owner read, cross-user RLS denial, hard-delete cascade and rollback cleanup. Follow-up queries found zero synthetic users, conversations or messages persisted. This does not yet verify the browser UI against a real signed-in user's session.
+
+### COCCE Docs image insertion
+
+Added a custom TipTap image node and an Insert Image action.
+
+- Device PNG/JPEG/WebP images are accepted up to 12 MB before processing.
+- Images are resized to a maximum 1,600 px edge and compressed to a bounded embedded data URI (maximum 1.8 MB).
+- Image source sanitization permits only bounded base64 PNG/JPEG/WebP data URIs; remote URLs, SVG data, event handlers and unsafe attributes are removed.
+- Safe image HTML is retained through document sanitization, rich-text persistence, reopen and Markdown export.
+- Image-only documents are no longer mistaken for empty drafts when reopened.
+- Image width controls are available for Auto, Small, Medium, Large and Full sizing.
+- A responsive image style and image sanitization regression tests were added.
+
+Images are embedded in the local rich-text document. This implementation does not yet upload image binaries to Bunny Drive or provide Drive image insertion; cloud image asset storage and shared collaboration remain separate outstanding work.
+
+### Release and validation status
+
+- The last verified Vercel build before the final image-width UI adjustment was READY for commit `5b246a6364d13cfa51a8b3c74570bff94d043403`; Vercel reported both project checks successful and the preview returned the COCCE Office HTML shell.
+- Earlier intermediate builds failed because review-comment newline string literals were accidentally changed while normalizing inserted component markup. The literals were restored; the `5b246a6` build then succeeded.
+- Subsequent source commits for image sizing and deterministic AI message ordering are awaiting their own latest exact-commit deployment verification.
+- The focused Docs sanitizer tests have been added but not yet executed in this environment. Do not count them as passed until Vitest/CI reports them.
+- Full GitHub Actions, complete Vitest, Node acceptance and sector PostgreSQL suites have not been rerun for this checkpoint.
+
+### Still outstanding after this stage
+
+- Browser-level authenticated AI history verification with a real test account.
+- Streaming AI responses and independent AI Chat destination.
+- Workspace-wide sector retrieval and approved AI actions/automations.
+- Bunny image upload and Drive insertion; private Drive migration and full Drive operations.
+- Docs cloud autosave/synchronization and shared editing.
+- Sheets, Slides and PDF completion.
+- Reliable offline queues and conflict resolution.
+- Remaining ten-sector workflow acceptance and mobile/device QA.
