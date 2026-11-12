@@ -5,7 +5,7 @@ import {
   assertPdfMergeInputLimits, assertPdfPageCopyInputSize, assertPdfPageCopyOutputSize,
   assertPdfPageOperationPageCount, extractPdfPages, MAX_PDF_MERGE_INPUTS,
   MAX_PDF_MERGE_TOTAL_INPUT_BYTES, MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles,
-  insertImageOnPdfPage, MAX_PDF_INSERT_IMAGE_BYTES, parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
+  insertImageOnPdfPage, MAX_PDF_INSERT_IMAGE_BYTES, insertPdfPagesAt, parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
 } from './pdfTools';
 
 async function makePdf(pageWidths: number[]): Promise<Uint8Array> {
@@ -51,6 +51,18 @@ describe('local PDF operations', () => {
   it('extracts the chosen pages into a new PDF', async () => {
     const source = await makePdf([100, 200, 300, 400]);
     expect(await readWidths(await extractPdfPages(source, [2, 4]))).toEqual([200, 400]);
+  });
+
+  it('inserts pages from a second PDF before the selected page without mutating either source', async () => {
+    const source = await makePdf([100, 200]);
+    const inserted = await makePdf([300, 400]);
+    const sourceBefore = source.slice();
+    const insertedBefore = inserted.slice();
+    expect(await readWidths(await insertPdfPagesAt(source, inserted, 2))).toEqual([100, 300, 400, 200]);
+    expect(await readWidths(await insertPdfPagesAt(source, inserted, 3))).toEqual([100, 200, 300, 400]);
+    expect(source).toEqual(sourceBefore);
+    expect(inserted).toEqual(insertedBefore);
+    await expect(insertPdfPagesAt(source, inserted, 4)).rejects.toThrow('between page 1 and page 3');
   });
 
   it('inserts a PNG image into a new PDF copy without mutating the source', async () => {
