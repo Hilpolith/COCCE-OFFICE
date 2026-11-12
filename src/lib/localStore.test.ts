@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_STATE, STORAGE_KEY, addDocument, addWorkbook, addWorksheet, addWorkspace,
-  readPreviewState, removeDocument, selectWorksheet, selectWorkspace, updateDocument,
+  DEFAULT_STATE, STORAGE_KEY, addDocument, addWorkbook, addWorksheet, addWorksheetChart, addWorkspace,
+  readPreviewState, removeDocument, removeWorksheetChart, selectWorksheet, selectWorkspace, updateDocument,
   updateWorksheetCell, updateWorksheetCells, writePreviewState,
 } from './localStore';
 import type { StorageReader, StorageWriter } from './localStore';
@@ -40,6 +40,24 @@ describe('local preview storage', () => {
   it('migrates earlier local v1 data by adding an empty workbook collection', () => {
     const oldState = JSON.stringify({ ...DEFAULT_STATE, workbooks: undefined });
     expect(readPreviewState(memoryStorage(oldState).storage).workbooks).toEqual([]);
+  });
+
+  it('persists validated worksheet charts and removes them without changing cell values', () => {
+    const created = addWorkbook(DEFAULT_STATE, 'Chart workbook');
+    const sheet = created.workbook.worksheets[0];
+    const withChart = addWorksheetChart(created.state, created.workbook.id, sheet.id, {
+      title: 'Revenue by month', type: 'bar', range: 'A1:B6',
+    }, new Date('2026-11-12T10:00:00.000Z'));
+    const chart = withChart.workbooks[0].worksheets[0].charts?.[0];
+    expect(chart).toMatchObject({ title: 'Revenue by month', type: 'bar', range: 'A1:B6' });
+    const { storage } = memoryStorage();
+    writePreviewState(storage, withChart);
+    expect(readPreviewState(storage).workbooks[0].worksheets[0].charts).toEqual([chart]);
+    const withoutChart = removeWorksheetChart(withChart, created.workbook.id, sheet.id, chart!.id);
+    expect(withoutChart.workbooks[0].worksheets[0].charts).toEqual([]);
+    expect(addWorksheetChart(withChart, created.workbook.id, sheet.id, {
+      title: '', type: 'bar', range: 'A1:B6',
+    })).toEqual(withChart);
   });
 
   it('changes only the legacy implicit dark default to light and preserves saved office data', () => {
