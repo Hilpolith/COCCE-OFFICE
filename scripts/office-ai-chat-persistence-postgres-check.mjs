@@ -15,8 +15,8 @@ let db;
 let conversationId;
 
 async function asUser(userId, work) {
-  await db.query('select set_config($1,$2,true)', ['request.jwt.claim.sub', userId]);
-  await db.query('set local role authenticated');
+  await db.query('select set_config($1,$2,false)', ['request.jwt.claim.sub', userId]);
+  await db.query('set role authenticated');
   try { return await work(); }
   finally { await db.query('reset role'); }
 }
