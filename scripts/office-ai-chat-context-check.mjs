@@ -58,7 +58,7 @@ test('selected Drive content requires per-request external provider consent', ()
 test('sector work queue context is opt-in, membership-checked, bounded and excludes sensitive fields', () => {
   assert.match(edge, /includeSectorRecords/);
   assert.match(edge, /loadSectorWorkItems/);
-  assert.match(edge, /office_industry_get_space/);
+  assert.match(sector, /office_industry_get_space/);
   assert.match(sector, /office_industry_list_work_items/);
   assert.match(sector, /MAX_WORKSPACES = 20/);
   assert.match(sector, /MAX_ITEMS_PER_WORKSPACE = 8/);
