@@ -4,7 +4,7 @@ import { formatSectorWorkItems, loadSectorWorkItems } from "./sector-context.ts"
 const workspace = { workspace_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Synthetic School" };
 
 describe("permission-aware industry work queue context", () => {
-  it("reads only the membership-scoped work queue and omits notes and personal identifiers", async () => {
+  it("reads only the membership-scoped work queue and omits notes and assignee identifiers", async () => {
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: [{ industry_id: "school" }], error: null })
       .mockResolvedValueOnce({ data: [{

@@ -64,7 +64,7 @@ test('sector work queue context is opt-in, membership-checked, bounded and exclu
   assert.match(sector, /MAX_ITEMS_PER_WORKSPACE = 8/);
   assert.match(sector, /excludes notes, people IDs/i);
   assert.doesNotMatch(sector, /assignee_user_id:/);
-  assert.match(sectorTest, /omits notes and personal identifiers/);
+  assert.match(sectorTest, /omits notes and assignee identifiers/);
 });
 
 test('sector work queue sharing requires per-request confirmation and remains read-only', () => {
