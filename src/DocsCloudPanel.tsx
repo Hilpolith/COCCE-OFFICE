@@ -51,11 +51,13 @@ export default function DocsCloudPanel({
   document,
   hasUnsavedChanges,
   onRestore,
+  onInsertImage,
   onGoToTeam,
 }: {
   document: OfficeDocument;
   hasUnsavedChanges: boolean;
   onRestore: (snapshot: DocsCloudSnapshot) => boolean;
+  onInsertImage?: (file: File) => Promise<void>;
   onGoToTeam: () => void;
 }) {
   const confirm = useFrostedConfirm();
