@@ -367,6 +367,10 @@ describe('COCCE AI workspace context', () => {
       makeFile('55555555-5555-4555-8555-555555555555', 'service-account.json'),
       makeFile('66666666-6666-4666-8666-666666666666', '.env.example'),
       makeFile('77777777-7777-4777-8777-777777777777', 'movie.mp4'),
+      makeFile('88888888-8888-4888-8888-888888888888', 'config/secrets.json'),
+      makeFile('99999999-9999-4999-8999-999999999999', 'keys/private-key.pem'),
+      makeFile('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'finance/password-export.csv'),
+      makeFile('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'docs/credentials.yaml'),
     ]) });
     render(<OfficeAiWorkspace initialWorkspaceId={workspaceId} />);
     await screen.findByRole('combobox', { name: 'Workspace' });
@@ -376,6 +380,10 @@ describe('COCCE AI workspace context', () => {
     expect(screen.queryByText('service-account.json')).toBeNull();
     expect(screen.queryByText('.env.example')).toBeNull();
     expect(screen.queryByText('movie.mp4')).toBeNull();
+    expect(screen.queryByText('config/secrets.json')).toBeNull();
+    expect(screen.queryByText('keys/private-key.pem')).toBeNull();
+    expect(screen.queryByText('finance/password-export.csv')).toBeNull();
+    expect(screen.queryByText('docs/credentials.yaml')).toBeNull();
   });
 
 });
