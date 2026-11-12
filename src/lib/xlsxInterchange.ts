@@ -883,19 +883,14 @@ function parseSimpleXlsxChart(xml: string, sheetName: string): Pick<OfficeSheetC
   return { title: safeTitle, type, range };
 }
 
-function officeRelationshipId(element: Element): string | null {
-  const attribute = Array.from(element.attributes).find((item) => (
-    item.localName === 'id' && (item.namespaceURI === OFFICE_REL_NS || item.name.toLowerCase() === 'r:id')
-  ));
-  return attribute?.value || element.getAttribute('r:id') || element.getAttribute('id');
-}
 
 function worksheetDrawingId(xml: string): string | null {
   const root = parseXml(xml, 'Worksheet drawing reference').documentElement;
   const drawings = elementChildren(root, 'drawing');
   if (!drawings.length) return null;
-  const id = officeRelationshipId(drawings[0]!);
-  if (!id || id.length > 128) fail('The worksheet drawing relationship is invalid.');
+  const matches = [...xml.matchAll(/<(?:[A-Za-z_][\\w.-]*:)?drawing\\b[^>]*\\br:id=(["'])([^"']{1,128})\\1/gi)];
+  const id = matches[0]?.[2];
+  if (matches.length !== 1 || !id) fail('The worksheet drawing relationship is invalid.');
   return id;
 }
 
@@ -925,8 +920,10 @@ function parseXlsxDrawingCharts(
   if (anchors.length < 1 || anchors.length > 20 || anchors.some((anchor) => anchor.localName !== 'twoCellAnchor' || anchor.namespaceURI !== DRAWING_NS)) {
     fail('The XLSX drawing contains unsupported anchors or too many charts.');
   }
+  const chartReferenceMatches = [...drawingXml.matchAll(/<(?:[A-Za-z_][\\w.-]*:)?chart\\b[^>]*\\br:id=(["'])([^"']{1,128})\\1/gi)];
+  if (chartReferenceMatches.length !== anchors.length) fail('The XLSX drawing contains missing or extra chart references.');
   const chartIds: string[] = [];
-  for (const anchor of anchors) {
+  for (const [anchorIndex, anchor] of anchors.entries()) {
     const children = allElementChildren(anchor);
     if (children.some((child) => child.namespaceURI !== DRAWING_NS || !['from', 'to', 'graphicFrame', 'clientData'].includes(child.localName))) {
       fail('The XLSX drawing contains pictures, shapes or unsupported objects.');
@@ -942,8 +939,8 @@ function parseXlsxDrawingCharts(
     };
     visitChartNodes(frames[0]!);
     if (chartNodes.length !== 1) fail('The XLSX drawing frame does not reference exactly one chart.');
-    const id = officeRelationshipId(chartNodes[0]!);
-    if (!id || chartIds.includes(id)) fail('The XLSX drawing contains an invalid or duplicate chart reference.');
+    const id = chartReferenceMatches[anchorIndex]?.[2];
+    if (!id || id.length > 128 || chartIds.includes(id)) fail('The XLSX drawing contains an invalid or duplicate chart reference.');
     chartIds.push(id);
   }
   const drawingRelationships = parseRelationships(drawingRelsXml, drawingPath, 'Drawing relationships');
