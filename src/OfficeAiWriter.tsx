@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { CellSelection } from '@tiptap/pm/tables';
@@ -86,7 +86,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
   const [documentSummaryConfirmation, setDocumentSummaryConfirmation] = useState<DocumentSummaryConfirmation | null>(null);
   const documentSummaryTriggerRef = useRef<HTMLButtonElement | null>(null);
   const editorRef = useRef(editor);
-  editorRef.current = editor;
+  useLayoutEffect(() => { editorRef.current = editor; }, [editor]);
   const editorRequestGeneration = useRef(0);
   const documentSummaryConfirmRef = useRef<HTMLButtonElement | null>(null);
 
