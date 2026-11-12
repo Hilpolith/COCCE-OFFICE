@@ -868,8 +868,8 @@ function validateExportCharts(charts: OfficeSheetChart[] | undefined): XlsxChart
 
 function chartCellFormula(sheetName: string, column: string, startRow: number, endRow: number): string {
   const quotedSheet = "'" + sheetName.replaceAll("'", "''") + "'";
-  const first = `${column}${startRow}`;
-  const last = `${column}${endRow}`;
+  const first = `$${column}$${startRow}`;
+  const last = `$${column}$${endRow}`;
   return `${quotedSheet}!${first}:${last}`;
 }
 
