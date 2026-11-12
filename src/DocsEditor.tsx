@@ -15,7 +15,7 @@ import { CellSelection } from '@tiptap/pm/tables';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { OfficeDocument } from './lib/localStore';
 import { activeDocsTable, countDocsTablesWithoutHeaderRow, DOCS_TABLE_LIMITS, DOCS_TABLE_LIMITS_COPY, docsTableDocumentViolation, docsTableGridViolation, inspectDocsTableUsage } from './lib/docsTableLimits';
-import { initialDocumentHtml, plainTextToRichHtml, richTextToPlainText, sanitizeRichTextHtmlWithWarnings } from './lib/documentEditor';
+import { initialDocumentHtml, markdownToRichHtml, plainTextToRichHtml, richTextToMarkdown, richTextToPlainText, sanitizeRichTextHtml, sanitizeRichTextHtmlWithWarnings } from './lib/documentEditor';
 import { DocsHighlight, DocsLink, DocsTextAlign, DocsTextStyle, safeDocsLinkHref } from './lib/docsFormattingExtensions';
 import {
   createDocsReviewComment, deleteDocsReviewComment, listDocsReviewComments,
@@ -302,6 +302,9 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [imageNotice, setImageNotice] = useState('');
   const [activeRibbonTab, setActiveRibbonTab] = useState<'home' | 'insert' | 'review' | 'view'>('home');
+  const [sourceMode, setSourceMode] = useState<'html' | 'markdown' | null>(null);
+  const [sourceText, setSourceText] = useState('');
+  const [sourceNotice, setSourceNotice] = useState('');
   const [pageZoom, setPageZoom] = useState('100%');
   const cloudEnabled = import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true' && Boolean(onRestoreCloudCopy);
   const [tableNotice, setTableNotice] = useState('');
@@ -801,7 +804,43 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     onExport(editor.getHTML());
   };
 
-  return <div className="page editor-page office-editor-page">
+  const openSourceMode = (mode: 'html' | 'markdown') => {
+    if (!editor) return;
+    const currentHtml = sourceMode
+      ? sourceMode === 'html' ? sanitizeRichTextHtml(sourceText) : markdownToRichHtml(sourceText).html
+      : editor.getHTML();
+    setSourceText(mode === 'html' ? currentHtml : richTextToMarkdown(currentHtml, document.content));
+    setSourceMode(mode);
+    setSourceNotice('');
+  };
+
+  const applySourceChanges = () => {
+    if (!editor || !sourceMode) return;
+    const converted = sourceMode === 'markdown'
+      ? markdownToRichHtml(sourceText)
+      : sanitizeRichTextHtmlWithWarnings(sourceText);
+    if (sourceText.trim() && !converted.html.trim()) {
+      setSourceNotice(converted.warnings.join(' ') || 'No supported document content remains after sanitization. Nothing was applied.');
+      return;
+    }
+    editor.commands.setContent(converted.html, { emitUpdate: false });
+    if (!saveEditor(editor)) {
+      setSourceNotice('The source was converted, but local document storage did not confirm the save. Retry Apply before leaving this editor.');
+      return;
+    }
+    setTableNotice(converted.warnings.join(' '));
+    setSourceMode(null);
+    setSourceText('');
+    setSourceNotice('');
+  };
+
+  const discardSourceChanges = () => {
+    setSourceMode(null);
+    setSourceText('');
+    setSourceNotice('');
+  };
+
+  return <div className={`page editor-page office-editor-page ${sourceMode ? "docs-source-mode" : ""}`.trim()}>
     <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Choose an image to insert" onChange={(event) => void insertImage(event)} />
     <div className="editor-toolbar">
       <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
@@ -892,6 +931,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       {activeRibbonTab === 'view' && <span className="docs-format-group docs-view-controls" aria-label="View controls">
         <label className="docs-format-select"><span>Zoom</span><select aria-label="Document zoom" value={pageZoom} onChange={(event) => setPageZoom(event.target.value)}><option>75%</option><option>90%</option><option>100%</option><option>110%</option><option>125%</option></select></label>
         <FormattingButton label="Print document" icon={<FileText size={16} />} onClick={() => window.print()} />
+        <FormattingButton label="Edit HTML source" icon={<Code size={16} />} disabled={!editor} onClick={() => openSourceMode('html')} />
+        <FormattingButton label="Edit Markdown source" icon={<FileText size={16} />} disabled={!editor} onClick={() => openSourceMode('markdown')} />
       </span>}
       <span className="docs-format-hint">Local rich text</span>
     </div>
@@ -994,11 +1035,20 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         else onPatch({ title: event.target.value });
       }} aria-label="Document title" placeholder="Untitled document" />
       <div className="document-meta"><span><FileText size={13} /> Local rich-text draft</span><span>Edited {friendlyDate(document.updatedAt)}</span></div>
-      <div className="docs-editor-container">
+      {sourceMode ? <section className="docs-source-editor" aria-label={sourceMode === 'html' ? 'HTML source editor' : 'Markdown source editor'}>
+        <div className="docs-source-heading"><div><span className="eyebrow">{sourceMode === 'html' ? 'HTML SOURCE' : 'MARKDOWN SOURCE'}</span><strong>{sourceMode === 'html' ? 'Edit document markup' : 'Edit Markdown'}</strong><small>Changes remain a local preview until you apply them. Unsafe HTML and remote image links are removed.</small></div><span className="docs-source-local"><LockKeyhole size={12} /> LOCAL</span></div>
+        <div className="docs-source-mode-tabs" role="group" aria-label="Source format">
+          <button type="button" aria-pressed={sourceMode === 'html'} onClick={() => openSourceMode('html')}>HTML</button>
+          <button type="button" aria-pressed={sourceMode === 'markdown'} onClick={() => openSourceMode('markdown')}>Markdown</button>
+        </div>
+        <textarea className="docs-source-textarea" aria-label={sourceMode === 'html' ? 'HTML source' : 'Markdown source'} spellCheck={false} autoCapitalize="off" autoCorrect="off" value={sourceText} onChange={(event) => setSourceText(event.target.value)} />
+        {sourceNotice && <p className="docs-source-notice" role="status">{sourceNotice}</p>}
+        <div className="docs-source-actions"><span>{sourceText.length.toLocaleString()} / 1,000,000 characters · nothing is sent to AI automatically</span><div><button type="button" className="button-secondary" onClick={discardSourceChanges}>Discard</button><button type="button" className="button-primary" onClick={applySourceChanges} disabled={!editor}>Apply to document</button></div></div>
+      </section> : <div className="docs-editor-container">
         {editorState.empty && <p className="docs-writing-placeholder" aria-hidden="true">Start writing… Your draft is stored in this browser only.</p>}
         <EditorContent editor={editor} />
-      </div>
-      <div className="document-editor-bottom"><span>{hasUnsavedChanges ? <X size={13} /> : <Check size={13} />}{hasUnsavedChanges ? 'Export or retry before closing this tab' : 'Formatting saves locally as you type'}</span><span>{document.content.length.toLocaleString()} characters</span></div>
+      </div>}
+      <div className="document-editor-bottom"><span>{sourceMode ? <Code size={13} /> : hasUnsavedChanges ? <X size={13} /> : <Check size={13} />}{sourceMode ? 'Source preview · apply to update the rich-text document' : hasUnsavedChanges ? 'Export or retry before closing this tab' : 'Formatting saves locally as you type'}</span><span>{sourceMode ? sourceText.length.toLocaleString() : document.content.length.toLocaleString()} characters</span></div>
     </article>
     <p className="editor-footnote"><LockKeyhole size={13} /> Drafts and review-comment sidecars stay in this browser. Simple bounded tables round-trip in DOCX; merged, nested, uneven, or over-limit imported tables become warned text, and unsupported export tables are refused. Review comments are not included in document exports or AI requests. Other Word structures may be omitted. {cloudEnabled ? 'Only an explicit, confirmed cloud-copy action sends document text and formatting to the chosen Office workspace. Documents with review comments are refused by this first copy format. Live sync and shared editing are not connected.' : 'Files are not uploaded, and cloud sync, sharing, and collaboration are not connected.'}</p>
       </div>

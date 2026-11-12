@@ -195,3 +195,25 @@
 .office-ai-diff-after pre{color:var(--text)}
 @media(max-width:620px){.office-ai-diff-block pre{max-height:150px}}
 @media(forced-colors:active){.office-ai-diff-block,.office-ai-diff-after{background:Canvas;color:CanvasText;border-color:ButtonText}.office-ai-diff-block>div{border-color:ButtonText}.office-ai-diff-after>div>span{color:Highlight}}
+
+.docs-source-editor{min-height:60vh;display:flex;flex-direction:column;gap:12px;padding:clamp(14px,2vw,24px);border:1px solid var(--border);border-radius:16px;background:linear-gradient(145deg,rgba(255,255,255,.06),transparent 45%),var(--surface-soft)}
+.docs-source-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.docs-source-heading>div{display:grid;gap:5px}
+.docs-source-heading strong{color:var(--text);font-size:15px;letter-spacing:-.02em}
+.docs-source-heading small{max-width:620px;color:var(--muted);font-size:10px;line-height:1.55}
+.docs-source-local{display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:8px;font-weight:800;letter-spacing:.08em}
+.docs-source-mode-tabs{display:flex;gap:4px;width:max-content;padding:4px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.docs-source-mode-tabs button{min-height:30px;padding:0 12px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:9px;font-weight:700;cursor:pointer}
+.docs-source-mode-tabs button[aria-pressed=true]{border-color:color-mix(in srgb,var(--accent) 30%,var(--border));background:color-mix(in srgb,var(--accent) 13%,var(--surface-soft));color:var(--text)}
+.docs-source-textarea{width:100%;min-height:48vh;flex:1;resize:vertical;padding:16px;border:1px solid var(--border-strong);border-radius:13px;outline:0;background:color-mix(in srgb,var(--surface) 92%,#080b16);color:var(--text);font:12px/1.75 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;tab-size:2;white-space:pre;overflow:auto}
+.docs-source-textarea:focus{border-color:color-mix(in srgb,var(--accent) 58%,var(--border));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+.docs-source-notice{margin:0;padding:9px 11px;border:1px solid color-mix(in srgb,var(--warning) 32%,var(--border));border-radius:10px;color:var(--text);font-size:9px;line-height:1.5}
+.docs-source-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.docs-source-actions>span{color:var(--faint);font-size:8px}
+.docs-source-actions>div{display:flex;gap:7px}
+.docs-source-mode .docs-ribbon-tabs,.docs-source-mode .docs-format-toolbar,.docs-source-mode .docs-table-toolbar,.docs-source-mode .docs-table-limit-copy,.docs-source-mode .docs-review-panel,.docs-source-mode .docs-find-panel{display:none!important}
+.docs-source-mode .docs-workbench-layout{grid-template-columns:minmax(0,1fr)!important}
+.docs-source-mode .docs-workbench-layout>.office-workbench-rail{display:none!important}
+.docs-source-mode .docs-workbench-layout>.office-workbench-editor{grid-column:1!important}
+@media(max-width:620px){.docs-source-editor{padding:12px;border-radius:13px}.docs-source-textarea{min-height:55vh;padding:11px;font-size:11px}.docs-source-actions{align-items:stretch;flex-direction:column}.docs-source-actions>div>*{flex:1}.docs-source-actions>div{width:100%}}
+@media(forced-colors:active){.docs-source-editor,.docs-source-mode-tabs,.docs-source-textarea,.docs-source-local{background:Canvas;color:CanvasText;border-color:ButtonText}.docs-source-mode-tabs button[aria-pressed=true]{background:Highlight;color:HighlightText}}
