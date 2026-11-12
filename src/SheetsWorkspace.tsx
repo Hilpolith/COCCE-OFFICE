@@ -191,18 +191,21 @@ export default function SheetsWorkspace({ state, onState, onGoToTeam }: { state:
       const created = addWorkbook(state, imported.title);
       const worksheetId = created.workbook.activeWorksheetId;
       const populated = updateWorksheetCells(created.state, created.workbook.id, worksheetId, imported.cells);
-      const candidate: PreviewState = {
+      let candidate: PreviewState = {
         ...populated,
         workbooks: populated.workbooks.map((item) => item.id === created.workbook.id
           ? { ...item, worksheets: item.worksheets.map((sheet) => sheet.id === worksheetId ? { ...sheet, name: imported.sheetName } : sheet) }
           : item),
       };
+      for (const chart of imported.charts) {
+        candidate = addWorksheetChart(candidate, created.workbook.id, worksheetId, chart);
+      }
       if (!onState(candidate)) {
         setNotice('The XLSX was validated but could not be saved. No new workbook was added and your previous browser data is untouched. Free storage and select the file again to retry.');
         return;
       }
       setSelectedWorkbookId(created.workbook.id);
-      setNotice(`Imported one worksheet locally. ${imported.warnings.join(' ')} No file was uploaded.`);
+      setNotice(`Imported one worksheet and ${imported.charts.length} chart${imported.charts.length === 1 ? '' : 's'} locally. ${imported.warnings.join(' ')} No file was uploaded.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The XLSX could not be imported. No workbook was changed.');
     }
@@ -241,7 +244,7 @@ export default function SheetsWorkspace({ state, onState, onGoToTeam }: { state:
       {notice && <div className="sheet-notice" role="status"><Check size={15} />{notice}</div>}
       <section className="sheet-limit-card glass-card">
         <div className="sheet-limit-icon"><Table2 size={19} /></div>
-        <div><strong>A useful local spreadsheet foundation</strong><p>Cell references, ranges, arithmetic, comparisons, and common functions are evaluated locally. CSV and a bounded one-sheet XLSX subset are supported. Native bar and line charts are included in XLSX exports and versioned cloud copies, but are not imported from external XLSX files yet; Excel formatting, dates, merged cells, macros, and live workbook collaboration are not included.</p></div>
+        <div><strong>A useful local spreadsheet foundation</strong><p>Cell references, ranges, arithmetic, comparisons, and common functions are evaluated locally. CSV and a bounded one-sheet XLSX subset are supported. Native bar and line charts are imported from supported single-series XLSX charts, and included in XLSX exports and versioned cloud copies; Excel formatting, dates, merged cells, macros, and live workbook collaboration are not included.</p></div>
         <span className="local-only-chip"><LockKeyhole size={13} /> This device</span>
       </section>
 
