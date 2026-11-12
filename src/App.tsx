@@ -15,6 +15,7 @@ import type { OfficeDocument, PreviewState, ThemeId, WorkspaceKind } from './lib
 import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import { deleteDocsReviewCommentsForDocument } from './lib/docsReviewComments';
 import { createDocxBlob, DOCX_IMPORT_CONFIRMATION, importDocxFile, safeDocxFilename } from './lib/docxInterchange';
+import { importTextDocumentFile } from './lib/documentFormats';
 import SheetsWorkspace from './SheetsWorkspace';
 import DriveWorkspace from './DriveWorkspace';
 import ChatsWorkspace from './ChatsWorkspace';
@@ -338,6 +339,33 @@ function App() {
     }
   };
 
+  const importDocumentText = async (file: File): Promise<boolean> => {
+    try {
+      const imported = await importTextDocumentFile(file);
+      const created = addDocument(state);
+      const next = updateDocument(created.state, created.document.id, {
+        title: imported.title, content: imported.content, richText: imported.richText,
+      });
+      const draft = next.documents.find((document) => document.id === created.document.id);
+      if (!draft) throw new Error('The imported draft could not be created.');
+      const saved = persist(next);
+      if (!saved) {
+        setState(next);
+        setUnsavedDocuments((current) => ({ ...current, [draft.id]: draft }));
+      }
+      setPage('docs');
+      setSelectedDocumentId(draft.id);
+      const warning = imported.warnings.length ? ' ' + imported.warnings.join(' ') : '';
+      setFeedback(saved
+        ? 'Imported ' + draft.title + ' as a new document on this device.' + warning
+        : 'Import completed, but storage is full. The new draft is kept in this tab; retry save or export it before closing.' + warning);
+      return true;
+    } catch (error) {
+      setFeedback('HTML / Markdown / text import failed: ' + (error instanceof Error ? error.message : 'The file could not be imported.'));
+      return false;
+    }
+  };
+
   const deleteDocument = () => {
     if (!selectedDocument) return;
     setDialog('delete');
@@ -437,7 +465,7 @@ function App() {
           {page === 'home' && <Dashboard greeting={clockLabel} activeWorkspace={activeWorkspace?.name ?? 'Personal space'} workspaceCount={state.workspaces.length} documentCount={workspaceDocuments.length} lastEdited={lastEdited} documents={visibleDocuments.slice(0, 5)} onCreateDocument={createDocument} onOpenDocument={openDocument} onCreateWorkspace={() => setDialog('workspace')} onNavigate={goTo} />}
           {page === 'docs' && (selectedDocument
             ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onExportDocx={exportDocumentDocx} onDelete={deleteDocument} onRestoreCloudCopy={restoreCloudDocument} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} /></Suspense>
-            : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} onImportDocx={importDocumentDocx} />)}
+            : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} onImportDocx={importDocumentDocx} onImportText={importDocumentText} />)}
           {page === 'drive' && <DriveWorkspace workspaceId={activeWorkspace?.id ?? null} officeWorkspaceId={serverWorkspace?.workspaceId ?? null} documents={visibleDocuments} query={query} onOpenDocument={openDocument} onCreateDocument={createDocument} />}
           {page === 'pdf' && <Suspense fallback={<div className="page" role="status">Opening local PDF tools…</div>}><PdfWorkspace workspaceId={activeWorkspace?.id ?? null} /></Suspense>}
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
@@ -536,9 +564,11 @@ function DocumentRows({ documents, onOpen }: { documents: OfficeDocument[]; onOp
   return <div className="document-list">{documents.map((document) => <button className="document-row" key={document.id} onClick={() => onOpen(document)}><span className="document-type-icon"><FileText size={17} /></span><span className="document-row-main"><strong>{document.title || 'Untitled document'}</strong><small>{document.content.trim().slice(0, 84) || 'No text yet · stored in this browser'}</small></span><span className="document-date">{friendlyDate(document.updatedAt)}</span><ArrowUpRight size={15} className="row-arrow" /></button>)}</div>;
 }
 
-function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx }: { documents: OfficeDocument[]; query: string; onCreate: () => void; onOpen: (document: OfficeDocument) => void; onImportDocx: (file: File) => Promise<boolean> }) {
+function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx, onImportText }: { documents: OfficeDocument[]; query: string; onCreate: () => void; onOpen: (document: OfficeDocument) => void; onImportDocx: (file: File) => Promise<boolean>; onImportText: (file: File) => Promise<boolean> }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const textInputRef = useRef<HTMLInputElement>(null);
+  const [importingText, setImportingText] = useState(false);
   const confirm = useFrostedConfirm();
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -547,16 +577,25 @@ function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx }: { d
     setImporting(true);
     try { await onImportDocx(file); } finally { setImporting(false); }
   };
+  const handleTextFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file || !(await confirm({ title: 'Import HTML, Markdown or text?', description: 'The file is processed locally. Active HTML content and unsafe links are removed.', confirmLabel: 'Import file', cancelLabel: 'Cancel' }))) return;
+    setImportingText(true);
+    try { await onImportText(file); } finally { setImportingText(false); }
+  };
   return <div className="page subpage">
     <div className="page-title-row docs-page-title-row">
       <div>
         <span className="eyebrow">COCCE DOCS · LOCAL MODE</span>
         <h1>Documents</h1>
-        <p className="page-lede">Format local drafts with headings, text styles, lists, quotes, and simple tables. Add review comments to selected text; comment notes stay in this browser. DOCX import/export supports bounded rectangular tables. Cloud sync and shared collaboration are not connected.</p>
+        <p className="page-lede">Format local drafts with headings, text styles, lists, quotes, and simple tables. Add review comments to selected text; comment notes stay in this browser. DOCX, Markdown, HTML and plain-text formats are supported. HTML imports are sanitized; Markdown imports preserve common headings, emphasis, lists and links. Cloud sync and shared collaboration are not connected.</p>
       </div>
       <div className="docs-page-actions">
         <input ref={inputRef} className="visually-hidden" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFile} aria-label="Choose a DOCX file" />
+        <input ref={textInputRef} className="visually-hidden" type="file" accept=".html,.htm,.md,.markdown,.txt,text/html,text/markdown,text/plain" onChange={handleTextFile} aria-label="Choose an HTML, Markdown or text file" />
         <button className="button-secondary" disabled={importing} onClick={() => inputRef.current?.click()}><FileText size={16} /> {importing ? 'Importing…' : 'Import DOCX'}</button>
+        <button className="button-secondary" disabled={importingText} onClick={() => textInputRef.current?.click()}><FileText size={16} /> {importingText ? 'Importing…' : 'Import HTML / MD / TXT'}</button>
         <button className="button-primary" onClick={onCreate}><Plus size={17} /> New document</button>
       </div>
     </div>
