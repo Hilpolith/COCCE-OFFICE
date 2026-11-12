@@ -386,3 +386,13 @@ Images are embedded in the local rich-text document. This implementation does no
 - Reference links: https://genoffice.ai/ and https://github.com/genspark-ai/genoffice; visionOS chat inspiration: https://www.macrumors.com/2023/11/14/telegram-demos-visionos-app/.
 - Focused checks in the implementation sandbox passed 28 tests (glass ownership, collaboration component, AI Chat regression and waveform helpers) and TypeScript/Vite build passed. The complete suite was attempted but the disposable build sandbox terminated during execution; rerun CI/full test suite before release.
 - Stories are not yet implemented in the existing Office collaboration schema/API. The chat backend supports direct, group and channel conversations plus media attachments; do not represent ephemeral stories as working until a dedicated workspace-scoped story data model, expiry policy, media authorization and UI have been implemented and tested.
+
+
+## 2026-11-12 — Workspace Stories delivery
+
+- Added an additive workspace-scoped stories schema and authenticated RPCs for listing, publishing, viewing and deleting stories.
+- Story visibility is limited to active workspace members; stories expire after 24 hours; each author is limited to 20 publications per rolling 24-hour window.
+- Media is restricted to JPEG, PNG, WebP, MP4 and WebM and is uploaded through the existing private Office Cloud API. The migration prevents an active story's cloud media from being trashed until the story expires or is deleted.
+- Added story rail, composer, private media viewer, view counts and author deletion controls to the dedicated Chats route. It is not shown for the all-workspaces scope.
+- Added frontend tests and an isolated PGlite migration test covering workspace isolation, supported media, expiry, view tracking, deletion permissions and active-media protection. The three database tests passed locally.
+- The story migration has been added to the repository but has not yet been applied to the production Supabase database. Production story publishing remains unavailable until the migration is applied and verified there.
