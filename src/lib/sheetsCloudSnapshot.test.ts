@@ -14,7 +14,7 @@ const original: OfficeWorkbook = {
   workspaceId: 'local-office',
   title: 'Q4 Tanzania budget',
   worksheets: [
-    { id: 'local-sheet-a', name: 'Budget', cells: { A1: 'TZS', A2: '250000', B2: '=A2*2', L24: 'last visible cell' } },
+    { id: 'local-sheet-a', name: 'Budget', cells: { A1: 'TZS', A2: '250000', B2: '=A2*2', L24: 'last visible cell' }, charts: [{ id: 'chart-budget', title: 'Budget overview', type: 'bar', range: 'A1:B2', createdAt: '2026-11-04T10:00:00.000Z' }] },
     { id: 'local-sheet-b', name: 'Forecast', cells: { A1: 'Month', B1: 'Revenue', A2: 'Nov', B2: '=SUM(B3:B12)' } },
   ],
   activeWorksheetId: 'local-sheet-b',
@@ -39,13 +39,13 @@ describe('bounded Sheets cloud snapshots', () => {
       title: original.title,
       activeWorksheetIndex: 1,
       worksheets: [
-        { name: 'Budget', cells: original.worksheets[0]!.cells },
+        { name: 'Budget', cells: original.worksheets[0]!.cells, charts: original.worksheets[0]!.charts },
         { name: 'Forecast', cells: original.worksheets[1]!.cells },
       ],
     });
     const envelope = JSON.parse(new TextDecoder().decode(bytes));
     expect(envelope.format).toBe('cocce-office-sheets-copy');
-    expect(envelope.version).toBe(1);
+    expect(envelope.version).toBe(2);
     expect(envelope).not.toHaveProperty('id');
     expect(envelope).not.toHaveProperty('workspaceId');
     expect(envelope).not.toHaveProperty('createdAt');
@@ -62,11 +62,37 @@ describe('bounded Sheets cloud snapshots', () => {
     expect(restored.workbook.id).not.toBe(original.id);
     expect(restored.workbook.workspaceId).toBe('local-office');
     expect(restored.workbook.title).toBe('Q4 Tanzania budget (cloud copy)');
-    expect(restored.workbook.worksheets.map(({ name, cells }) => ({ name, cells }))).toEqual(
+    expect(restored.workbook.worksheets.map(({ name, cells, charts }) => ({ name, cells, ...(charts === undefined ? {} : { charts }) }))).toEqual(
       snapshot.worksheets,
     );
     expect(restored.workbook.worksheets.every((sheet, index) => sheet.id !== original.worksheets[index]!.id)).toBe(true);
     expect(restored.workbook.activeWorksheetId).toBe(restored.workbook.worksheets[1]!.id);
+  });
+
+  it('reads legacy version-1 cloud copies and defaults their charts to absent', () => {
+    const legacyWorkbook = {
+      ...original,
+      worksheets: original.worksheets.map(({ charts: _charts, ...worksheet }) => worksheet),
+    };
+    const legacy = JSON.parse(new TextDecoder().decode(createSheetsCloudSnapshot(legacyWorkbook)));
+    legacy.version = 1;
+    const parsed = parseSheetsCloudSnapshot(new TextEncoder().encode(JSON.stringify(legacy)));
+    expect(parsed.worksheets.every((worksheet) => worksheet.charts === undefined)).toBe(true);
+  });
+
+  it('rejects malformed or oversized chart metadata in cloud copies', () => {
+    const malformed = {
+      ...original,
+      worksheets: [{ ...original.worksheets[0]!, charts: [{ ...original.worksheets[0]!.charts![0]!, range: 'A1:M25' }] }],
+      activeWorksheetId: 'local-sheet-a',
+    };
+    expect(() => createSheetsCloudSnapshot(malformed)).toThrow(/chart contains invalid data/);
+    const tooMany = {
+      ...original,
+      worksheets: [{ ...original.worksheets[0]!, charts: Array.from({ length: 21 }, (_, index) => ({ ...original.worksheets[0]!.charts![0]!, id: 'chart-' + index })) }],
+      activeWorksheetId: 'local-sheet-a',
+    };
+    expect(() => createSheetsCloudSnapshot(tooMany)).toThrow(/too many charts/);
   });
 
   it('preserves duplicate valid worksheet names exactly when present in the local model', () => {
