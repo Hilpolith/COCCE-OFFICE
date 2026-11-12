@@ -329,7 +329,7 @@ async function verifyUser(config: CloudConfig, token: string, fetcher: Fetcher):
 }
 
 async function officeRpc(config: CloudConfig, name: string, payload: Record<string, unknown>, fetcher: Fetcher): Promise<unknown> {
-  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload|list_storage_plans|list_storage_subscriptions|list_storage_history|purchase_storage_subscription|renew_storage_subscription|set_storage_subscription_auto_renew)$/.test(name)) {
+  if (!/^office_cloud_(begin_upload|begin_revision|get_sync_state|get_upload|find_upload|note_object_absent|finalize_upload|fail_upload|list_files|list_trash|get_file_link|get_usage|trash_file|restore_file|recover_upload|release_expired_upload|list_storage_plans|list_storage_subscriptions|list_storage_history|purchase_storage_subscription|renew_storage_subscription|set_storage_subscription_auto_renew|wallet_pin_attempt)$/.test(name)) {
     throw new Error('Office RPC not allowed');
   }
   const response = await fetcher(`${config.supabaseUrl}/rest/v1/rpc/${name}`, {
@@ -647,6 +647,15 @@ async function verifyOfficeWalletPin(
     return { status: 400, error: 'INVALID_WALLET_PIN_FORMAT', message: 'Enter your four-digit COCCE Wallet PIN.' };
   }
   try {
+    const attempt = rpcObject(await officeRpc(config, 'office_cloud_wallet_pin_attempt', {
+      p_actor_id: actorId, p_succeeded: false,
+    }, fetcher));
+    if (!attempt || typeof attempt.allowed !== 'boolean') {
+      return { status: 503, error: 'WALLET_PIN_VERIFICATION_UNAVAILABLE', message: 'COCCE Wallet PIN verification is temporarily unavailable. No payment was made.' };
+    }
+    if (!attempt.allowed) {
+      return { status: 429, error: 'WALLET_PIN_RATE_LIMITED', message: 'Too many incorrect COCCE Wallet PIN attempts. Try again in 15 minutes. No payment was made.' };
+    }
     const query = new URLSearchParams({ select: 'wallet_pin_hash', id: `eq.${actorId}` });
     const response = await fetcher(`${config.supabaseUrl}/rest/v1/profiles?${query.toString()}`, {
       method: 'GET',
@@ -673,9 +682,16 @@ async function verifyOfficeWalletPin(
     for (let index = 0; index < 4; index += 1) {
       difference |= (storedPin.charCodeAt(index) || 0) ^ pin.charCodeAt(index);
     }
-    return difference === 0
-      ? null
-      : { status: 403, error: 'INVALID_WALLET_PIN', message: 'The COCCE Wallet PIN is incorrect. No payment was made.' };
+    if (difference !== 0) {
+      return { status: 403, error: 'INVALID_WALLET_PIN', message: 'The COCCE Wallet PIN is incorrect. No payment was made.' };
+    }
+    const reset = rpcObject(await officeRpc(config, 'office_cloud_wallet_pin_attempt', {
+      p_actor_id: actorId, p_succeeded: true,
+    }, fetcher));
+    if (!reset || reset.allowed !== true) {
+      return { status: 503, error: 'WALLET_PIN_VERIFICATION_UNAVAILABLE', message: 'COCCE Wallet PIN verification is temporarily unavailable. No payment was made.' };
+    }
+    return null;
   } catch {
     return { status: 503, error: 'WALLET_PIN_VERIFICATION_UNAVAILABLE', message: 'COCCE Wallet PIN verification is temporarily unavailable. No payment was made.' };
   }
