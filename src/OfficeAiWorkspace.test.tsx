@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
   invoke: vi.fn(),
+  rpc: vi.fn(),
+  from: vi.fn(),
   listWorkspaces: vi.fn(),
   getWorkspaceAiEnabled: vi.fn(),
   createOfficeCloudApi: vi.fn(),
@@ -20,6 +22,8 @@ vi.mock('./lib/officeTeamSupabase', () => ({
   getOfficeTeamClient: () => ({
     auth: { getSession: mocks.getSession, onAuthStateChange: mocks.onAuthStateChange },
     functions: { invoke: mocks.invoke },
+    rpc: mocks.rpc,
+    from: mocks.from,
   }),
 }));
 vi.mock('./lib/officeTeamApi', () => ({
@@ -41,6 +45,18 @@ beforeEach(() => {
       ? { data: { configured: true }, error: null }
       : { data: { text: 'A tested workspace summary.' }, error: null }
   ));
+  mocks.rpc.mockImplementation(async (name: string) => name === 'office_ai_create_conversation'
+    ? { data: '55555555-5555-4555-8555-555555555555', error: null }
+    : { data: null, error: null });
+  mocks.from.mockImplementation(() => {
+    const builder = {
+      select: vi.fn(() => builder),
+      eq: vi.fn(() => builder),
+      order: vi.fn(() => builder),
+      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    return builder;
+  });
   mocks.listWorkspaces.mockResolvedValue(workspaces);
   mocks.getWorkspaceAiEnabled.mockResolvedValue(true);
   mocks.createOfficeCloudApi.mockReturnValue({ list: vi.fn().mockResolvedValue([{ fileId: '33333333-3333-4333-8333-333333333333', workspaceId: '11111111-1111-4111-8111-111111111111', displayName: 'policy.md', sizeBytes: 123, createdAt: '2026-11-09T00:00:00Z', sha256Hex: '0'.repeat(64) }]) });
@@ -137,6 +153,15 @@ describe('COCCE AI workspace context', () => {
       },
     }));
     expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
+    expect(mocks.rpc).toHaveBeenCalledWith('office_ai_create_conversation', {
+      p_workspace_id: 'workspace-one',
+      p_title: 'Prepare a short project plan.',
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith('office_ai_save_exchange', expect.objectContaining({
+      p_conversation_id: '55555555-5555-4555-8555-555555555555',
+      p_user_content: 'Prepare a short project plan.',
+      p_assistant_content: 'A tested workspace summary.',
+    }));
   });
   it('clears the selected workspace and ignores an in-flight answer after workspace access is cleared', async () => {
     let resolveChat: ((value: { data: { text: string }; error: null }) => void) | null = null;
