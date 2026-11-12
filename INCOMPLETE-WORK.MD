@@ -12,6 +12,7 @@
 # 1. YOUR MISSION
 
 You are responsible for completing the entire COCCE Office application.
+some work has been completed. 
 
 This is not a request for another audit, a roadmap, a list of recommendations, a prototype, or a partial implementation.
 
