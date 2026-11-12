@@ -334,3 +334,17 @@ Images are embedded in the local rich-text document. This implementation does no
 - Added a live selected-range summary with numeric-cell count, sum, average, minimum and maximum.
 - Values are derived from the visible evaluated cell results, including supported formulas; blanks and non-numeric labels are ignored.
 - The summary is read-only and remains local to the workbook. It does not transmit selected cell contents to AI or a server.
+
+---
+
+## 2026-11-12 — VisionOS-inspired AI Chat interface
+
+- The dedicated AI Chat route now uses a two-pane glass conversation window: a translucent conversation-history sidebar and a larger focused message surface.
+- The dedicated Chat route hides the separate hero banner, keeps the workspace selector in a compact top context row, and defaults to the first joined workspace rather than the all-workspaces scope. This ensures private chat history is persisted to a concrete workspace from the first conversation.
+- Added local title search across the loaded conversation list (latest 30), a floating circular send control, refined glass message bubbles, a quiet empty state, and automatic scroll-to-latest-message behavior.
+- Added stale-request protection when opening a saved conversation so a response from a previous workspace selection cannot overwrite the current thread.
+- Mobile layout stacks the conversation list above the message pane; reduced-motion preferences disable the decorative transitions.
+- The separate COCCE AI assistant keeps its existing multi-workspace and explicit Drive-context interface.
+- Reference inspiration: the MacRumors report on Telegram's early visionOS concept, especially its translucent environment-matched interface, conversation sidebar and focused media/chat surface. This is an adaptation, not a pixel-for-pixel copy.
+- Focused validation at commit `7c14b72` passed 45 tests across AI Chat, Docs sanitization and Sheets local storage, and the production TypeScript/Vite build passed. Subsequent small changes add workspace-default, local search and chat test assertions; those later changes require a fresh test/build run.
+- Current limitations remain: AI responses are returned after the provider completes rather than streamed; history search covers only the latest 30 conversations loaded in the sidebar; real signed-in browser/device QA has not yet been performed.
