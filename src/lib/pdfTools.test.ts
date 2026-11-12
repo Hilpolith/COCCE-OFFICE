@@ -5,7 +5,7 @@ import {
   assertPdfMergeInputLimits, assertPdfPageCopyInputSize, assertPdfPageCopyOutputSize,
   assertPdfPageOperationPageCount, extractPdfPages, MAX_PDF_MERGE_INPUTS,
   MAX_PDF_MERGE_TOTAL_INPUT_BYTES, MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles,
-  parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
+  insertImageOnPdfPage, MAX_PDF_INSERT_IMAGE_BYTES, parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
 } from './pdfTools';
 
 async function makePdf(pageWidths: number[]): Promise<Uint8Array> {
@@ -51,6 +51,21 @@ describe('local PDF operations', () => {
   it('extracts the chosen pages into a new PDF', async () => {
     const source = await makePdf([100, 200, 300, 400]);
     expect(await readWidths(await extractPdfPages(source, [2, 4]))).toEqual([200, 400]);
+  });
+
+  it('inserts a PNG image into a new PDF copy without mutating the source', async () => {
+    const source = await makePdf([300, 400]);
+    const before = source.slice();
+    const image = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/kYkAAAAASUVORK5CYII='), (character) => character.charCodeAt(0));
+    const output = await insertImageOnPdfPage(source, 2, image, 'image/png');
+    const parsed = await PDFDocument.load(output);
+    expect(parsed.getPageCount()).toBe(2);
+    expect(parsed.getPage(1).getWidth()).toBe(400);
+    expect(output.byteLength).toBeGreaterThan(source.byteLength);
+    expect(source).toEqual(before);
+    await expect(insertImageOnPdfPage(source, 1, image, 'image/svg+xml')).rejects.toThrow('PNG and JPEG');
+    await expect(insertImageOnPdfPage(source, 1, new Uint8Array(MAX_PDF_INSERT_IMAGE_BYTES + 1), 'image/png')).rejects.toThrow('no larger than');
+    await expect(insertImageOnPdfPage(source, 3, image, 'image/png')).rejects.toThrow('between 1 and 2');
   });
 
   it('removes one page into a new copy and refuses to remove the final page', async () => {
