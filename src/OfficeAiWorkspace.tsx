@@ -9,7 +9,7 @@ import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSu
 import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import { officeAiInvokeError } from './lib/officeAi';
-import { parseOfficeAiActionProposal } from './lib/officeAiActionProposal';
+import { createOfficeActionIdempotencyKey, parseOfficeAiActionProposal } from './lib/officeAiActionProposal';
 import './officeAiWorkspace.css';
 
 
@@ -640,7 +640,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
       const parsedAnswer = parseOfficeAiActionProposal(data.text);
       setPendingAction(workspaceId === '*' ? null : parsedAnswer.proposal);
-      setPendingActionKey(workspaceId !== '*' && parsedAnswer.proposal ? crypto.randomUUID() : '');
+      setPendingActionKey(workspaceId !== '*' && parsedAnswer.proposal ? createOfficeActionIdempotencyKey() : '');
       setActionStatus('');
       setTurns((current) => [...current, { role: 'user' as const, content: question }, { role: 'assistant' as const, content: parsedAnswer.displayText }].slice(-100));
       setPrompt('');

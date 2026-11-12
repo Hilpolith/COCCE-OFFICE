@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseOfficeAiActionProposal } from './officeAiActionProposal';
+import { createOfficeActionIdempotencyKey, parseOfficeAiActionProposal } from './officeAiActionProposal';
 
 describe('COCCE AI approved action proposals', () => {
   it('extracts one bounded create-work-item proposal and removes its JSON block from chat text', () => {
@@ -19,6 +19,10 @@ describe('COCCE AI approved action proposals', () => {
     expect(parseOfficeAiActionProposal('```office-action\n' + base.replace('create_work_item', 'delete_workspace') + '\n```').proposal).toBeNull();
     expect(parseOfficeAiActionProposal('```office-action\n' + base.replace('null', '"2026-02-31"') + '\n```').proposal).toBeNull();
     expect(parseOfficeAiActionProposal('```office-action\n' + base + '\n```\n```office-action\n' + base + '\n```').proposal).toBeNull();
+  });
+
+  it('creates an RFC 4122 UUID idempotency key for modern and fallback browsers', () => {
+    expect(createOfficeActionIdempotencyKey()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   });
 
   it('does not parse arbitrary JSON or untrusted text as an action', () => {
