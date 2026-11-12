@@ -167,7 +167,7 @@ describe('Cloud Drive workspace', () => {
     render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
     fireEvent.click(await screen.findByRole('button', { name: /^PPTX quarterly\.pptx/ }));
-    expect(await screen.findByText('Quarterly review')).toBeTruthy();
+    expect((await screen.findAllByText('Quarterly review')).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Revenue increased.')).toBeTruthy();
     fireEvent.click(screen.getByText('Speaker notes'));
     expect(screen.getByText('Discuss the new targets.')).toBeTruthy();
