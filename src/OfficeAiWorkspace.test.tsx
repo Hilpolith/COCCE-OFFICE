@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import OfficeAiWorkspace from './OfficeAiWorkspace';
+import { FrostedConfirmProvider } from './FrostedConfirm';
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -182,6 +183,32 @@ describe('COCCE AI workspace context', () => {
     })));
     expect(await screen.findByText('Created “Prepare monthly report” in Operations.')).toBeTruthy();
   });
+
+
+  it('does not execute an approval after the workspace changes while confirmation is open', async () => {
+    mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
+      args.body.action === 'status'
+        ? { data: { configured: true }, error: null }
+        : { data: { text: 'Review this task first.\\n\\n```office-action\\n{"type":"create_work_item","title":"Prepare monthly report","reference":"FIN-12","dueDate":"2026-12-01"}\\n```' }, error: null }
+    ));
+    render(<FrostedConfirmProvider><OfficeAiWorkspace mode="assistant" initialWorkspaceId="workspace-one" /></FrostedConfirmProvider>);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    const composer = screen.getByRole('textbox', { name: 'Ask across your workspace' }) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'Create a task to prepare the monthly report.' } });
+    fireEvent.submit(composer.closest('form')!);
+    await screen.findByRole('heading', { name: 'Proposed task' });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and create task' }));
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Approve this Office task?' });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('cocce-office:workspace-changed', { detail: { workspaceId: 'workspace-two' } }));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and create' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(confirmation).toBeTruthy();
+    expect(mocks.rpc).not.toHaveBeenCalledWith('office_industry_create_work_item', expect.anything());
+  });
+
 
   it('sends on Enter and preserves multiline drafting on Shift+Enter', async () => {
     render(<OfficeAiWorkspace mode="chat" />);
