@@ -115,3 +115,6 @@
 
 .office-ai-history-search{width:100%;min-width:0;min-height:36px;margin:2px 0 8px;padding:0 11px;border:1px solid rgba(255,255,255,.15);border-radius:12px;outline:0;background:rgba(255,255,255,.055);color:var(--text);font:inherit;font-size:10px;backdrop-filter:var(--glass-filter);-webkit-backdrop-filter:var(--glass-filter)}
 .office-ai-history-search::placeholder{color:var(--faint)}.office-ai-history-search:focus{border-color:color-mix(in srgb,var(--accent) 55%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 13%,transparent)}
+
+.office-ai-chat-shell .office-ai-load-more{justify-self:start;min-height:32px;margin:3px 5px 0;padding:0 11px;border:1px solid rgba(255,255,255,.13);border-radius:999px;background:rgba(255,255,255,.045);color:var(--muted);font-size:9px}
+.office-ai-chat-shell .office-ai-load-more:disabled{opacity:.55;cursor:wait}
