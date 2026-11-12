@@ -5,7 +5,7 @@ import {
   assertPdfMergeInputLimits, assertPdfPageCopyInputSize, assertPdfPageCopyOutputSize,
   assertPdfPageOperationPageCount, extractPdfPages, MAX_PDF_MERGE_INPUTS,
   MAX_PDF_MERGE_TOTAL_INPUT_BYTES, MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles,
-  parsePageRange, reorderPdfPages, rotatePdfPage,
+  parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
 } from './pdfTools';
 
 async function makePdf(pageWidths: number[]): Promise<Uint8Array> {
@@ -51,6 +51,15 @@ describe('local PDF operations', () => {
   it('extracts the chosen pages into a new PDF', async () => {
     const source = await makePdf([100, 200, 300, 400]);
     expect(await readWidths(await extractPdfPages(source, [2, 4]))).toEqual([200, 400]);
+  });
+
+  it('removes one page into a new copy and refuses to remove the final page', async () => {
+    const source = await makePdf([100, 200, 300]);
+    const before = source.slice();
+    expect(await readWidths(await removePdfPage(source, 2))).toEqual([100, 300]);
+    expect(source).toEqual(before);
+    await expect(removePdfPage(source, 4)).rejects.toThrow('between 1 and 3');
+    await expect(removePdfPage(await makePdf([100]), 1)).rejects.toThrow('retain at least one page');
   });
 
   it('reorders all pages and rejects incomplete or repeated permutations', async () => {
