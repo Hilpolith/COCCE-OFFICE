@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
-import { extractDocxText, extractPptxText, extractXlsxText, isSupportedDriveContextFile, isSupportedDriveTextFile, loadSelectedDriveFiles } from './drive-context';
+import { extractDocxText, extractPptxText, extractXlsxText, isSupportedDriveContextFile, isSupportedDriveTextFile, loadDriveInventory, loadSelectedDriveFiles } from './drive-context';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const otherWorkspaceId = '22222222-2222-4222-8222-222222222222';
