@@ -632,10 +632,13 @@ function errorMessage(status: number): string {
 type WalletPinFailure = { status: number; error: string; message: string };
 
 /**
- * Verify the same four-digit value stored for COCCE Wallet in profiles.wallet_pin_hash.
- * The Super App's current wallet flow compares the entered PIN with this profile value;
- * Office performs that comparison server-side so the stored PIN is never returned to a
- * browser. This deliberately does not read, write, or alter the COCCE wallet ledger.
+ * Verify the legacy COCCE Super App PIN contract in profiles.wallet_pin_hash.
+ * The current Super App writes the literal four-digit PIN to this text column and compares
+ * it directly during wallet authorization (the column name is historical; this is not a
+ * cryptographic hash). Office must preserve that exact compatibility contract server-side.
+ * Do not re-hash or change the Super App wallet flow as part of Office work.
+ * This verifier reads only the profile PIN value and never reads, writes, or alters
+ * wallet_transactions; Office's separate, existing atomic purchase RPC handles any debit.
  */
 async function verifyOfficeWalletPin(
   config: CloudConfig,
