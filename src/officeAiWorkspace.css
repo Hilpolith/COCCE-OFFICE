@@ -138,3 +138,6 @@
 .office-ai-rich-content .office-ai-code-block{max-width:100%;margin:0;padding:13px;overflow:auto;border:1px solid rgba(160,150,255,.2);border-radius:12px;background:rgba(12,17,32,.58);color:#dce7ff}
 .office-ai-rich-content .office-ai-code-block code{padding:0;border:0;background:transparent;color:inherit;white-space:pre;font-size:11px;line-height:1.6}
 .office-ai-rich-content hr{width:100%;border:0;border-top:1px solid var(--border);margin:3px 0}
+
+.office-ai-rich-content a{color:#a9c8ff;text-decoration:underline;text-decoration-color:rgba(169,200,255,.45);text-underline-offset:3px}
+.office-ai-rich-content a:hover{color:#d5e3ff;text-decoration-color:currentColor}
