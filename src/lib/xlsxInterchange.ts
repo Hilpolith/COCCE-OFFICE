@@ -796,7 +796,6 @@ function validateSheetName(name: string): void {
 
 const DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing';
 const CHART_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
-const DRAWING_MAIN_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 
 function relationshipPartPath(sourcePath: string): string {
   const slash = sourcePath.lastIndexOf('/');

@@ -167,7 +167,7 @@ export default function ManufacturingSupplierPrivatePanel({
       setSuppliers((result?.rows ?? []).filter((row) => typeof row.id === "string"));
       setSupplierOffset(result?.offset ?? offset);
       setSupplierHasMore(result?.has_more ?? false);
-    } catch {
+    } catch (caught) {
       if (current(token)) setError(safeError(caught));
     }
   };
@@ -199,7 +199,7 @@ export default function ManufacturingSupplierPrivatePanel({
       setLoadedVersion(row.version);
       setHasPrivateRecord(true);
       setNotice("Private supplier details loaded into this device only.");
-    } catch (caught) {
+    } catch {
       if (current(token)) { setFields(emptyFields()); setLoadedVersion(null); setHasPrivateRecord(false); setError("Could not decrypt this supplier record. Check the key, context, and record integrity."); }
     }
   }, [canManage, context, readPage, recordsKey, selectedId]);
