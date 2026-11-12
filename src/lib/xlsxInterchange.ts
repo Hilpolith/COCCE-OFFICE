@@ -773,6 +773,160 @@ function validateSheetName(name: string): void {
   }
 }
 
+
+const DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing';
+const CHART_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
+const DRAWING_MAIN_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+
+function relationshipPartPath(sourcePath: string): string {
+  const slash = sourcePath.lastIndexOf('/');
+  return sourcePath.slice(0, slash + 1) + '_rels/' + sourcePath.slice(slash + 1) + '.rels';
+}
+
+function columnNumber(label: string): number {
+  let value = 0;
+  for (const character of label) value = value * 26 + character.charCodeAt(0) - 64;
+  return value;
+}
+
+function columnLabel(value: number): string {
+  let result = '';
+  while (value > 0) {
+    const digit = (value - 1) % 26;
+    result = String.fromCharCode(65 + digit) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+function chartFormulaRange(formula: string, sheetName: string): { column: number; firstRow: number; lastRow: number } {
+  const match = /^'((?:[^']|'')+)'!\\$([A-Z]{1,2})\\$(\\d+):\\$([A-Z]{1,2})\\$(\\d+)$/.exec(formula.trim());
+  if (!match || match[1]!.replaceAll("''", "'") !== sheetName
+    || match[2] !== match[4]) fail('The XLSX chart must reference one contiguous column on the imported worksheet.');
+  const column = columnNumber(match[2]!);
+  const firstRow = Number(match[3]);
+  const lastRow = Number(match[5]);
+  if (!Number.isInteger(column) || column < 1 || column > 12
+    || !Number.isInteger(firstRow) || !Number.isInteger(lastRow)
+    || firstRow < 2 || lastRow < firstRow || lastRow > 24) {
+    fail('The XLSX chart references cells outside the supported visible grid.');
+  }
+  return { column, firstRow, lastRow };
+}
+
+function chartReferenceFormula(element: Element, kind: 'strRef' | 'numRef'): string {
+  const reference = elementChildren(element, kind, CHART_NS);
+  if (reference.length !== 1) fail('The XLSX chart must contain one supported category/value reference.');
+  const formula = elementChildren(reference[0]!, 'f', CHART_NS);
+  if (formula.length !== 1 || !(formula[0]!.textContent ?? '').trim()) fail('The XLSX chart reference formula is missing.');
+  return formula[0]!.textContent!.trim();
+}
+
+function parseSimpleXlsxChart(xml: string, sheetName: string): Pick<OfficeSheetChart, 'title' | 'type' | 'range'> {
+  const document = parseXml(xml, 'Chart');
+  const root = document.documentElement;
+  if (root.localName !== 'chartSpace' || root.namespaceURI !== CHART_NS
+    || root.getElementsByTagNameNS(CHART_NS, 'externalData').length
+    || root.getElementsByTagNameNS(CHART_NS, 'pivotSource').length) {
+    fail('The XLSX chart uses unsupported or external chart content.');
+  }
+  const charts = elementChildren(root, 'chart', CHART_NS);
+  if (charts.length !== 1) fail('The XLSX chart package must contain one chart.');
+  const plotAreas = elementChildren(charts[0]!, 'plotArea', CHART_NS);
+  if (plotAreas.length !== 1) fail('The XLSX chart plot area is unsupported.');
+  const plotArea = plotAreas[0]!;
+  const barCharts = elementChildren(plotArea, 'barChart', CHART_NS);
+  const lineCharts = elementChildren(plotArea, 'lineChart', CHART_NS);
+  if (barCharts.length + lineCharts.length !== 1) fail('Only simple bar or line XLSX charts are supported.');
+  const type: OfficeSheetChartType = barCharts.length ? 'bar' : 'line';
+  const plot = barCharts[0] ?? lineCharts[0]!;
+  if (type === 'bar') {
+    const direction = elementChildren(plot, 'barDir', CHART_NS)[0]?.getAttribute('val');
+    const grouping = elementChildren(plot, 'grouping', CHART_NS)[0]?.getAttribute('val');
+    if (direction !== 'col' || (grouping && grouping !== 'clustered')) fail('Only clustered column bar charts are supported.');
+  }
+  const series = elementChildren(plot, 'ser', CHART_NS);
+  if (series.length !== 1) fail('Only one-series XLSX charts are supported.');
+  const categories = elementChildren(series[0]!, 'cat', CHART_NS);
+  const values = elementChildren(series[0]!, 'val', CHART_NS);
+  if (categories.length !== 1 || values.length !== 1) fail('The XLSX chart category or value data is unsupported.');
+  const categoryRange = chartFormulaRange(chartReferenceFormula(categories[0]!, 'strRef'), sheetName);
+  const valueRange = chartFormulaRange(chartReferenceFormula(values[0]!, 'numRef'), sheetName);
+  if (valueRange.column !== categoryRange.column + 1
+    || valueRange.firstRow !== categoryRange.firstRow || valueRange.lastRow !== categoryRange.lastRow) {
+    fail('The XLSX chart must use adjacent category and numeric value columns over the same rows.');
+  }
+  const titleNode = elementChildren(charts[0]!, 'title', CHART_NS)[0];
+  const title = titleNode
+    ? [...titleNode.getElementsByTagNameNS(DRAWING_MAIN_NS, 't')].map((node) => node.textContent ?? '').join('').trim()
+    : '';
+  const safeTitle = stripControlCharacters(title, true).trim().slice(0, 80) || 'Imported chart';
+  const range = `${columnLabel(categoryRange.column)}${categoryRange.firstRow - 1}:${columnLabel(valueRange.column)}${valueRange.lastRow}`;
+  return { title: safeTitle, type, range };
+}
+
+function worksheetDrawingId(xml: string): string | null {
+  const root = parseXml(xml, 'Worksheet drawing reference').documentElement;
+  const drawings = elementChildren(root, 'drawing');
+  if (!drawings.length) return null;
+  const id = drawings[0]!.getAttributeNS(OFFICE_REL_NS, 'id');
+  if (!id || id.length > 128) fail('The worksheet drawing relationship is invalid.');
+  return id;
+}
+
+function parseXlsxDrawingCharts(
+  archive: XlsxArchive,
+  worksheetPath: string,
+  drawingId: string,
+  sheetName: string,
+): Array<Pick<OfficeSheetChart, 'title' | 'type' | 'range'>> {
+  const worksheetRelsPath = relationshipPartPath(worksheetPath);
+  const worksheetRelsXml = archive.parts.get(worksheetRelsPath);
+  if (!worksheetRelsXml) fail('The worksheet drawing relationship part is missing.');
+  const worksheetRelationships = parseRelationships(worksheetRelsXml, worksheetPath, 'Worksheet relationships');
+  if (worksheetRelationships.length !== 1
+    || worksheetRelationships[0]!.id !== drawingId
+    || !worksheetRelationships[0]!.type.endsWith('/drawing')
+    || !/^xl\\/drawings\\/drawing\\d+\\.xml$/.test(worksheetRelationships[0]!.target)) {
+    fail('The worksheet drawing relationship is not a supported internal drawing.');
+  }
+  const drawingPath = worksheetRelationships[0]!.target;
+  const drawingXml = archive.parts.get(drawingPath);
+  const drawingRelsXml = archive.parts.get(relationshipPartPath(drawingPath));
+  if (!drawingXml || !drawingRelsXml) fail('The XLSX drawing or its chart relationships are missing.');
+  const drawing = parseXml(drawingXml, 'Drawing').documentElement;
+  if (drawing.localName !== 'wsDr' || drawing.namespaceURI !== DRAWING_NS) fail('The XLSX drawing contains unsupported content.');
+  const anchors = allElementChildren(drawing);
+  if (anchors.length < 1 || anchors.length > 20 || anchors.some((anchor) => anchor.localName !== 'twoCellAnchor' || anchor.namespaceURI !== DRAWING_NS)) {
+    fail('The XLSX drawing contains unsupported anchors or too many charts.');
+  }
+  const chartIds: string[] = [];
+  for (const anchor of anchors) {
+    const children = allElementChildren(anchor);
+    if (children.some((child) => child.namespaceURI !== DRAWING_NS || !['from', 'to', 'graphicFrame', 'clientData'].includes(child.localName))) {
+      fail('The XLSX drawing contains pictures, shapes or unsupported objects.');
+    }
+    const frames = children.filter((child) => child.localName === 'graphicFrame');
+    if (frames.length !== 1) fail('Each XLSX drawing anchor must contain exactly one chart frame.');
+    const chartNodes = frames[0]!.getElementsByTagNameNS(CHART_NS, 'chart');
+    if (chartNodes.length !== 1) fail('The XLSX drawing frame does not reference exactly one chart.');
+    const id = chartNodes[0]!.getAttributeNS(OFFICE_REL_NS, 'id');
+    if (!id || chartIds.includes(id)) fail('The XLSX drawing contains an invalid or duplicate chart reference.');
+    chartIds.push(id);
+  }
+  const drawingRelationships = parseRelationships(drawingRelsXml, drawingPath, 'Drawing relationships');
+  if (drawingRelationships.length !== chartIds.length) fail('The XLSX drawing has unreferenced or missing chart relationships.');
+  const byId = new Map(drawingRelationships.map((relationship) => [relationship.id, relationship]));
+  return chartIds.map((id) => {
+    const relationship = byId.get(id);
+    if (!relationship || !relationship.type.endsWith('/chart')
+      || !/^xl\\/charts\\/chart\\d+\\.xml$/.test(relationship.target)) fail('The XLSX drawing references an unsupported chart part.');
+    const chartXml = archive.parts.get(relationship.target);
+    if (!chartXml) fail('The XLSX chart part is missing.');
+    return parseSimpleXlsxChart(chartXml, sheetName);
+  });
+}
+
 function safeTitleFromFilename(filename: string): string {
   const title = stripControlCharacters(filename.replaceAll('\\', '/').split('/').pop()?.replace(/\.xlsx$/i, '') ?? '', true)
     .trim().slice(0, 200);
