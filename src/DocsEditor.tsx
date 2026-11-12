@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrostedConfirm } from './FrostedConfirm';
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
-import { Extension } from '@tiptap/core';
+import type { ChangeEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import { Extension, Node as TiptapNode, mergeAttributes } from '@tiptap/core';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import type { Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -33,7 +33,7 @@ import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import './docs.css';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
-  FileText, Heading1, Heading2, Heading3, Highlighter, Italic, Link2, List, ListOrdered, LockKeyhole, MessageSquarePlus, Code, Eraser, Minus, Palette,
+  FileText, Heading1, Heading2, Heading3, Highlighter, Italic, Link2, List, ListOrdered, LockKeyhole, MessageSquarePlus, Code, Eraser, Minus, Palette, ImagePlus,
   Pilcrow, Quote, Redo2, Replace, Rows3, Search, Strikethrough, Table2, Trash2, RotateCcw,
   Underline as UnderlineIcon, Undo2, X,
 } from 'lucide-react';
@@ -42,6 +42,68 @@ type DocumentPatch = Partial<Pick<OfficeDocument, 'title' | 'content' | 'richTex
 
 function friendlyDate(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(iso));
+}
+
+const DocsImage = TiptapNode.create({
+  name: 'docsImage',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  addAttributes() {
+    return {
+      src: { default: null },
+      alt: { default: '' },
+      width: { default: null },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'img[src]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['img', mergeAttributes(HTMLAttributes, {
+      class: 'docs-inline-image',
+      style: 'max-width:100%;height:auto;display:block;margin:14px auto',
+      loading: 'lazy',
+      decoding: 'async',
+    })];
+  },
+});
+
+async function prepareDocsImage(file: File): Promise<string> {
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    throw new Error('Choose a PNG, JPEG or WebP image.');
+  }
+  if (file.size <= 0 || file.size > 12 * 1024 * 1024) {
+    throw new Error('Images must be smaller than 12 MB before compression.');
+  }
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    let width = Math.max(1, Math.round(bitmap.width * scale));
+    let height = Math.max(1, Math.round(bitmap.height * scale));
+    let result = '';
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const canvas = window.document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('This browser could not prepare the image.');
+      context.drawImage(bitmap, 0, 0, width, height);
+      result = canvas.toDataURL('image/webp', Math.max(0.55, 0.84 - attempt * 0.06));
+      if (!result.startsWith('data:image/webp;base64,')) {
+        result = canvas.toDataURL('image/jpeg', 0.78);
+      }
+      if (result.length <= 1_800_000) break;
+      width = Math.max(1, Math.round(width * 0.78));
+      height = Math.max(1, Math.round(height * 0.78));
+    }
+    if (!result || result.length > 1_800_000) {
+      throw new Error('This image is too detailed to embed safely. Choose a smaller image.');
+    }
+    return result;
+  } finally {
+    bitmap.close();
+  }
 }
 
 function createDocsTableGuard(onRejected: (message: string) => void) {
@@ -230,7 +292,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 }) {
   const confirm = useFrostedConfirm();
   const patchRef = useRef(onPatch);
-  const [cloudOpen, setCloudOpen] = useState(false);
+  const [cloudOpen, setCloudOpen] = useState(false);\n  const imageInputRef = useRef<HTMLInputElement | null>(null);\n  const [imageNotice, setImageNotice] = useState('');
   const [activeRibbonTab, setActiveRibbonTab] = useState<'home' | 'insert' | 'review' | 'view'>('home');
   const [pageZoom, setPageZoom] = useState('100%');
   const cloudEnabled = import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true' && Boolean(onRestoreCloudCopy);
@@ -276,7 +338,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const editor = useEditor({
     extensions: [StarterKit.configure({
       heading: { levels: [1, 2, 3] }, link: false, underline: false,
-    }), Underline, TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } }), DocsTextStyle, DocsHighlight, DocsLink, DocsTextAlign, reviewCommentExtension, tableGuard],
+    }), Underline, DocsImage, TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } }), DocsTextStyle, DocsHighlight, DocsLink, DocsTextAlign, reviewCommentExtension, tableGuard],
     content: initialHtml,
     editorProps: {
       attributes: { class: 'rich-text-editor', role: 'textbox', 'aria-label': 'Document content', 'aria-multiline': 'true', spellcheck: 'true' },
@@ -664,6 +726,24 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     editor.chain().focus().setMark('docsLink', { href }).run();
   };
 
+  const insertImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !editor) return;
+    setImageNotice('');
+    try {
+      const src = await prepareDocsImage(file);
+      if (!editor.isDestroyed) {
+        editor.chain().focus().insertContent({
+          type: 'docsImage',
+          attrs: { src, alt: file.name.replace(/[<>]/g, '').slice(0, 180), width: null },
+        }).run();
+      }
+    } catch (reason) {
+      setImageNotice(reason instanceof Error ? reason.message : 'The image could not be inserted.');
+    }
+  };
+
   const exportMarkdown = async () => {
     if (!editor) {
       setTableNotice('The document editor is still loading; nothing was exported.');
@@ -683,7 +763,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   };
 
   return <div className="page editor-page office-editor-page">
-    <div className="editor-toolbar">
+    <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Choose an image to insert" onChange={(event) => void insertImage(event)} />\n    <div className="editor-toolbar">
       <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
       <div className="editor-actions">
         <span className={`autosave-label ${hasUnsavedChanges ? 'autosave-failed' : ''}`} role="status">
@@ -756,7 +836,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Insert" hidden={activeRibbonTab !== 'insert'}>
-        <FormattingButton label="Insert link" icon={<Link2 size={16}/>} onClick={insertLink} />
+        <FormattingButton label="Insert link" icon={<Link2 size={16}/>} onClick={insertLink} />\n        <FormattingButton label="Insert image" icon={<ImagePlus size={16}/>} disabled={!editor} onClick={() => imageInputRef.current?.click()} />
         <FormattingButton label="Horizontal rule" icon={<Minus size={16}/>} onClick={() => editor?.chain().focus().setHorizontalRule().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
@@ -772,7 +852,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <span className="docs-format-hint">Local rich text</span>
     </div>
 
-    <div className="docs-table-toolbar glass-card" role="toolbar" aria-label="Table editing">
+    {imageNotice && <p className="docs-image-notice" role="alert">{imageNotice}</p>}\n    <div className="docs-table-toolbar glass-card" role="toolbar" aria-label="Table editing">
       <div className="docs-table-insert-controls">
         <span className="docs-table-insert-label"><Table2 size={15} /> Insert table</span>
         <label>Rows <input aria-label="New table rows" type="number" min="1" max={DOCS_TABLE_LIMITS.maxRows} value={insertRows} onChange={(event) => setInsertRows(event.target.value)} /></label>
