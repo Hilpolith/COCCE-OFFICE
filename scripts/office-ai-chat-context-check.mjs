@@ -74,6 +74,17 @@ test('sector work queue sharing requires per-request confirmation and remains re
   assert.match(edge, /Never execute or claim to execute an action/);
 });
 
+test('AI action proposals are limited to user-approved generic task creation', () => {
+  assert.match(edge, /fenced office-action block/);
+  assert.match(edge, /create_work_item/);
+  assert.match(aiUi, /parseOfficeAiActionProposal/);
+  assert.match(aiUi, /office_industry_create_work_item/);
+  assert.match(aiUi, /Approve and create task/);
+  assert.match(aiUi, /approveProposedAction/);
+  assert.match(aiUi, /p_idempotency_key: pendingActionKey/);
+  assert.match(edge, /Never execute or claim to execute an action/);
+});
+
 test('AI provider delegates to the authenticated OpenRouter free router and rejects paid responses', () => {
   assert.ok(edge.includes('/api/office-ai-provider'));
   assert.ok(edge.includes('const FREE_MODEL = "openrouter/free"'));
