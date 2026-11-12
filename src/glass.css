@@ -132,7 +132,7 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
-  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .drive-storage-dialog-backdrop, .mobile-scrim, .slides-present-overlay, .docs-format-toolbar, .team-panel, .office-collab-panel, .frosted-confirm-backdrop) {
+  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .drive-storage-dialog-backdrop, .mobile-scrim, .slides-present-overlay, .docs-format-toolbar, .team-panel, .office-collab-panel, .frosted-confirm-backdrop, .office-ai-chat-shell, .office-ai-context, .office-ai-thread-toolbar, .office-ai-compose, .office-ai-history-search) {
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
