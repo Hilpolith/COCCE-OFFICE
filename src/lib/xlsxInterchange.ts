@@ -883,11 +883,18 @@ function parseSimpleXlsxChart(xml: string, sheetName: string): Pick<OfficeSheetC
   return { title: safeTitle, type, range };
 }
 
+function officeRelationshipId(element: Element): string | null {
+  const attribute = Array.from(element.attributes).find((item) => (
+    item.localName === 'id' && (item.namespaceURI === OFFICE_REL_NS || item.name.toLowerCase() === 'r:id')
+  ));
+  return attribute?.value || element.getAttribute('r:id') || element.getAttribute('id');
+}
+
 function worksheetDrawingId(xml: string): string | null {
   const root = parseXml(xml, 'Worksheet drawing reference').documentElement;
   const drawings = elementChildren(root, 'drawing');
   if (!drawings.length) return null;
-  const id = drawings[0]!.getAttributeNS(OFFICE_REL_NS, 'id') || drawings[0]!.getAttribute('r:id');
+  const id = officeRelationshipId(drawings[0]!);
   if (!id || id.length > 128) fail('The worksheet drawing relationship is invalid.');
   return id;
 }
@@ -935,7 +942,7 @@ function parseXlsxDrawingCharts(
     };
     visitChartNodes(frames[0]!);
     if (chartNodes.length !== 1) fail('The XLSX drawing frame does not reference exactly one chart.');
-    const id = chartNodes[0]!.getAttributeNS(OFFICE_REL_NS, 'id') || chartNodes[0]!.getAttribute('r:id');
+    const id = officeRelationshipId(chartNodes[0]!);
     if (!id || chartIds.includes(id)) fail('The XLSX drawing contains an invalid or duplicate chart reference.');
     chartIds.push(id);
   }
