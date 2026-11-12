@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFrostedConfirm } from './FrostedConfirm';
 import { officeTeamApi, type OfficeWorkspace } from './lib/officeTeamApi';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
@@ -103,6 +103,8 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   const [previewText, setPreviewText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const sequence = useRef(0);
+  const accessGeneration = useRef(0);
+  useLayoutEffect(() => { accessGeneration.current += 1; }, [workspaceId, userId]);
 
   const schemaReady = config.status === 'ready' ? config.schemaReady : false;
   // Billing stays disabled until the owner approves pricing and server-side wallet PIN verification is complete.
@@ -289,9 +291,11 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
 
   const download = async (file: CloudFile, open = false) => {
     if (!api) return;
+    const requestGeneration = accessGeneration.current;
     setBusy(true); setError('');
     try {
       const bytes = await api.download(file);
+      if (requestGeneration !== accessGeneration.current) return;
       const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeOf(file) });
       if (open) {
         setPreviewText('');
@@ -349,10 +353,11 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
             }
           }
         }
+        if (requestGeneration !== accessGeneration.current) return;
         setPreview({ file, blob, url: URL.createObjectURL(blob), ...(docxHtml ? { docxHtml } : {}), ...(docxWarnings?.length ? { docxWarnings } : {}), ...(xlsx ? { xlsx } : {}), ...(pptx ? { pptx } : {}) });
       } else { saveBlob(blob, file.displayName); setNotice(`Downloaded ${file.displayName} after cloud integrity verification.`); }
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'The cloud file could not be downloaded.'); }
-    finally { setBusy(false); }
+    } catch (cause) { if (requestGeneration === accessGeneration.current) setError(cause instanceof Error ? cause.message : 'The cloud file could not be downloaded.'); }
+    finally { if (requestGeneration === accessGeneration.current) setBusy(false); }
   };
 
   const purchaseStorage = async () => {
