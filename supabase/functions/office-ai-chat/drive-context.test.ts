@@ -21,6 +21,34 @@ function cloudLink(overrides: Record<string, unknown> = {}) {
   });
 }
 
+describe('COCCE AI authenticated Drive inventory', () => {
+  it('lists only membership-scoped file metadata using the signed-in JWT and filters credential files', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return Response.json({ files: [
+        { fileId, workspaceId, displayName: 'operations-plan.md', sizeBytes: 120, createdAt: '2026-11-12T10:00:00Z' },
+        { fileId: otherWorkspaceId, workspaceId: otherWorkspaceId, displayName: 'wrong-scope.md', sizeBytes: 90, createdAt: '2026-11-12T11:00:00Z' },
+        { fileId: revisionId, workspaceId, displayName: 'credentials.json', sizeBytes: 80, createdAt: '2026-11-12T12:00:00Z' },
+      ] });
+    });
+    const result = await loadDriveInventory(enabled, supabaseUrl, 'public-anon-key', 'caller-jwt', fetchImpl);
+    expect(result).toEqual([{
+      fileId, workspaceId, workspaceName: 'Operations', displayName: 'operations-plan.md',
+      sizeBytes: 120, createdAt: '2026-11-12T10:00:00Z',
+    }]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.init?.headers).toMatchObject({ Authorization: 'Bearer caller-jwt', apikey: 'public-anon-key' });
+    expect(calls[0]!.init?.body).toBe(JSON.stringify({ action: 'list_files', workspaceId, limit: 100, offset: 0 }));
+  });
+
+  it('fails closed when an enabled workspace inventory cannot be authorised', async () => {
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 403 }));
+    await expect(loadDriveInventory(enabled, supabaseUrl, 'key', 'jwt', fetchImpl))
+      .rejects.toMatchObject({ status: 403, code: 'DRIVE_INVENTORY_ACCESS_DENIED' });
+  });
+});
+
 describe('COCCE AI selected Drive context', () => {
   it('retrieves only the selected text file through the caller-authorised cloud API and pinned Bunny origin', async () => {
     const calls: Array<{ input: string; init: RequestInit }> = [];
