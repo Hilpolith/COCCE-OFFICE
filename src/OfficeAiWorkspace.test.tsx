@@ -153,7 +153,7 @@ describe('COCCE AI workspace context', () => {
     mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
       args.body.action === 'status'
         ? { data: { configured: true }, error: null }
-        : { data: { text: 'I can prepare this task for review.\\n\\n```office-action\\n{"type":"create_work_item","title":"Prepare monthly report","reference":"FIN-12","dueDate":"2026-12-01"}\\n```' }, error: null }
+        : { data: { text: 'I can prepare this task for review.\n\n```office-action\n{"type":"create_work_item","title":"Prepare monthly report","reference":"FIN-12","dueDate":"2026-12-01"}\n```' }, error: null }
     ));
     mocks.rpc.mockImplementation(async (name: string) => name === 'office_ai_create_conversation'
       ? { data: '55555555-5555-4555-8555-555555555555', error: null }
