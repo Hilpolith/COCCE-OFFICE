@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowUp, Bot, CheckCircle2, LoaderCircle, MessageCircle, Sparkles } from 'lucide-react';
+import { AlertCircle, ArrowUp, Bot, CheckCircle2, LoaderCircle, Sparkles } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
 import { createOfficeCloudApi } from './lib/officeCloudFiles';
 import type { CloudFile } from './lib/officeCloudFiles';
