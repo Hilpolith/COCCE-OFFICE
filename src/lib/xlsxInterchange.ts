@@ -854,6 +854,7 @@ function validateExportCharts(charts: OfficeSheetChart[] | undefined): XlsxChart
     if (!chart || typeof chart !== 'object' || typeof chart.id !== 'string'
       || typeof chart.title !== 'string' || !chart.title.trim() || chart.title.length > 80
       || (chart.type !== 'bar' && chart.type !== 'line')
+      || typeof chart.range !== 'string'
       || typeof chart.createdAt !== 'string' || !Number.isFinite(Date.parse(chart.createdAt))) {
       fail('A worksheet chart contains invalid metadata; nothing was exported.');
     }
@@ -872,14 +873,14 @@ function chartCellFormula(sheetName: string, column: string, startRow: number, e
   return `${quotedSheet}!${first}:${last}`;
 }
 
-function xlsxChartXml(chart: OfficeSheetChart, range: XlsxChartRange, index: number, sheetName: string): string {
+function xlsxChartXml(chart: OfficeSheetChart, range: XlsxChartRange, sheetName: string): string {
   const chartNs = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
   const drawingNs = 'http://schemas.openxmlformats.org/drawingml/2006/main';
   const categoryFormula = chartCellFormula(sheetName, range.startColumn, range.startRow + 1, range.endRow);
   const valueFormula = chartCellFormula(sheetName, range.endColumn, range.startRow + 1, range.endRow);
   const seriesNameFormula = chartCellFormula(sheetName, range.endColumn, range.startRow, range.startRow);
   const title = xmlText(chart.title);
-  const series = `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>${seriesNameFormula}</c:f></c:strRef></c:tx><c:cat><c:strRef><c:f>${categoryFormula}</c:f></c:strRef></c:cat><c:val><c:numRef><c:f>${valueFormula}</c:f></c:numRef></c:val>${chart.type === 'line' ? '<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>' : ''}<c:smooth val="0"/></c:ser>`;
+  const series = `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>${seriesNameFormula}</c:f></c:strRef></c:tx><c:cat><c:strRef><c:f>${categoryFormula}</c:f></c:strRef></c:cat><c:val><c:numRef><c:f>${valueFormula}</c:f></c:numRef></c:val>${chart.type === 'line' ? '<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>' : ''}</c:ser>`;
   const plot = chart.type === 'bar'
     ? `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${series}<c:gapWidth val="150"/><c:overlap val="0"/><c:axId val="50010001"/><c:axId val="50010002"/></c:barChart>`
     : `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${series}<c:marker val="1"/><c:smooth val="0"/><c:axId val="50010001"/><c:axId val="50010002"/></c:lineChart>`;
@@ -969,7 +970,7 @@ export async function createXlsxBlob(input: XlsxExportInput): Promise<Blob> {
     files['xl/drawings/drawing1.xml'] = new TextEncoder().encode(xlsxDrawingXml(chartRanges.length));
     files['xl/drawings/_rels/drawing1.xml.rels'] = new TextEncoder().encode(xlsxDrawingRelationships(chartRanges.length));
     input.charts!.forEach((chart, index) => {
-      files[`xl/charts/chart${index + 1}.xml`] = new TextEncoder().encode(xlsxChartXml(chart, chartRanges[index]!, index, input.sheetName));
+      files[`xl/charts/chart${index + 1}.xml`] = new TextEncoder().encode(xlsxChartXml(chart, chartRanges[index]!, input.sheetName));
     });
   }
   const { zipSync } = await import('fflate');
