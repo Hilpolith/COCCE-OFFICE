@@ -464,7 +464,7 @@ function parseWorkbookRelationships(xml: string, archive: XlsxArchive): {
     const linkedParts = parseRelationships(worksheetRelationships, worksheetPath, 'Worksheet relationships');
     if (linkedParts.length > 1 || linkedParts.some((relationship) => (
       !relationship.type.endsWith('/drawing')
-      || !/^xl\\/drawings\\/drawing\\d+\\.xml$/.test(relationship.target)
+      || !/^xl\/drawings\/drawing\d+\.xml$/.test(relationship.target)
     ))) {
       fail('Worksheet hyperlinks and unsupported linked features are not supported; nothing was imported.');
     }
