@@ -491,6 +491,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
               p_title: question.slice(0, 80),
             });
             if (createError || typeof createdId !== 'string') throw createError ?? new Error('Conversation creation failed');
+            if (requestGeneration !== aiRequestGeneration.current) return;
             conversationId = createdId;
             setActiveConversationId(createdId);
           }
@@ -501,19 +502,22 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
             p_model: typeof data.model === 'string' ? data.model : 'unknown',
           });
           if (saveError) throw saveError;
+          if (requestGeneration !== aiRequestGeneration.current) return;
           const { data: saved, error: listError } = await client
             .from('office_ai_conversations')
             .select('conversation_id,workspace_id,title,last_message_at')
             .eq('workspace_id', workspaceId)
             .order('last_message_at', { ascending: false })
             .range(0, 29);
-          if (requestGeneration === aiRequestGeneration.current && !listError) {
+          if (requestGeneration !== aiRequestGeneration.current) return;
+          if (!listError) {
             const rows = (saved ?? []) as AiConversation[];
             setConversations(rows);
             setHasMoreConversations(rows.length === 30);
           }
         } catch {
-          setError('Your answer was generated, but this exchange could not be saved to conversation history. Retry by sending your message again if you need a saved copy.');
+          if (requestGeneration === aiRequestGeneration.current)
+            setError('Your answer was generated, but this exchange could not be saved to conversation history. Retry by sending your message again if you need a saved copy.');
         }
       }
     } catch (reason) {
