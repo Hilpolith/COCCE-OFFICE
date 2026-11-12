@@ -80,6 +80,32 @@ describe('COCCE AI workspace context', () => {
     expect(screen.getByText('Start a conversation')).toBeTruthy();
   });
 
+  it('requires confirmation before permanently deleting a saved conversation', async () => {
+    const conversation = {
+      conversation_id: '55555555-5555-4555-8555-555555555555',
+      workspace_id: 'workspace-one',
+      title: 'Sensitive budget review',
+      last_message_at: '2026-11-12T00:00:00Z',
+    };
+    mocks.from.mockImplementation(() => {
+      const builder = {
+        select: vi.fn(() => builder),
+        eq: vi.fn(() => builder),
+        order: vi.fn(() => builder),
+        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        range: vi.fn().mockResolvedValue({ data: [conversation], error: null }),
+      };
+      return builder;
+    });
+    const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<OfficeAiWorkspace mode="chat" />);
+    await screen.findByText('Sensitive budget review');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Sensitive budget review' }));
+    expect(confirmation).toHaveBeenCalledWith(expect.stringContaining('permanently deleted'));
+    expect(mocks.rpc).not.toHaveBeenCalledWith('office_ai_delete_conversation', expect.anything());
+    expect(screen.getByText('Sensitive budget review')).toBeTruthy();
+  });
+
   it('loads older private conversations in bounded pages', async () => {
     const makeConversation = (index: number) => ({
       conversation_id: `55555555-5555-4555-8555-${String(index + 1).padStart(12, '0')}`,
