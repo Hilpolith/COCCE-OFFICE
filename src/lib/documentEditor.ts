@@ -260,7 +260,7 @@ export function richTextToPlainText(html: string): string {
 /** Never let empty/unsafe optional markup replace a valid legacy text draft. */
 export function initialDocumentHtml(content: string, richText?: string): string {
   const safe = typeof richText === 'string' ? sanitizeRichTextHtml(richText) : '';
-  return richTextToPlainText(safe).trim() || /<img\\b/i.test(safe) ? safe : plainTextToRichHtml(content);
+  return richTextToPlainText(safe).trim() || /<img\b/i.test(safe) ? safe : plainTextToRichHtml(content);
 }
 
 export function escapeMarkdownText(text: string): string {
