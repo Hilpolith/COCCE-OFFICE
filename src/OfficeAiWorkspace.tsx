@@ -7,6 +7,7 @@ import type { CloudFile } from './lib/officeCloudFiles';
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSupabase';
 import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
+import { officeAiInvokeError } from './lib/officeAi';
 import './officeAiWorkspace.css';
 
 type AiChatTurn = { role: 'user' | 'assistant'; content: string };
@@ -477,7 +478,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
         body: { action: 'chat', workspaceId, prompt: question, includeConversations: includeWorkspaceContext, ...(history.length ? { history } : {}), ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}) },
       });
       if (requestGeneration !== aiRequestGeneration.current) return;
-      if (invokeError) throw new Error(invokeError.message || 'COCCE AI request failed.');
+      if (invokeError) throw await officeAiInvokeError(invokeError);
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
       setTurns((current) => [...current, { role: 'user' as const, content: question }, { role: 'assistant' as const, content: data.text }].slice(-100));
       setPrompt('');
