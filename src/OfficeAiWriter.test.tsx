@@ -128,6 +128,47 @@ describe('Docs Writing assistant', () => {
     );
   });
 
+  it('discards a pending excerpt result when the Docs editor switches to another document', async () => {
+    let resolvePost!: (response: Response) => void;
+    const pendingPost = new Promise<Response>((resolve) => { resolvePost = resolve; });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') return pendingPost;
+      return { ok: true, json: async () => ({ configured: true }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const first = makeEditor();
+    const second = makeEditor();
+    const { rerender } = render(<OfficeAiWriter editor={first.editor} onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Summarize' }));
+    await waitFor(() => expect(fetcher.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
+
+    rerender(<OfficeAiWriter editor={second.editor} onGoToTeam={vi.fn()} />);
+    resolvePost({ ok: true, json: async () => ({ text: 'Stale document result.' }) } as Response);
+
+    expect(await screen.findByText(/document changed while COCCE AI was working/i)).toBeTruthy();
+    expect(screen.queryByText('Stale document result.')).toBeNull();
+    expect(second.chain.insertContentAt).not.toHaveBeenCalled();
+  });
+
+  it('does not send a full-document summary confirmation after the editor switches documents', async () => {
+    const fetcher = mockFetch();
+    const first = makeEditor();
+    const second = makeEditor();
+    const { rerender } = render(<OfficeAiWriter editor={first.editor} onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Writing assistant/i }));
+    await waitFor(() => expect(screen.getByText('Cloud AI configured')).toBeTruthy());
+    fireEvent.click(screen.getByText('Summarize full document'));
+    fireEvent.click(screen.getByRole('button', { name: 'Review and summarize' }));
+    expect(await screen.findByText('Confirm full-document summary')).toBeTruthy();
+
+    rerender(<OfficeAiWriter editor={second.editor} onGoToTeam={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
+    expect(await screen.findByText(/active document changed after confirmation/i)).toBeTruthy();
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
   it('offers a one-click rollback immediately after applying a reviewed AI edit', async () => {
     const fetcher = mockFetch();
     const { editor, chain } = makeEditor();
