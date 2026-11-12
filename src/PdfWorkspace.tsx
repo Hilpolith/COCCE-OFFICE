@@ -6,7 +6,7 @@ import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, BookOpenText, Check, FilePlus2,
-  FileText, Files, Highlighter, LoaderCircle, MessageSquare, RotateCw, Search,
+  FileImage, FileText, Files, Highlighter, LoaderCircle, MessageSquare, RotateCw, Search,
   Strikethrough, Trash2, Underline, Undo2, Upload, X,
 } from 'lucide-react';
 import { localDriveRepository, MAX_LOCAL_FILE_BYTES } from './lib/driveStore';
