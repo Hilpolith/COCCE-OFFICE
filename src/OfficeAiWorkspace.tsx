@@ -39,6 +39,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
   const [turns, setTurns] = useState<AiChatTurn[]>([]);
   const [conversations, setConversations] = useState<AiConversation[]>([]);
+  const [conversationSearch, setConversationSearch] = useState('');
+  const answerPaneRef = useRef<HTMLDivElement | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
@@ -262,8 +264,19 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     return () => { active = false; };
   }, [client, userId, status, workspaceId]);
 
+  const visibleConversations = useMemo(() => {
+    const query = conversationSearch.trim().toLocaleLowerCase();
+    return query ? conversations.filter((conversation) => conversation.title.toLocaleLowerCase().includes(query)) : conversations;
+  }, [conversations, conversationSearch]);
+
+  useEffect(() => {
+    const pane = answerPaneRef.current;
+    if (pane) pane.scrollTop = pane.scrollHeight;
+  }, [turns, busy]);
+
   const openConversation = async (conversationId: string) => {
     if (!client || historyLoading || busy) return;
+    const requestGeneration = ++aiRequestGeneration.current;
     setHistoryLoading(true);
     setError('');
     try {
@@ -273,6 +286,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
         .eq('conversation_id', conversationId)
         .order('sequence_no', { ascending: true })
         .limit(100);
+      if (requestGeneration !== aiRequestGeneration.current) return;
       if (messagesError) throw messagesError;
       setTurns((data ?? []).map((row: { role: 'user' | 'assistant'; content: string }) => ({ role: row.role, content: row.content })));
       setActiveConversationId(conversationId);
@@ -280,9 +294,9 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       setDriveFiles([]);
       setPrompt('');
     } catch {
-      setError('This saved conversation could not be opened. It may have been deleted or access may have changed.');
+      if (requestGeneration === aiRequestGeneration.current) setError('This saved conversation could not be opened. It may have been deleted or access may have changed.');
     } finally {
-      setHistoryLoading(false);
+      if (requestGeneration === aiRequestGeneration.current) setHistoryLoading(false);
     }
   };
 
@@ -485,13 +499,14 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
           </div>}
         </section>}
         <aside className="office-ai-history" aria-label="Saved AI conversations">
-          <div className="office-ai-history-heading"><strong>Conversation history</strong><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy || historyLoading}>New chat</button></div>
-          {workspaceId === '*' ? <small className="office-ai-history-hint">Select one workspace to save and reopen conversations. All-workspace context remains available for one-off questions.</small> : historyLoading ? <small className="office-ai-history-hint">Loading saved conversations…</small> : conversations.length ? conversations.map((conversation) => <div className={`office-ai-history-row ${activeConversationId === conversation.conversation_id ? 'is-active' : ''}`} key={conversation.conversation_id}>
+          <div className="office-ai-history-heading"><strong>Messages</strong><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy || historyLoading}>+ New</button></div>
+          {mode === "chat" && <input className="office-ai-history-search" type="search" value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search conversations" aria-label="Search conversations" />}
+          {workspaceId === '*' ? <small className="office-ai-history-hint">Select one workspace to save and reopen conversations. All-workspace context remains available for one-off questions.</small> : historyLoading ? <small className="office-ai-history-hint">Loading saved conversations…</small> : visibleConversations.length ? visibleConversations.map((conversation) => <div className={`office-ai-history-row ${activeConversationId === conversation.conversation_id ? 'is-active' : ''}`} key={conversation.conversation_id}>
             <button type="button" className="office-ai-history-open" onClick={() => void openConversation(conversation.conversation_id)} disabled={busy}><strong>{conversation.title}</strong><small>{new Date(conversation.last_message_at).toLocaleString()}</small></button>
             <button type="button" className="office-ai-history-delete" aria-label={`Delete ${conversation.title}`} onClick={() => void deleteConversation(conversation.conversation_id)} disabled={busy}>×</button>
-          </div>) : <small className="office-ai-history-hint">Your saved chats will appear here.</small>}
+          </div>) : <small className="office-ai-history-hint">{conversationSearch.trim() ? 'No matching conversations.' : 'Your saved chats will appear here.'}</small>}
         </aside>
-        <div className="office-ai-answer" aria-live="polite">{turns.length ? <><div className="office-ai-thread-toolbar"><span><span className="office-ai-presence-dot" /> {activeConversationId ? 'Saved conversation' : 'New conversation'} · {Math.floor(turns.length / 2)} messages</span><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy}>Clear thread</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div><p>{turn.content}</p></article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><div className="office-ai-empty-orb"><Sparkles size={23} /></div><strong>Start a conversation</strong><span>Ask a question, work through an idea, or get help with your workspace.</span><div className="office-ai-suggestions"><span>Summarise a document</span><span>Draft a project plan</span><span>Analyse a report</span></div></div>}</div>
+        <div className="office-ai-answer" aria-live="polite" ref={answerPaneRef}>{turns.length ? <><div className="office-ai-thread-toolbar"><span><span className="office-ai-presence-dot" /> {activeConversationId ? 'Saved conversation' : 'New conversation'} · {Math.floor(turns.length / 2)} messages</span><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy}>Clear thread</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div><p>{turn.content}</p></article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><div className="office-ai-empty-orb"><Sparkles size={23} /></div><strong>Start a conversation</strong><span>Ask a question, work through an idea, or get help with your workspace.</span><div className="office-ai-suggestions"><span>Summarise a document</span><span>Draft a project plan</span><span>Analyse a report</span></div></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder={mode === 'chat' ? 'Message…' : 'Ask across your workspace…'} disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
         {showDriveConsent && <div className="office-ai-consent-backdrop">
           <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
