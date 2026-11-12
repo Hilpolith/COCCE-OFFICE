@@ -446,7 +446,8 @@ function App() {
           {page === 'industry' && <IndustrySuitesWorkspace key={`${serverWorkspace?.workspaceId ?? 'local'}-${serverWorkspace?.suiteId ?? 'none'}-${industryFocus ?? 'all'}`} preferredIndustryId={industryFocus} activeWorkspace={serverWorkspace} onCreateTeam={openIndustryTeam} />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
           {page === 'chats' && <ChatsWorkspace />}
-          {page === 'ai-chat' && <OfficeAiWorkspace mode="chat" initialWorkspaceId={serverWorkspace?.workspaceId} />}\n          {page === 'ai' && <OfficeAiWorkspace mode="assistant" initialWorkspaceId={aiContext?.workspaceId ?? serverWorkspace?.workspaceId} initialPrompt={aiContext?.prompt} />}
+          {page === 'ai-chat' && <OfficeAiWorkspace mode="chat" initialWorkspaceId={serverWorkspace?.workspaceId} />}
+          {page === 'ai' && <OfficeAiWorkspace mode="assistant" initialWorkspaceId={aiContext?.workspaceId ?? serverWorkspace?.workspaceId} initialPrompt={aiContext?.prompt} />}
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
@@ -467,7 +468,8 @@ function pageTitle(page: PageId, editing: boolean, industryFocus: IndustryId | n
   if (page === 'settings') return 'Preferences';
   if (page === 'industry') return industryFocus ? getIndustryDefinition(industryFocus).shortLabel : 'Office suites';
   if (page === 'chats') return 'Chats';
-  if (page === 'ai-chat') return 'AI Chat';\n  if (page === 'ai') return 'COCCE AI';
+  if (page === 'ai-chat') return 'AI Chat';
+  if (page === 'ai') return 'COCCE AI';
   return documentNav.find((item) => item.id === page)?.label ?? toolkitNav.find((item) => item.id === page)?.label ?? 'Overview';
 }
 
