@@ -781,6 +781,7 @@ describe('Office cloud Edge Function', () => {
 
   it('verifies the existing COCCE Wallet PIN server-side before allowing storage purchase', async () => {
     const { fetchImpl, calls } = routedFetch((url, init) => {
+      if (url.pathname === '/rest/v1/rpc/office_cloud_wallet_pin_attempt') return Response.json({ allowed: true, retry_after_seconds: 0 });
       if (url.pathname === '/rest/v1/profiles') {
         expect(url.searchParams.get('select')).toBe('wallet_pin_hash');
         expect(url.searchParams.get('id')).toBe(`eq.${actorId}`);
@@ -810,8 +811,27 @@ describe('Office cloud Edge Function', () => {
     expect(JSON.stringify(calls.map((call) => call.init.body))).not.toContain('2468');
   });
 
+  it('rate-limits repeated wallet PIN attempts before reading the profile or invoking a debit', async () => {
+    const { fetchImpl, calls } = routedFetch((url) => {
+      if (url.pathname === '/rest/v1/rpc/office_cloud_wallet_pin_attempt') {
+        return Response.json({ allowed: false, retry_after_seconds: 900 });
+      }
+      throw new Error('A locked PIN attempt must not read the profile or debit the wallet.');
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const response = await handler(request({
+      action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
+      idempotencyKey: '88888888-8888-4888-8888-888888888888', walletPin: '2468',
+    }));
+    expect(response.status).toBe(429);
+    expect((await response.json()).error).toBe('WALLET_PIN_RATE_LIMITED');
+    expect(calls.some((call) => call.url.includes('/rest/v1/profiles'))).toBe(false);
+    expect(calls.some((call) => call.url.endsWith('/office_cloud_purchase_storage_subscription'))).toBe(false);
+  });
+
   it('rejects an incorrect COCCE Wallet PIN without invoking the storage debit RPC', async () => {
     const { fetchImpl, calls } = routedFetch((url) => {
+      if (url.pathname === '/rest/v1/rpc/office_cloud_wallet_pin_attempt') return Response.json({ allowed: true, retry_after_seconds: 0 });
       if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: '2468' }]);
       throw new Error('An invalid PIN must never reach a wallet debit RPC.');
     });
@@ -839,6 +859,7 @@ describe('Office cloud Edge Function', () => {
 
   it('rejects purchases when no COCCE Wallet PIN is configured', async () => {
     const { fetchImpl, calls } = routedFetch((url) => {
+      if (url.pathname === '/rest/v1/rpc/office_cloud_wallet_pin_attempt') return Response.json({ allowed: true, retry_after_seconds: 0 });
       if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: null }]);
       throw new Error('No debit is allowed without a configured wallet PIN.');
     });
@@ -854,6 +875,7 @@ describe('Office cloud Edge Function', () => {
 
   it('verifies the COCCE Wallet PIN before enabling storage auto-renew', async () => {
     const { fetchImpl, calls } = routedFetch((url) => {
+      if (url.pathname === '/rest/v1/rpc/office_cloud_wallet_pin_attempt') return Response.json({ allowed: true, retry_after_seconds: 0 });
       if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: '2468' }]);
       if (url.pathname === '/rest/v1/rpc/office_cloud_set_storage_subscription_auto_renew') {
         return Response.json({
