@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
     const searchResults = await Promise.all(enabledWorkspaces.slice(0, 20).map(async (workspace) => {
       const { data, error } = await client.rpc("office_search_ai_messages", {
         p_workspace_id: workspace.workspace_id,
-        p_query: prompt.trim(),
+        p_query: body.prompt.trim(),
         p_limit: 8,
       });
       return {
