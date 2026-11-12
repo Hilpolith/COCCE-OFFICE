@@ -97,7 +97,8 @@ describe('COCCE AI workspace context', () => {
       };
       return builder;
     });
-    const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const confirmation = vi.fn().mockReturnValue(false);
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirmation });
     render(<OfficeAiWorkspace mode="chat" />);
     await screen.findByText('Sensitive budget review');
     fireEvent.click(screen.getByRole('button', { name: 'Delete Sensitive budget review' }));
