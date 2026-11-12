@@ -238,10 +238,6 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       }
       const output = await requestOfficeAi(token, payload);
       if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== editor) return;
-      if (editorRef.current !== editor) {
-        setError('The document changed while COCCE AI was working. Its result was discarded and cannot be applied to another document.');
-        return;
-      }
       setAvailability('available');
       setResult(output);
       setPreviewTarget({
@@ -340,10 +336,6 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
       }
       const output = await requestOfficeAi(token, pending.payload);
       if (requestGeneration !== editorRequestGeneration.current || editorRef.current !== pending.editor) return;
-      if (editorRef.current !== pending.editor) {
-        setError('The document changed while COCCE AI was working. Its summary was discarded and cannot be applied to another document.');
-        return;
-      }
       setAvailability('available');
       setResult(output);
       setPreviewTarget({
