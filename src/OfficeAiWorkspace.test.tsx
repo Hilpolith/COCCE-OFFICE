@@ -72,6 +72,8 @@ describe('COCCE AI workspace context', () => {
     expect(shell).toBeTruthy();
     expect(container.querySelector('.office-ai-page-chat')).toBeTruthy();
     expect(container.querySelector('.office-ai-history[aria-label="Saved AI conversations"]')).toBeTruthy();
+    expect((screen.getByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement).value).toBe('workspace-one');
+    expect(screen.getByRole('searchbox', { name: 'Search conversations' })).toBeTruthy();
     expect(container.querySelector('.office-ai-answer[aria-live="polite"]')).toBeTruthy();
     expect(screen.getByPlaceholderText('Message…')).toBeTruthy();
     expect(screen.getByText('Start a conversation')).toBeTruthy();
