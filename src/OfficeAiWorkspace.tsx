@@ -115,7 +115,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const authGeneration = useRef(0);
   const aiRequestGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
-  const lastAppliedInitialWorkspaceId = useRef<string | undefined>(undefined);
+  const previousInitialWorkspaceId = useRef(initialWorkspaceId);
+  const pendingInitialWorkspaceId = useRef<string | undefined>(undefined);
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(mode === 'assistant');
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
   const [turns, setTurns] = useState<AiChatTurn[]>([]);
@@ -303,12 +304,18 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   }, [workspaces]);
 
   useLayoutEffect(() => {
-    if (!initialWorkspaceId || initialWorkspaceId === lastAppliedInitialWorkspaceId.current || !workspaces.some((space) => space.workspace_id === initialWorkspaceId)) return;
-    lastAppliedInitialWorkspaceId.current = initialWorkspaceId;
+    if (initialWorkspaceId !== previousInitialWorkspaceId.current) {
+      previousInitialWorkspaceId.current = initialWorkspaceId;
+      pendingInitialWorkspaceId.current = initialWorkspaceId;
+    }
+    const requestedWorkspaceId = pendingInitialWorkspaceId.current;
+    if (!requestedWorkspaceId || !workspaces.some((space) => space.workspace_id === requestedWorkspaceId)) return;
+    pendingInitialWorkspaceId.current = undefined;
+    if (workspaceId === requestedWorkspaceId) return;
     aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
     setBusy(false);
-    setWorkspaceId(initialWorkspaceId);
+    setWorkspaceId(requestedWorkspaceId);
     setTurns([]);
     setConversations([]);
     setHistoryLoading(false);

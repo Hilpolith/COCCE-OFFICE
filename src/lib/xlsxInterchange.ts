@@ -308,10 +308,19 @@ function resolveInternalTarget(sourcePath: string, target: string): string {
   if (!target || hasControlCharacters(target, true) || target.startsWith('/') || target.includes('\\') || target.includes('%') || target.includes('?') || target.includes('#')) {
     fail('The XLSX contains an unsafe relationship target.');
   }
-  const targetSegments = target.split('/');
-  if (targetSegments.some((segment) => !segment || segment === '.' || segment === '..')) fail('The XLSX contains an unsafe relationship target.');
   const directory = sourcePath ? sourcePath.slice(0, Math.max(0, sourcePath.lastIndexOf('/'))) : '';
-  return [directory, ...targetSegments].filter(Boolean).join('/');
+  const segments = [...directory.split('/').filter(Boolean)];
+  for (const segment of target.split('/')) {
+    if (!segment || segment === '.') fail('The XLSX contains an unsafe relationship target.');
+    if (segment === '..') {
+      if (!segments.length) fail('The XLSX contains an unsafe relationship target.');
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  if (!segments.length) fail('The XLSX contains an unsafe relationship target.');
+  return segments.join('/');
 }
 
 function parseRelationships(xml: string, sourcePath: string, label: string): PackageRelationship[] {
