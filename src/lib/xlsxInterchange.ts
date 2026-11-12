@@ -963,14 +963,23 @@ export async function importXlsxFile(file: File): Promise<ImportedXlsx> {
   }
   const worksheetXml = archive.parts.get(relationships.worksheetPath);
   if (!worksheetXml) fail('The XLSX worksheet part is missing.');
+  const drawingId = worksheetDrawingId(worksheetXml);
+  const drawingParts = [...archive.parts.keys()].filter((name) => /^xl\\/drawings\\/drawing\\d+\\.xml$/.test(name));
+  const chartParts = [...archive.parts.keys()].filter((name) => /^xl\\/charts\\/chart\\d+\\.xml$/.test(name));
+  if ((!drawingId && (drawingParts.length || chartParts.length)) || (drawingId && drawingParts.length !== 1)) {
+    fail('The XLSX package contains orphaned or unsupported chart/drawing parts.');
+  }
+  const charts = drawingId ? parseXlsxDrawingCharts(archive, relationships.worksheetPath, drawingId, workbook.sheetName) : [];
+  if (charts.length !== chartParts.length) fail('The XLSX package contains chart parts outside the supported drawing relationship graph.');
   validateStyles(relationships.stylesPath ? archive.parts.get(relationships.stylesPath) : undefined);
   const sharedStrings = parseSharedStrings(relationships.sharedStringsPath ? archive.parts.get(relationships.sharedStringsPath) : undefined);
-  const cells = parseWorksheet(worksheetXml, sharedStrings, workbook.sheetName);
+  const cells = parseWorksheet(worksheetXml, sharedStrings, workbook.sheetName, Boolean(drawingId));
   return {
     title: safeTitleFromFilename(file.name),
     sheetName: workbook.sheetName,
     cells,
-    warnings: [XLSX_IMPORT_FIDELITY_WARNING],
+    charts,
+    warnings: [XLSX_IMPORT_FIDELITY_WARNING, ...(charts.length ? [`Imported ${charts.length} supported chart${charts.length === 1 ? '' : 's'}; chart styling and placement are not retained.`] : [])],
   };
 }
 
