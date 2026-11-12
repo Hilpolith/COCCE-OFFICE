@@ -887,7 +887,7 @@ function worksheetDrawingId(xml: string): string | null {
   const root = parseXml(xml, 'Worksheet drawing reference').documentElement;
   const drawings = elementChildren(root, 'drawing');
   if (!drawings.length) return null;
-  const id = drawings[0]!.getAttributeNS(OFFICE_REL_NS, 'id');
+  const id = drawings[0]!.getAttributeNS(OFFICE_REL_NS, 'id') || drawings[0]!.getAttribute('r:id');
   if (!id || id.length > 128) fail('The worksheet drawing relationship is invalid.');
   return id;
 }
