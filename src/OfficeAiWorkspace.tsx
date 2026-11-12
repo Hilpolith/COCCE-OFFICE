@@ -17,10 +17,13 @@ function renderOfficeAiMarkdown(source: string): ReactNode {
   const blocks: ReactNode[] = [];
   const codeFence = String.fromCharCode(96).repeat(3);
   let index = 0;
-  const inline = (value: string) => value.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_)/g).filter(Boolean).map((part, key) => {
+  const inline = (value: string) => value.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\x60[^\x60]+\x60|\[[^\]]+\]\((?:https?:\/\/|mailto:)[^)]+\))/g).filter(Boolean).map((part, key) => {
     if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) return <strong key={key}>{part.slice(2, -2)}</strong>;
     if (part.startsWith('*') && part.endsWith('*')) return <em key={key}>{part.slice(1, -1)}</em>;
     if (part.startsWith('_') && part.endsWith('_')) return <em key={key}>{part.slice(1, -1)}</em>;
+    if (part.startsWith(String.fromCharCode(96)) && part.endsWith(String.fromCharCode(96))) return <code key={key}>{part.slice(1, -1)}</code>;
+    const link = /^\[([^\]]+)\]\(((?:https?:\/\/|mailto:)[^)]+)\)$/.exec(part);
+    if (link) return <a key={key} href={link[2]} target="_blank" rel="noopener noreferrer">{link[1]}</a>;
     return <Fragment key={key}>{part}</Fragment>;
   });
   while (index < lines.length) {
