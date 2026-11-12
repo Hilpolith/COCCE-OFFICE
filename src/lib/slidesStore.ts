@@ -56,7 +56,6 @@ function validSlide(value: unknown): value is SlideInput {
     && typeof value.notes === 'string' && value.notes.length <= MAX_SLIDE_TEXT_LENGTH
     && (value.imageAssetId === undefined || (typeof value.imageAssetId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.imageAssetId)))
     && (value.imageAltText === undefined || (typeof value.imageAltText === 'string' && value.imageAltText.length <= 500))
-    && (value.imageFit === undefined || value.imageFit === 'contain' || value.imageFit === 'cover')
     && (value.imageOmitted === undefined || typeof value.imageOmitted === 'boolean');
 }
 
