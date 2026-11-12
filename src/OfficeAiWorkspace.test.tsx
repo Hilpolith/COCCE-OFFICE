@@ -80,6 +80,18 @@ describe('COCCE AI workspace context', () => {
     expect(screen.getByText('Start a conversation')).toBeTruthy();
   });
 
+  it('does not reapply an old initial workspace after the user selects another workspace', async () => {
+    const { rerender } = render(<OfficeAiWorkspace mode="chat" />);
+    const selector = await screen.findByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement;
+    fireEvent.change(selector, { target: { value: 'workspace-two' } });
+    expect(selector.value).toBe('workspace-two');
+
+    rerender(<OfficeAiWorkspace mode="chat" initialWorkspaceId="workspace-one" />);
+    await waitFor(() => expect(selector.value).toBe('workspace-one'));
+    fireEvent.change(selector, { target: { value: 'workspace-two' } });
+    await waitFor(() => expect(selector.value).toBe('workspace-two'));
+  });
+
   it('sends on Enter and preserves multiline drafting on Shift+Enter', async () => {
     render(<OfficeAiWorkspace mode="chat" />);
     await screen.findByRole('combobox', { name: 'Workspace' });
