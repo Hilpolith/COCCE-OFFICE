@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import OfficeCloudSyncControl from './OfficeCloudSyncControl';
-import { getOfficeCloudSyncLink, OFFICE_CLOUD_SYNC_LINKS_KEY } from './lib/officeCloudSync';
+import { getOfficeCloudSyncLink, OFFICE_CLOUD_SYNC_LINKS_KEY, saveOfficeCloudSyncLink } from './lib/officeCloudSync';
 import { hashBytes } from './lib/officeCloudFiles';
 
 const actorId = '11111111-1111-4111-8111-111111111111';
@@ -111,5 +111,33 @@ describe('per-record Office cloud sync consent', () => {
     expect(api.reserve).not.toHaveBeenCalled();
     expect(snapshot).not.toHaveBeenCalled();
   });
+
+  it('retries a transient sync failure when the user returns to the tab without an unhandled rejection', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    const api = buildApi();
+    const localHash = await hashBytes(bytes);
+    api.getSyncState.mockRejectedValueOnce(new Error('temporary network failure'));
+    api.getSyncState.mockResolvedValueOnce({ ...state, sha256Hex: localHash });
+    saveOfficeCloudSyncLink(window.localStorage, {
+      actorId, workspaceId, module: 'docs', localRecordId,
+      fileId, baseRevisionId: revisionId, baseSha256Hex: 'a'.repeat(64),
+      displayName, sizeBytes: bytes.byteLength,
+      enabledAt: '2026-11-06T12:00:00.000Z',
+      lastSyncedAt: '2026-11-06T12:00:00.000Z',
+    });
+    const execute = vi.fn(async (work: (cloud: typeof api, current: () => boolean) => Promise<void>) => work(api, () => true));
+    render(<OfficeCloudSyncControl
+      actorId={actorId} workspaceId={workspaceId} module="docs"
+      localRecordId={localRecordId} displayName={displayName}
+      sourceKey="2026-11-06T12:01:00.000Z" hasUnsavedChanges={false}
+      busy={false} execute={execute as never} snapshot={() => bytes}
+    />);
+    await waitFor(() => expect(api.getSyncState).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText(/Auto-sync could not finish/)).toBeTruthy());
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await waitFor(() => expect(api.getSyncState).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText(/Saved changes synced|up to date/)).toBeTruthy());
+  });
+
 
 });
