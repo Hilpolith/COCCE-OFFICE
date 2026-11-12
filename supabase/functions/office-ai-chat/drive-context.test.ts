@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
-import { extractDocxText, extractPptxText, extractXlsxText, isSupportedDriveContextFile, isSupportedDriveTextFile, loadDriveInventory, loadSelectedDriveFiles } from './drive-context';
+import { extractDocxText, extractPptxText, extractXlsxText, isSupportedDriveContextFile, isSupportedDriveTextFile, loadDriveInventory, rankDriveInventoryFiles, loadSelectedDriveFiles } from './drive-context';
 
 const workspaceId = '11111111-1111-4111-8111-111111111111';
 const otherWorkspaceId = '22222222-2222-4222-8222-222222222222';
@@ -40,6 +40,38 @@ describe('COCCE AI authenticated Drive inventory', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.init?.headers).toMatchObject({ Authorization: 'Bearer caller-jwt', apikey: 'public-anon-key' });
     expect(calls[0]!.init?.body).toBe(JSON.stringify({ action: 'list_files', workspaceId, limit: 100, offset: 0 }));
+  });
+
+  it('paginates past the first 100 files and keeps the newest inventory entries', async () => {
+    const calls: Array<{ init?: RequestInit }> = [];
+    const pageOne = Array.from({ length: 100 }, (_, index) => ({
+      fileId: '10000000-0000-4000-8000-' + String(index + 1).padStart(12, '0'),
+      workspaceId, displayName: 'archive-' + index + '.pdf', sizeBytes: 100,
+      createdAt: '2026-10-01T00:00:00Z',
+    }));
+    const pageTwo = [{
+      fileId: revisionId, workspaceId, displayName: 'latest-report.pdf', sizeBytes: 100,
+      createdAt: '2026-11-12T10:00:00Z',
+    }];
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ init });
+      return Response.json({ files: calls.length === 1 ? pageOne : pageTwo });
+    });
+    const result = await loadDriveInventory(enabled, supabaseUrl, 'key', 'jwt', fetchImpl);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.init?.body).toBe(JSON.stringify({ action: 'list_files', workspaceId, limit: 100, offset: 100 }));
+    expect(result[0]!.displayName).toBe('latest-report.pdf');
+    expect(result).toHaveLength(101);
+  });
+
+  it('ranks content excerpts by prompt terms while retaining recent-file fallback', () => {
+    const inventory = [
+      { fileId, workspaceId, workspaceName: 'Operations', displayName: 'meeting-notes.md', sizeBytes: 10, createdAt: '2026-11-12T10:00:00Z' },
+      { fileId: revisionId, workspaceId, workspaceName: 'Finance', displayName: 'annual-budget.xlsx', sizeBytes: 10, createdAt: '2026-11-10T10:00:00Z' },
+      { fileId: otherWorkspaceId, workspaceId, workspaceName: 'Operations', displayName: 'staff-handbook.pdf', sizeBytes: 10, createdAt: '2026-11-09T10:00:00Z' },
+    ];
+    expect(rankDriveInventoryFiles(inventory, 'Explain the annual budget', 1).map((file) => file.fileId)).toEqual([revisionId]);
+    expect(rankDriveInventoryFiles(inventory, 'What files do I have?', 2).map((file) => file.fileId)).toEqual([fileId, revisionId]);
   });
 
   it('fails closed when an enabled workspace inventory cannot be authorised', async () => {
