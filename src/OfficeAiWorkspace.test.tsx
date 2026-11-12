@@ -377,6 +377,11 @@ describe('COCCE AI workspace context', () => {
       makeFile('ffffffff-ffff-4fff-8fff-ffffffffffff', 'auth/tokens.json'),
       makeFile('12121212-1212-4121-8121-121212121212', 'infra/service_account.json'),
       makeFile('13131313-1313-4131-8131-131313131313', 'ssh/id_ecdsa'),
+      makeFile('14141414-1414-4141-8141-141414141414', 'project/.npmrc'),
+      makeFile('15151515-1515-4151-8151-151515151515', '.aws/credentials'),
+      makeFile('16161616-1616-4161-8161-161616161616', '.docker/config.json'),
+      makeFile('17171717-1717-4171-8171-171717171717', '.git/config'),
+      makeFile('18181818-1818-4181-8181-181818181818', 'deploy/kubeconfig'),
     ]) });
     render(<OfficeAiWorkspace initialWorkspaceId={workspaceId} />);
     await screen.findByRole('combobox', { name: 'Workspace' });
@@ -396,6 +401,11 @@ describe('COCCE AI workspace context', () => {
     expect(screen.queryByText('auth/tokens.json')).toBeNull();
     expect(screen.queryByText('infra/service_account.json')).toBeNull();
     expect(screen.queryByText('ssh/id_ecdsa')).toBeNull();
+    expect(screen.queryByText('project/.npmrc')).toBeNull();
+    expect(screen.queryByText('.aws/credentials')).toBeNull();
+    expect(screen.queryByText('.docker/config.json')).toBeNull();
+    expect(screen.queryByText('.git/config')).toBeNull();
+    expect(screen.queryByText('deploy/kubeconfig')).toBeNull();
   });
 
 });
