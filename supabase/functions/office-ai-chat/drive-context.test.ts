@@ -189,7 +189,7 @@ describe('COCCE AI selected Drive context', () => {
       'config/secrets.json','keys/private-key.pem','finance/password-export.csv','docs/credentials.yaml',
       'certs/server.pem','signing/office.keystore','exports/passwords.csv','auth/tokens.json',
       'infra/service_account.json','ssh/id_ecdsa','project/.npmrc','.aws/credentials',
-      '.docker/config.json','.git/config','deploy/kubeconfig','C:\\Users\\operator\\.ssh\\id_ed25519',
+      '.aws/credentials.json','.ssh/config.json','.kube/config.json','.docker/config.json','.git/config.json','deploy/kubeconfig','C:\\Users\\operator\\.ssh\\id_ed25519',
       'movie.mp4','archive.zip',
     ]) {
       expect(isSupportedDriveTextFile(name), name).toBe(false);
