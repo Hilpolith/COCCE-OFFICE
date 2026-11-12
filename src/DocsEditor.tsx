@@ -816,6 +816,10 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
   const applySourceChanges = () => {
     if (!editor || !sourceMode) return;
+    if (sourceText.length > 1_000_000) {
+      setSourceNotice('Source text is limited to 1,000,000 characters. Nothing was applied.');
+      return;
+    }
     const converted = sourceMode === 'markdown'
       ? markdownToRichHtml(sourceText)
       : sanitizeRichTextHtmlWithWarnings(sourceText);
@@ -1035,7 +1039,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         else onPatch({ title: event.target.value });
       }} aria-label="Document title" placeholder="Untitled document" />
       <div className="document-meta"><span><FileText size={13} /> Local rich-text draft</span><span>Edited {friendlyDate(document.updatedAt)}</span></div>
-      {sourceMode ? <section className="docs-source-editor" aria-label={sourceMode === 'html' ? 'HTML source editor' : 'Markdown source editor'}>
+      {sourceMode && <section className="docs-source-editor" aria-label={sourceMode === 'html' ? 'HTML source editor' : 'Markdown source editor'}>
         <div className="docs-source-heading"><div><span className="eyebrow">{sourceMode === 'html' ? 'HTML SOURCE' : 'MARKDOWN SOURCE'}</span><strong>{sourceMode === 'html' ? 'Edit document markup' : 'Edit Markdown'}</strong><small>Changes remain a local preview until you apply them. Unsafe HTML and remote image links are removed.</small></div><span className="docs-source-local"><LockKeyhole size={12} /> LOCAL</span></div>
         <div className="docs-source-mode-tabs" role="group" aria-label="Source format">
           <button type="button" aria-pressed={sourceMode === 'html'} onClick={() => openSourceMode('html')}>HTML</button>
@@ -1044,10 +1048,11 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <textarea className="docs-source-textarea" aria-label={sourceMode === 'html' ? 'HTML source' : 'Markdown source'} spellCheck={false} autoCapitalize="off" autoCorrect="off" value={sourceText} onChange={(event) => setSourceText(event.target.value)} />
         {sourceNotice && <p className="docs-source-notice" role="status">{sourceNotice}</p>}
         <div className="docs-source-actions"><span>{sourceText.length.toLocaleString()} / 1,000,000 characters · nothing is sent to AI automatically</span><div><button type="button" className="button-secondary" onClick={discardSourceChanges}>Discard</button><button type="button" className="button-primary" onClick={applySourceChanges} disabled={!editor}>Apply to document</button></div></div>
-      </section> : <div className="docs-editor-container">
+      </section>}
+      <div className="docs-editor-container" hidden={Boolean(sourceMode)}>
         {editorState.empty && <p className="docs-writing-placeholder" aria-hidden="true">Start writing… Your draft is stored in this browser only.</p>}
         <EditorContent editor={editor} />
-      </div>}
+      </div>
       <div className="document-editor-bottom"><span>{sourceMode ? <Code size={13} /> : hasUnsavedChanges ? <X size={13} /> : <Check size={13} />}{sourceMode ? 'Source preview · apply to update the rich-text document' : hasUnsavedChanges ? 'Export or retry before closing this tab' : 'Formatting saves locally as you type'}</span><span>{sourceMode ? sourceText.length.toLocaleString() : document.content.length.toLocaleString()} characters</span></div>
     </article>
     <p className="editor-footnote"><LockKeyhole size={13} /> Drafts and review-comment sidecars stay in this browser. Simple bounded tables round-trip in DOCX; merged, nested, uneven, or over-limit imported tables become warned text, and unsupported export tables are refused. Review comments are not included in document exports or AI requests. Other Word structures may be omitted. {cloudEnabled ? 'Only an explicit, confirmed cloud-copy action sends document text and formatting to the chosen Office workspace. Documents with review comments are refused by this first copy format. Live sync and shared editing are not connected.' : 'Files are not uploaded, and cloud sync, sharing, and collaboration are not connected.'}</p>
