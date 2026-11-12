@@ -162,7 +162,6 @@ describe('per-record Office cloud sync consent', () => {
   });
 
 
-}
   it('refreshes this item when another tab enables or removes its sync link', async () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
     const api = buildApi();
