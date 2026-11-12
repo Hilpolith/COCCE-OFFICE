@@ -457,6 +457,29 @@ describe('COCCE AI workspace context', () => {
   });
 
 
+
+  it('clears a pending AI task proposal when an external workspace change occurs', async () => {
+    mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
+      args.body.action === 'status'
+        ? { data: { configured: true }, error: null }
+        : { data: { text: 'Review this task first.\\n\\n```office-action\\n{"type":"create_work_item","title":"Prepare monthly report","reference":"FIN-12","dueDate":"2026-12-01"}\\n```' }, error: null }
+    ));
+    render(<OfficeAiWorkspace mode="assistant" initialWorkspaceId="workspace-one" />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    const composer = screen.getByRole('textbox', { name: 'Ask across your workspace' }) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'Create a task to prepare the monthly report.' } });
+    fireEvent.submit(composer.closest('form')!);
+    expect(await screen.findByRole('heading', { name: 'Proposed task' })).toBeTruthy();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('cocce-office:workspace-changed', { detail: { workspaceId: 'workspace-two' } }));
+    });
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Proposed task' })).toBeNull());
+    expect(mocks.rpc).not.toHaveBeenCalledWith('office_industry_create_work_item', expect.anything());
+  });
+
+
   it('offers source-code text files while hiding likely secrets and credentials', async () => {
     const workspaceId = '11111111-1111-4111-8111-111111111111';
     mocks.listWorkspaces.mockResolvedValue([{ workspace_id: workspaceId, name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
