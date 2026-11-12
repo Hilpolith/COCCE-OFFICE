@@ -48,6 +48,27 @@ describe('spreadsheet formula engine', () => {
     expect(evaluateCellValue(cells, 'A21')).toEqual({ error: '#NUM!' });
   });
 
+  it('evaluates AVERAGEIF with optional same-shape average ranges and safe no-match errors', () => {
+    const cells = {
+      A1: 'East', A2: 'West', A3: 'East', A4: 'North',
+      B1: '10', B2: '99', B3: '20', B4: 'not a number',
+      C1: '=AVERAGEIF(A1:A4,"East",B1:B4)',
+      C2: '=AVERAGEIF(A1:A3,"West",B1:B3)',
+      C3: '=AVERAGEIF(A1:A4,"Missing",B1:B4)',
+      C4: '=AVERAGEIF(A1:A4,"East",B1:B2)',
+      C5: '=AVERAGEIF(A1:A3,"West")',
+      C6: '=AVERAGEIF(A1:A4,"North",B1:B4)',
+    };
+    expect(evaluateCellValue(cells, 'C1')).toBe(15);
+    expect(evaluateCellValue(cells, 'C2')).toBe(99);
+    expect(evaluateCellValue(cells, 'C3')).toEqual({ error: '#DIV/0!' });
+    expect(evaluateCellValue(cells, 'C4')).toEqual({ error: '#VALUE!' });
+    expect(evaluateCellValue(cells, 'C5')).toEqual({ error: '#DIV/0!' });
+    expect(evaluateCellValue(cells, 'C6')).toEqual({ error: '#DIV/0!' });
+    expect(isSupportedFormulaWithinVisibleGrid('=AVERAGEIF(A1:A3,"East",B1:B3)')).toBe(true);
+    expect(isSupportedFormulaWithinVisibleGrid('=AVERAGEIF(A1:A3,"East",B1:B2)')).toBe(false);
+  });
+
   it('recognizes the new functions in the safe formula-fill validator and rejects invalid arity', () => {
     for (const formula of [
       '=PRODUCT(A1:A3)', '=ROUNDUP(A1,2)', '=ROUNDDOWN(A1,2)', '=LEN(A1)',
