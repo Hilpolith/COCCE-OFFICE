@@ -18,6 +18,7 @@ import OfficeAiPromptWorkbench, { OfficeWorkbenchLayout } from './OfficeWorkbenc
 import {
   localSlidesAssetRepository, MAX_ACTIVE_SLIDE_IMAGES, MAX_ACTIVE_SLIDE_IMAGE_BYTES, MAX_SLIDE_IMAGE_BYTES,
 } from './lib/slidesAssets';
+import { createPptxBlob } from './lib/pptxExport';
 import {
   addSlide, createDeck, duplicateSlide, importDeck, moveSlide, readSlidesState,
   removeDeck, removeSlide, serializeDeck, SLIDE_LAYOUTS, SLIDES_STORAGE_KEY, updateDeck, updateSlide, writeSlidesState,
@@ -73,6 +74,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
   const [slidesCloudOpen, setSlidesCloudOpen] = useState(false);
   const slidesCloudReady = slidesCloudFilesEnabled(import.meta.env);
   const [feedback, setFeedback] = useState(loadResult.recovered ? 'Recovered unsaved edits from this tab. Retry save to keep them in local storage.' : '');
+  const [pptxExporting, setPptxExporting] = useState(false);
   const [history, setHistory] = useState<SlidesHistory>(createSlidesHistory);
   const [historyAnnouncement, setHistoryAnnouncement] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -391,6 +393,25 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
     setFeedback('Presentation JSON downloaded.');
   };
 
+  const downloadPptx = async (deck: PresentationDeck) => {
+    if (pptxExporting) return;
+    setPptxExporting(true);
+    try {
+      const blob = await createPptxBlob(deck);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = safeFileName(deck.title) + '.pptx';
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setFeedback('Editable PowerPoint presentation downloaded, including retained local images and speaker notes.');
+    } catch (error) {
+      setFeedback('PowerPoint export failed: ' + (error instanceof Error ? error.message : 'The presentation could not be exported.'));
+    } finally {
+      setPptxExporting(false);
+    }
+  };
+
   const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -553,14 +574,14 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
         <div>
           <span className="eyebrow">{slidesCloudReady ? 'COCCE SLIDES · LOCAL-FIRST' : 'COCCE SLIDES · LOCAL MODE'}</span>
           <h1>{activeDeck ? 'Edit presentation' : 'Presentations'}</h1>
-          <p className="page-lede">{slidesCloudReady ? 'Create and edit presentations saved in this browser. Manual cloud copies are optional; PPTX, background sync, and co-editing are not connected.' : 'Create and edit simple presentations saved in this browser. PPTX, cloud copies, and co-editing are not connected in this environment.'}</p>
+          <p className="page-lede">{slidesCloudReady ? 'Create and edit presentations saved in this browser. Manual cloud copies are optional; PowerPoint export is available; background sync and co-editing are not connected.' : 'Create and edit simple presentations saved in this browser. PowerPoint export is available; cloud copies and co-editing are not connected in this environment.'}</p>
         </div>
         <div className="slides-heading-actions">
           {activeDeck ? <button className="button-secondary" onClick={() => { selectDeck(null); setActiveSlideIndex(0); setHistoryAnnouncement(''); }}><ChevronLeft size={16} /> All presentations</button> : <button className="button-primary" onClick={beginDeck}><Plus size={17} /> New presentation</button>}
         </div>
       </div>
 
-      <div className="slides-local-note"><LockKeyhole size={14} /><span>Slides are saved in this browser, scoped to <strong>{workspaceId ? 'this local workspace' : 'Personal space'}</strong>. Image files use local IndexedDB; {slidesCloudReady ? 'a confirmed cloud copy includes the full presentation and all retained image files. No background sync occurs.' : 'JSON transfer omits local images after confirmation.'}</span></div>
+      <div className="slides-local-note"><LockKeyhole size={14} /><span>Slides are saved in this browser, scoped to <strong>{workspaceId ? 'this local workspace' : 'Personal space'}</strong>. Image files use local IndexedDB; {slidesCloudReady ? 'a confirmed cloud copy includes the full presentation and all retained image files. No background sync occurs.' : 'JSON transfer omits local images after confirmation; PowerPoint export embeds retained local images and notes.'}</span></div>
       {unsaved && <div className="slides-unsaved" role="alert"><span>{feedback}</span><button className="button-tertiary" onClick={retrySave}>Retry save</button></div>}
       {assetCleanupFailed && <div className="slides-unsaved" role="alert"><span>The presentation is deleted, but its local image files still need cleanup.</span><button className="button-tertiary" onClick={() => { void retryPendingAssetCleanup(); }}>Retry image cleanup</button></div>}
 
@@ -620,6 +641,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
               <span className="slides-history-live" role="status" aria-live="polite">{historyAnnouncement}</span>
             </div>
             <button className="icon-button" title="Download presentation JSON" aria-label="Download presentation JSON" onClick={() => downloadJson(activeDeck)}><Download size={16} /></button>
+            <button className="icon-button" title="Download editable PowerPoint" aria-label="Download PowerPoint PPTX" disabled={pptxExporting} onClick={() => void downloadPptx(activeDeck)}><FileText size={16} /></button>
             <button className="icon-button" title="Print or save as PDF" aria-label="Print or save as PDF" onClick={() => { void printPresentation(); }}><Printer size={16} /></button>
             <button className="button-present" disabled={!canPresent} title={canPresent ? 'Present this local deck' : 'Wait for local images to load or replace unavailable images'} onClick={() => setPresenting(true)}><Maximize2 size={15} /> Present</button>
             <button className="icon-button danger-icon" title="Delete presentation" aria-label="Delete presentation" onClick={deletePresentation}><Trash2 size={16} /></button>
