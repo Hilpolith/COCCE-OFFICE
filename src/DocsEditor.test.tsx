@@ -634,3 +634,40 @@ describe('Docs tabbed ribbon', () => {
     expect(document.querySelector('.document-canvas')?.getAttribute('style')).toContain('zoom: 125%');
   });
 });
+
+
+describe('Docs HTML and Markdown source modes', () => {
+  it('edits Markdown locally, previews it, and applies it to the rich-text document only on approval', async () => {
+    const { onPatch } = renderEditor();
+    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Markdown source' }));
+    const source = await screen.findByRole('textbox', { name: 'Markdown source' });
+    fireEvent.change(source, { target: { value: '# Quarterly report\\n\\nRevenue grew **18%**.\\n\\n- East\\n- West' } });
+    expect(onPatch).not.toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('Quarterly report') }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to document' }));
+    const content = await screen.findByRole('textbox', { name: 'Document content' });
+    await waitFor(() => expect(content.querySelector('h1')?.textContent).toBe('Quarterly report'));
+    expect(content.querySelector('strong')?.textContent).toBe('18%');
+    expect(content.querySelectorAll('li')).toHaveLength(2);
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('<h1>Quarterly report</h1>') }));
+  });
+
+  it('sanitizes HTML source before applying it and leaves the source untouched when discarded', async () => {
+    const { onPatch } = renderEditor();
+    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit HTML source' }));
+    const source = await screen.findByRole('textbox', { name: 'HTML source' });
+    fireEvent.change(source, { target: { value: '<h1>Safe heading</h1><script>bad()</script><img src="https://example.com/track.png" onerror="bad()">' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(onPatch).not.toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('Safe heading') }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit HTML source' }));
+    const secondSource = await screen.findByRole('textbox', { name: 'HTML source' });
+    fireEvent.change(secondSource, { target: { value: '<h1>Safe heading</h1><script>bad()</script><img src="https://example.com/track.png" onerror="bad()">' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to document' }));
+    const content = await screen.findByRole('textbox', { name: 'Document content' });
+    await waitFor(() => expect(content.querySelector('h1')?.textContent).toBe('Safe heading'));
+    expect(content.querySelector('script')).toBeNull();
+    expect(content.querySelector('img')).toBeNull();
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('<h1>Safe heading</h1>') }));
+  });
+});
