@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
     }
     const requestedFileIds = Array.isArray(body.fileIds) ? body.fileIds as string[] : [];
     const inventoryFileIds = body.includeDriveInventory === true
-      ? driveInventory.filter((file) => file.sizeBytes <= 512 * 1024 && /\\.(?:txt|md|markdown|csv|json|xml|yaml|yml|log|pdf|docx|xlsx|pptx|cocce-docs\\.json|cocce-sheets\\.json)$/i.test(file.displayName)).map((file) => file.fileId)
+      ? driveInventory.filter((file) => file.sizeBytes <= 512 * 1024 && /\.(?:txt|md|markdown|csv|json|xml|yaml|yml|log|pdf|docx|xlsx|pptx|cocce-docs\.json|cocce-sheets\.json)$/i.test(file.displayName)).map((file) => file.fileId)
       : [];
     const contextFileIds = [...new Set([...requestedFileIds, ...inventoryFileIds])].slice(0, MAX_DRIVE_FILES);
     driveFiles = await loadSelectedDriveFiles(contextFileIds, enabledWorkspaces, supabaseUrl, anonKey, token, fetch, extractPdfText);
@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
   if (driveInventory.length) {
     const inventoryText = driveInventory.map((file, index) =>
       (index + 1) + ". " + file.displayName + " — " + file.workspaceName + " — " + file.sizeBytes + " bytes — updated " + file.createdAt
-    ).join("\\n").slice(0, 14_000);
+    ).join("\n").slice(0, 14_000);
     history.push({
       role: "user",
       content: "[Untrusted private COCCE Office Drive inventory — authenticated membership scope; up to 200 files from enabled workspaces. This is file metadata, not file contents. Only the separately supplied excerpts below were read.]\\n" + inventoryText,
