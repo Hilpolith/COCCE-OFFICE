@@ -92,6 +92,22 @@ describe('COCCE AI workspace context', () => {
     await waitFor(() => expect(selector.value).toBe('workspace-two'));
   });
 
+  it('renders assistant markdown as structured rich content', async () => {
+    mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
+      args.body.action === 'status'
+        ? { data: { configured: true }, error: null }
+        : { data: { text: '## Workspace summary\\n\\n**Ready for review**\\n\\n- First action\\n- Second action' }, error: null }
+    ));
+    render(<OfficeAiWorkspace mode="chat" />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    const composer = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'Summarise this workspace.' } });
+    fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false });
+    expect(await screen.findByRole('heading', { name: 'Workspace summary' })).toBeTruthy();
+    expect(screen.getByText('Ready for review', { selector: 'strong' })).toBeTruthy();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
   it('sends on Enter and preserves multiline drafting on Shift+Enter', async () => {
     render(<OfficeAiWorkspace mode="chat" />);
     await screen.findByRole('combobox', { name: 'Workspace' });
