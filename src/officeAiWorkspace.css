@@ -141,3 +141,10 @@
 
 .office-ai-rich-content a{color:#a9c8ff;text-decoration:underline;text-decoration-color:rgba(169,200,255,.45);text-underline-offset:3px}
 .office-ai-rich-content a:hover{color:#d5e3ff;text-decoration-color:currentColor}
+
+.office-ai-table-wrap{max-width:100%;overflow-x:auto;border:1px solid var(--border);border-radius:13px;background:rgba(255,255,255,.035)}
+.office-ai-table{width:100%;min-width:320px;border-collapse:separate;border-spacing:0;font-size:12px;line-height:1.55}
+.office-ai-table th,.office-ai-table td{padding:9px 11px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+.office-ai-table th{background:rgba(153,139,255,.12);color:#c9c0ff;font-weight:800;white-space:nowrap}
+.office-ai-table tbody tr:last-child td{border-bottom:0}
+.office-ai-table tbody tr:nth-child(even){background:rgba(255,255,255,.025)}
