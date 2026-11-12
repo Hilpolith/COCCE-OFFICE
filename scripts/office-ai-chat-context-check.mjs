@@ -9,7 +9,7 @@ const migration = read('../supabase/migrations/20261109104406_office_ai_message_
 const aiUi = read('../src/OfficeAiWorkspace.tsx');
 const aiTest = read('../src/OfficeAiWorkspace.test.tsx');
 const chatUi = read('../src/OfficeChatPanel.tsx');
-const workspaceAiMigration = read('../supabase/migrations/20261112150000_fix_office_workspace_ai_enabled_membership_schema.sql');
+const workspaceAiMigration = read('../supabase/migrations/20261112102219_fix_office_workspace_ai_enabled_membership_schema.sql');
 
 test('COCCE AI uses authenticated relevance search and excludes deleted fallback messages', () => {
   assert.match(edge, /office_search_ai_messages/);
