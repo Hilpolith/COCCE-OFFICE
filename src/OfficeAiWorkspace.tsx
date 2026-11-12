@@ -115,6 +115,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const driveLoadGeneration = useRef(0);
   const authGeneration = useRef(0);
   const aiRequestGeneration = useRef(0);
+  const workspaceContextGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const initialWorkspaceIdAtMount = useRef(initialWorkspaceId);
   const previousInitialWorkspaceId = useRef(initialWorkspaceId);
@@ -144,6 +145,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     let active = true;
     const clearAiContext = (nextStatus: 'loading' | 'signed-out') => {
       authGeneration.current += 1;
+      workspaceContextGeneration.current += 1;
       aiRequestGeneration.current += 1;
       driveLoadGeneration.current += 1;
       setBusy(false);
@@ -244,6 +246,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   }, [initialPrompt, initialWorkspaceId]);
 
   const changeWorkspace = (nextId: string) => {
+    workspaceContextGeneration.current += 1;
     setPendingAction(null);
     setPendingActionKey('');
     setActionStatus('');
@@ -273,6 +276,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   useEffect(() => {
     const applyWorkspace = (nextId: string) => {
       if (!nextId || !workspaces.some((space) => space.workspace_id === nextId)) return;
+      workspaceContextGeneration.current += 1;
       aiRequestGeneration.current += 1;
       driveLoadGeneration.current += 1;
       setBusy(false);
@@ -290,12 +294,19 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       setDriveFilesError('');
       setDriveFilesOpen(false);
       setShowDriveConsent(false);
+      setShareCloudInventory(false);
+      setShareSectorRecords(false);
+      setIncludeSectorRecords(false);
+      setPendingAction(null);
+      setPendingActionKey('');
+      setActionStatus('');
     };
     const handleWorkspaceChange = (event: Event) => {
       const nextId = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId ?? '';
       applyWorkspace(nextId);
     };
     const handleWorkspaceClear = () => {
+      workspaceContextGeneration.current += 1;
       aiRequestGeneration.current += 1;
       driveLoadGeneration.current += 1;
       setBusy(false);
@@ -314,6 +325,12 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       setDriveFilesOpen(false);
       setDriveFilesError('');
       setShowDriveConsent(false);
+      setShareCloudInventory(false);
+      setShareSectorRecords(false);
+      setIncludeSectorRecords(false);
+      setPendingAction(null);
+      setPendingActionKey('');
+      setActionStatus('');
     };
     window.addEventListener('cocce-office:workspace-changed', handleWorkspaceChange);
     window.addEventListener('cocce-office:workspace-cleared', handleWorkspaceClear);
@@ -579,6 +596,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
 
   const approveProposedAction = async () => {
     if (!client || !pendingAction || !pendingActionKey || workspaceId === '*' || busy) return;
+    const contextGeneration = workspaceContextGeneration.current;
+    const proposalKey = pendingActionKey;
     const workspace = workspaces.find((item) => item.workspace_id === workspaceId);
     if (!workspace) {
       setActionStatus('Select one authorised workspace before applying this action.');
@@ -589,7 +608,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       description: `Create “${pendingAction.title}” in workspace “${workspace.name}”?${pendingAction.reference ? ` Reference: ${pendingAction.reference}.` : ''}${pendingAction.dueDate ? ` Due: ${pendingAction.dueDate}.` : ''} This creates one generic industry work item. No other records will be changed.`,
       confirmLabel: 'Approve and create',
     });
-    if (!accepted) return;
+    if (!accepted || contextGeneration !== workspaceContextGeneration.current || proposalKey !== pendingActionKey) return;
     setBusy(true);
     setActionStatus('Creating the approved task…');
     try {
