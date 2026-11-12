@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
 import type { PresentationDeck } from './slidesStore';
-import { createPptxBlob } from './pptxExport';
+import { createPptxBlob, importPptxFile } from './pptxExport';
 const deck: PresentationDeck = {
   id: 'deck-export-test', workspaceId: null, title: 'Quarterly COCCE Report', theme: 'ocean', updatedAt: '2026-11-12T00:00:00.000Z',
   slides: [
@@ -35,6 +35,27 @@ describe('PowerPoint interchange', () => {
     expect(Object.keys(files).some((name) => name.startsWith('ppt/media/'))).toBe(true);
     expect(strFromU8(files['ppt/slides/slide1.xml']!)).toContain('COCCE launch photo');
   });
+  it('imports PowerPoint text and speaker notes into a new COCCE deck', async () => {
+    const blob = await createPptxBlob(deck);
+    const file = new File([blob], 'Quarterly COCCE Report.pptx', { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    const imported = await importPptxFile(file, null);
+    expect(imported.deck.title).toBe('Quarterly COCCE Report');
+    expect(imported.deck.slides).toHaveLength(2);
+    expect(imported.deck.slides[0]?.title).toBe('Quarterly results');
+    expect(imported.deck.slides[0]?.body).toContain('Revenue increased by 18%.');
+    expect(imported.deck.slides[0]?.notes).toContain('Presenter note: explain the regional rollout.');
+    expect(imported.omittedImageCount).toBe(0);
+  });
+
+  it('flags embedded PowerPoint images for reinsertion instead of silently losing them', async () => {
+    const imageBytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/kYkAAAAASUVORK5CYII='), (char) => char.charCodeAt(0));
+    const readImage = async () => ({ metadata: { width: 1, height: 1 }, blob: new Blob([imageBytes], { type: 'image/png' }) });
+    const blob = await createPptxBlob({ ...deck, slides: [{ ...deck.slides[0]!, imageAssetId: 'local-image-1' }] }, readImage);
+    const file = new File([blob], 'Image presentation.pptx', { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    const imported = await importPptxFile(file, null);
+    expect(imported.omittedImageCount).toBe(1);
+  });
+
   it('rejects empty or oversized presentation decks', async () => {
     await expect(createPptxBlob({ ...deck, slides: [] })).rejects.toThrow(/supported number of slides/);
     await expect(createPptxBlob({ ...deck, slides: Array.from({ length: 101 }, (_, index) => ({ ...deck.slides[0]!, id: 'slide-' + index })) })).rejects.toThrow(/supported number of slides/);
