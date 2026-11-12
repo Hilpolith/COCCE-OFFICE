@@ -102,7 +102,7 @@ test('manual settlement records a finance-visible payment and advances order ver
 test('room charge requires checked-in same-property reservation and posts snapshot totals', async () => {
   const order = '88888888-8888-4888-8888-888888888888';
   await q(`INSERT INTO public.office_hospitality_restaurant_orders(id,workspace_id,property_id,status,created_by,data) VALUES($1,$2,$3,'open',$4,$5)`, [order,ids.workspace,ids.property,ids.owner,{property_id:ids.property,code:'O-2'}]);
-  const added=await action('add_order_line',{id:order,expected_version:1,item_id:ids.menu,quantity:'1'});
+  const _added=await action('add_order_line',{id:order,expected_version:1,item_id:ids.menu,quantity:'1'});
   await q("UPDATE public.office_hospitality_restaurant_orders SET status='served' WHERE id=$1",[order]);
   const settled=await action('settle_order',{id:order,expected_version:2,method:'room_charge',reservation_id:ids.reservation,reference:'FOLIO-2'});
   assert.equal(settled.status,'settled'); assert.equal(settled.version,3);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
-const root = new URL('../', import.meta.url);
+const _root = new URL('../', import.meta.url);
 const ids = { owner:'11111111-1111-4111-8111-111111111111', workspace:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', property:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', item:'cccccccc-cccc-4ccc-8ccc-cccccccccccc', menu:'dddddddd-dddd-4ddd-8ddd-dddddddddddd', order:'ffffffff-ffff-4fff-8fff-ffffffffffff', reservationA:'99999999-9999-4999-8999-999999999999', reservationB:'88888888-8888-4888-8888-888888888888' };
 const migrations = ['20261108010000_office_hospitality_management.sql','20261108010100_office_hospitality_read_security.sql','20261108010110_office_hospitality_finance.sql','20261108010120_office_hospitality_food_stock.sql','20261108010130_office_hospitality_operations.sql','20261108010140_office_hospitality_dispatch.sql','20261108010150_office_hospitality_guardrails.sql','20261108020000_office_hospitality_workflow_repair.sql','20261108020100_office_hospitality_finance_repair.sql','20261108020200_office_hospitality_report_repair.sql'];
 const db = new PGlite();

@@ -96,7 +96,7 @@ test('full public receive, QC, BOM, production, return/output, QC and dispatch w
   assert.equal(inspected.status, 'released');
   const bom = await cmd('save_bom', { bom_code: 'BOM-' + randomUUID().slice(0, 6), revision: '1', kind: 'standard', product_id: fg.id, output_quantity: '1.000000' }, ids.planner);
   const line = await cmd('save_bom_line', { bom_id: bom.id, item_id: raw.id, quantity: '2.000000', expected_parent_version: bom.version }, ids.planner);
-  const active = await cmd('activate_bom', { id: bom.id, expected_version: line.parent_version }, ids.planner);
+  const _active = await cmd('activate_bom', { id: bom.id, expected_version: line.parent_version }, ids.planner);
   const order = await cmd('save_production_order', { order_code: 'PO-' + randomUUID().slice(0, 6), bom_id: bom.id, target_quantity: '2.000000', due_date: '2026-12-01', asset_id: asset.id, output_location_id: loc.id }, ids.planner);
   const allocation = await cmd('allocate_material', { order_id: order.id, expected_parent_version: order.version, lot_id: received.lot_id, location_id: loc.id, quantity: '4.000000' }, ids.planner);
   const released = await cmd('release_production_order', { id: order.id, expected_version: allocation.parent_version }, ids.planner);
