@@ -149,6 +149,40 @@ describe('COCCE AI workspace context', () => {
     expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
   });
 
+  it('requires explicit confirmation and an authenticated RPC before creating an AI-proposed work item', async () => {
+    mocks.invoke.mockImplementation(async (_name: string, args: { body: { action: string } }) => (
+      args.body.action === 'status'
+        ? { data: { configured: true }, error: null }
+        : { data: { text: 'I can prepare this task for review.\\n\\n```office-action\\n{"type":"create_work_item","title":"Prepare monthly report","reference":"FIN-12","dueDate":"2026-12-01"}\\n```' }, error: null }
+    ));
+    mocks.rpc.mockImplementation(async (name: string) => name === 'office_ai_create_conversation'
+      ? { data: '55555555-5555-4555-8555-555555555555', error: null }
+      : name === 'office_industry_create_work_item'
+        ? { data: '66666666-6666-4666-8666-666666666666', error: null }
+        : { data: null, error: null });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<OfficeAiWorkspace mode="assistant" initialWorkspaceId="workspace-one" />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    const composer = screen.getByRole('textbox', { name: 'Ask across your workspace' }) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'Create a task to prepare the monthly report.' } });
+    fireEvent.submit(composer.closest('form')!);
+    expect(await screen.findByRole('heading', { name: 'Proposed task' })).toBeTruthy();
+    expect(screen.getByText('Prepare monthly report')).toBeTruthy();
+    expect(mocks.rpc.mock.calls.some((call) => call[0] === 'office_industry_create_work_item')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and create task' }));
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('office_industry_create_work_item', expect.objectContaining({
+      p_workspace_id: 'workspace-one',
+      p_title: 'Prepare monthly report',
+      p_reference: 'FIN-12',
+      p_due_date: '2026-12-01',
+      p_assignee_user_id: null,
+      p_notes: '',
+      p_idempotency_key: expect.any(String),
+    })));
+    expect(await screen.findByText('Created “Prepare monthly report” in Operations.')).toBeTruthy();
+  });
+
   it('sends on Enter and preserves multiline drafting on Shift+Enter', async () => {
     render(<OfficeAiWorkspace mode="chat" />);
     await screen.findByRole('combobox', { name: 'Workspace' });
