@@ -343,6 +343,8 @@ function expectedContentType(name: string): string | null {
   if (/^\/xl\/worksheets\/sheet\d+\.xml$/.test(name)) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml';
   if (name === '/xl/sharedStrings.xml') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml';
   if (name === '/xl/styles.xml') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml';
+  if (/^\/xl\/drawings\/drawing\d+\.xml$/.test(name)) return 'application/vnd.openxmlformats-officedocument.drawing+xml';
+  if (/^\/xl\/charts\/chart\d+\.xml$/.test(name)) return 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml';
   if (name === '/xl/theme/theme1.xml') return 'application/vnd.openxmlformats-officedocument.theme+xml';
   if (name === '/xl/calcChain.xml') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml';
   if (name === '/docProps/core.xml') return 'application/vnd.openxmlformats-package.core-properties+xml';
