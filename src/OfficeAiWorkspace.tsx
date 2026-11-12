@@ -217,7 +217,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   }, [workspaces]);
 
   useEffect(() => {
-    if (!initialWorkspaceId || !workspaces.some((space) => space.workspace_id === initialWorkspaceId)) return;
+    if (!initialWorkspaceId || workspaceId === initialWorkspaceId || !workspaces.some((space) => space.workspace_id === initialWorkspaceId)) return;
     aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
     setBusy(false);
@@ -231,8 +231,6 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setDriveFileOffsets({});
     setDriveFileHasMore(false);
     setDriveFilesOpen(false);
-    setTurns([]);
-    setActiveConversationId(null);
     setShowDriveConsent(false);
   }, [initialWorkspaceId, workspaces]);
 
