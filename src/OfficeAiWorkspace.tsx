@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertCircle, ArrowUp, Bot, CheckCircle2, LoaderCircle, Sparkles } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
@@ -284,7 +284,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     };
   }, [workspaces]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!initialWorkspaceId || initialWorkspaceId === lastAppliedInitialWorkspaceId.current || !workspaces.some((space) => space.workspace_id === initialWorkspaceId)) return;
     lastAppliedInitialWorkspaceId.current = initialWorkspaceId;
     aiRequestGeneration.current += 1;
