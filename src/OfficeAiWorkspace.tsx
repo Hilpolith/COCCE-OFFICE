@@ -528,7 +528,6 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
 
   const ask = async (confirmedDriveSharing = false) => {
     if (!client || !workspaceId || !prompt.trim() || busy) return;
-    if (selectedFileIds.length > 0 && !confirmedDriveSharing) { setShowDriveConsent(true); return; }
     setShowDriveConsent(false);
     const question = prompt.trim();
     const wantsCloudInventory = /\b(?:cloud|drive)\b|\b(?:what|which|list|show|find|search|summari[sz]e?|describe).{0,80}\b(?:files?|documents?|folders?)\b/i.test(question);
