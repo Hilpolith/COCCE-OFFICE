@@ -366,3 +366,9 @@ Images are embedded in the local rich-text document. This implementation does no
 
 - Enter submits the current message; Shift+Enter keeps a multiline draft. The behavior is covered by a component test and uses the same validated submit path as the send control.
 - The dedicated AI Chat component suite now passes 12/12 tests; the glass boundary suite passes 8/8; the production TypeScript/Vite build passes. The latest commits are not yet deployed because Vercel is returning a build-rate-limit failure for both linked project checks; the previously verified production deployment remains commit `7de27e8` until a newer deployment reaches READY.
+
+### AI Chat final interaction tranche
+
+- The composer now sends on Enter and preserves multiline text on Shift+Enter; both paths use the same submit validation and request handler.
+- The latest focused run passed 12/12 AI Chat component tests and 8/8 glass-boundary tests (20 total), followed by a successful TypeScript/Vite production build.
+- Latest main commit: `7adfdbb` for the keyboard test, with subsequent roadmap documentation committed separately. The last READY production deployment is still `7de27e8`; newer Vercel builds are currently rejected by the account's build-rate limit. Do not claim the latest chat changes are live until a deployment for the newer commit reaches READY.
