@@ -8,7 +8,8 @@ import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import './officeAiWorkspace.css';
 
-type AiChatTurn = { role: 'user' | 'assistant'; content: string };\ntype AiConversation = { conversation_id: string; workspace_id: string; title: string; last_message_at: string };
+type AiChatTurn = { role: 'user' | 'assistant'; content: string };
+type AiConversation = { conversation_id: string; workspace_id: string; title: string; last_message_at: string };
 
 const AI_DRIVE_TEXT_EXTENSIONS = new Set([
   'txt','md','markdown','mdx','csv','tsv','json','jsonl','ndjson','xml','yaml','yml','log',
@@ -36,7 +37,10 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
   const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
-  const [turns, setTurns] = useState<AiChatTurn[]>([]);\n  const [conversations, setConversations] = useState<AiConversation[]>([]);\n  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);\n  const [historyLoading, setHistoryLoading] = useState(false);
+  const [turns, setTurns] = useState<AiChatTurn[]>([]);
+  const [conversations, setConversations] = useState<AiConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
   const [busy, setBusy] = useState(false);
   const [showDriveConsent, setShowDriveConsent] = useState(false);
