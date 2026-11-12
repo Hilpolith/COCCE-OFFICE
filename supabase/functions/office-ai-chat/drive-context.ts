@@ -11,7 +11,13 @@ const DRIVE_TEXT_EXTENSIONS = new Set([
   'toml','ini','conf','properties','dart','java','kt','kts','go','rs','php','rb','swift','c','h','cpp','hpp',
   'cs','r','lua','ps1','bat','graphql','gql','prisma','vue','svelte','astro',
 ]);
-const SENSITIVE_DRIVE_NAME = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
+const SENSITIVE_DRIVE_SEGMENT = /^(?:\.env(?:\..*)?|\.aws|\.ssh|\.kube|\.docker|\.git|\.npmrc|\.pypirc|\.netrc|\.git-credentials|kubeconfig|secrets?(?:\..*)?|credentials?(?:\..*)?|service[-_]account(?:\..*)?|id_(?:rsa|ed25519|ecdsa|dsa))$|(?:^|[._-])(?:secrets?|credentials?|passwords?|tokens?|private[-_]?keys?)(?:[._-]|$)/i;
+const SENSITIVE_PRIVATE_KEY_EXTENSION = /\.(?:pem|key|p12|pfx|jks|keystore)$/i;
+
+function isSensitiveDriveFileName(value: string): boolean {
+  return value.normalize('NFC').replaceAll('\\', '/').split('/').some((segment) =>
+    SENSITIVE_DRIVE_SEGMENT.test(segment) || SENSITIVE_PRIVATE_KEY_EXTENSION.test(segment));
+}
 const OFFICE_CLOUD_FUNCTION = '/functions/v1/office-cloud-files';
 const BUNNY_DOWNLOAD_ORIGIN = 'https://de-s3.storage.bunnycdn.com';
 
@@ -118,7 +124,7 @@ function extractOfficeSnapshot(name: string, text: string): string {
 
 export function isSupportedDriveTextFile(name: string): boolean {
   const normalized = name.normalize('NFC').trim();
-  if (!normalized || SENSITIVE_DRIVE_NAME.test(normalized)) return false;
+  if (!normalized || isSensitiveDriveFileName(normalized)) return false;
   const extension = normalized.split('.').pop()?.toLowerCase() ?? '';
   return DRIVE_TEXT_EXTENSIONS.has(extension);
 }
@@ -131,7 +137,7 @@ const MAX_OFFICE_ARCHIVE_TEXT = 8_000;
 
 export function isSupportedDriveContextFile(name: string): boolean {
   const normalized = name.normalize('NFC').trim();
-  if (!normalized || SENSITIVE_DRIVE_NAME.test(normalized)) return false;
+  if (!normalized || isSensitiveDriveFileName(normalized)) return false;
   return CONTEXT_EXTENSIONS.has(normalized.split('.').pop()?.toLowerCase() ?? '');
 }
 
