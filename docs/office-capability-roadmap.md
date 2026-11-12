@@ -355,3 +355,9 @@ Images are embedded in the local rich-text document. This implementation does no
 - Search filters the conversations currently loaded into the sidebar; loading older pages expands the searchable set without replacing already loaded rows.
 - Added a generation guard so an older-page response is discarded if the selected workspace changes while the request is in flight.
 - The focused AI Chat suite now has 10 passing tests, including the first and second history-page boundaries. The TypeScript/Vite production build passed after this change.
+
+### AI Chat destructive-action safeguard
+
+- Permanent conversation deletion now requires the shared Frosted Confirm dialog, names the conversation, explains that its messages will be removed, and uses a destructive confirmation action.
+- Cancelling leaves the conversation and its message rows untouched; the existing owner-only hard-delete RPC remains the only deletion path.
+- Added a regression test for cancellation. The dedicated AI Chat component suite now passes 11/11 tests and the TypeScript/Vite build passes after this change.
