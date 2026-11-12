@@ -149,6 +149,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setDriveFilesLoading(false);
     setWorkspaceId(nextId);
     setTurns([]);
+    setConversations([]);
+    setHistoryLoading(false);
     setActiveConversationId(null);
     setError('');
     setDriveFiles([]);
@@ -170,6 +172,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       setDriveFilesLoading(false);
       setWorkspaceId(nextId);
       setTurns([]);
+      setConversations([]);
+      setHistoryLoading(false);
       setActiveConversationId(null);
       setError('');
       setDriveFiles([]);
@@ -191,6 +195,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       setDriveFilesLoading(false);
       setWorkspaceId('');
       setTurns([]);
+      setConversations([]);
+      setHistoryLoading(false);
       setActiveConversationId(null);
       setPrompt('');
       setError('');
@@ -217,6 +223,9 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setBusy(false);
     setWorkspaceId(initialWorkspaceId);
     setTurns([]);
+    setConversations([]);
+    setHistoryLoading(false);
+    setActiveConversationId(null);
     setDriveFiles([]);
     setSelectedFileIds([]);
     setDriveFileOffsets({});
