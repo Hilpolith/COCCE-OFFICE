@@ -148,3 +148,13 @@
 .office-ai-table th{background:rgba(153,139,255,.12);color:#c9c0ff;font-weight:800;white-space:nowrap}
 .office-ai-table tbody tr:last-child td{border-bottom:0}
 .office-ai-table tbody tr:nth-child(even){background:rgba(255,255,255,.025)}
+
+
+.office-ai-action-proposal{display:grid;gap:8px;margin:12px 4px;padding:15px;border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border));border-radius:18px;background:linear-gradient(135deg,rgba(142,126,255,.12),rgba(255,255,255,.045));box-shadow:0 12px 32px rgba(0,0,0,.12);backdrop-filter:var(--glass-filter);-webkit-backdrop-filter:var(--glass-filter)}
+.office-ai-action-proposal h3{margin:3px 0 0;color:var(--text);font-size:14px;letter-spacing:-.02em}
+.office-ai-action-proposal>strong{font-size:13px;color:var(--text);overflow-wrap:anywhere}
+.office-ai-action-proposal>span,.office-ai-action-proposal>p,.office-ai-action-status{margin:0;color:var(--muted);font-size:11px;line-height:1.55;overflow-wrap:anywhere}
+.office-ai-action-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:3px}
+.office-ai-action-buttons button{min-height:36px;padding:0 13px;border-radius:999px;font-size:10px}
+.office-ai-action-status{margin:8px 8px}
+@media(max-width:640px){.office-ai-action-buttons{display:grid;grid-template-columns:1fr}.office-ai-action-buttons button{width:100%}}
