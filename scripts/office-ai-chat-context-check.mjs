@@ -5,6 +5,8 @@ import test from 'node:test';
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const edge = read('../supabase/functions/office-ai-chat/index.ts');
 const drive = read('../supabase/functions/office-ai-chat/drive-context.ts');
+const sector = read('../supabase/functions/office-ai-chat/sector-context.ts');
+const sectorTest = read('../supabase/functions/office-ai-chat/sector-context.test.ts');
 const migration = read('../supabase/migrations/20261109104406_office_ai_message_search.sql');
 const aiUi = read('../src/OfficeAiWorkspace.tsx');
 const aiTest = read('../src/OfficeAiWorkspace.test.tsx');
@@ -51,6 +53,25 @@ test('selected Drive content requires per-request external provider consent', ()
   assert.match(aiUi, /Send selected content/);
   assert.match(aiUi, /This is not a zero-data-retention guarantee/);
   assert.match(aiTest, /requires explicit consent/);
+});
+
+test('sector work queue context is opt-in, membership-checked, bounded and excludes sensitive fields', () => {
+  assert.match(edge, /includeSectorRecords/);
+  assert.match(edge, /loadSectorWorkItems/);
+  assert.match(edge, /office_industry_get_space/);
+  assert.match(sector, /office_industry_list_work_items/);
+  assert.match(sector, /MAX_WORKSPACES = 20/);
+  assert.match(sector, /MAX_ITEMS_PER_WORKSPACE = 8/);
+  assert.match(sector, /notes and personal identifiers are excluded/i);
+  assert.doesNotMatch(sector, /assignee_user_id:/);
+  assert.match(sectorTest, /omits notes and personal identifiers/);
+});
+
+test('sector work queue sharing requires per-request confirmation and remains read-only', () => {
+  assert.match(aiUi, /Industry work queue context/);
+  assert.match(aiUi, /Share sector context/);
+  assert.match(aiUi, /includeSectorRecords: true/);
+  assert.match(edge, /Never execute or claim to execute an action/);
 });
 
 test('AI provider delegates to the authenticated OpenRouter free router and rejects paid responses', () => {
