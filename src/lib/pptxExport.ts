@@ -124,13 +124,13 @@ function shapeTop(shape: Element): number {
 }
 
 function pptxSlideContent(xml: string, index: number, notesXml?: string): {
-  title: string; body: string; notes: string; layout: 'title-content' | 'two-column' | 'quote' | 'section-divider'; imageOmitted: boolean;
+  title: string; body: string; notes: string; layout: 'title-content' | 'two-column' | 'quote' | 'section-divider'; imageOmitted: boolean; imageCount: number;
 } {
   const document = parsePptxXml(xml);
   const shapes = Array.from(document.getElementsByTagName('p:sp'));
   const blocks = shapes.map((shape) => ({ text: shapeText(shape), top: shapeTop(shape) })).filter((block) => block.text && block.text !== 'COCCE OFFICE');
   const first = blocks[0];
-  const imageOmitted = document.getElementsByTagName('p:pic').length > 0;
+  const imageCount = document.getElementsByTagName('p:pic').length;\n  const imageOmitted = imageCount > 0;
   let title = first?.text ?? 'Slide ' + index;
   let body = blocks.slice(1).map((block) => block.text).join('\n\n');
   let layout: 'title-content' | 'two-column' | 'quote' | 'section-divider' = 'title-content';
@@ -151,7 +151,7 @@ function pptxSlideContent(xml: string, index: number, notesXml?: string): {
     notes = Array.from(notesDocument.getElementsByTagName('a:t')).map((node) => node.textContent ?? '')
       .filter((value) => value.trim() && value.trim() !== 'COCCE OFFICE' && !/^\d+$/.test(value.trim())).join('\n').slice(0, 12_000);
   }
-  return { title: title.slice(0, 12_000) || 'Slide ' + index, body: body.slice(0, 12_000), notes, layout, imageOmitted };
+  return { title: title.slice(0, 12_000) || 'Slide ' + index, body: body.slice(0, 12_000), notes, layout, imageOmitted, imageCount };
 }
 
 type PptxImportedImage = { bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; altText: string };
@@ -218,7 +218,7 @@ export async function importPptxFile(
   try { files = unzipSync(bytes); } catch { throw new Error('The PowerPoint archive could not be safely opened.'); }
   if (!files['[Content_Types].xml'] || !files['ppt/presentation.xml']) throw new Error('This file is not a supported PowerPoint presentation.');
   const slideNames = Object.keys(files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
-    .sort((a, b) => Number(a.match(/slide(\d+)/)?.[1] ?? 0) - Number(b.match(/slide(\\d+)/)?.[1] ?? 0));
+    .sort((a, b) => Number(a.match(/slide(\d+)/)?.[1] ?? 0) - Number(b.match(/slide(\d+)/)?.[1] ?? 0));
   if (slideNames.length < 1 || slideNames.length > 100) throw new Error('PowerPoint import supports 1 to 100 slides.');
   const slideDrafts = slideNames.map((name, index) => {
     const number = Number(name.match(/slide(\d+)/)?.[1] ?? index + 1);
@@ -229,7 +229,7 @@ export async function importPptxFile(
     return {
       id: 'pptx-slide-' + (index + 1), title: parsed.title, body: parsed.body, notes: parsed.notes, layout: parsed.layout,
       image,
-      imageOmitted: parsed.imageOmitted && !image,
+      imageOmitted: parsed.imageOmitted && !image,\n      extraImageCount: Math.max(0, parsed.imageCount - (image ? 1 : 0)),
     };
   });
   const title = file.name.replace(/\.pptx$/i, '').slice(0, 300) || 'Imported PowerPoint';
@@ -252,7 +252,7 @@ export async function importPptxFile(
         imported.omittedImageCount += 1;
         continue;
       }
-      const blob = new Blob([image.bytes], { type: image.mimeType });
+      const blob = new Blob([image.bytes.slice().buffer], { type: image.mimeType });
       try {
         const saved = await saveImage(blob, imported.deck.id);
         slides[index] = { ...slides[index]!, imageAssetId: saved.id, imageAltText: image.altText };
