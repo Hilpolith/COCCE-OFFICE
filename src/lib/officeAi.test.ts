@@ -14,6 +14,7 @@ import {
   OFFICE_AI_WORKFLOWS_STORAGE_KEY,
   parseOfficeAiWorkflows,
   requestOfficeAi,
+  officeAiInvokeError,
   saveOfficeAiWorkflows,
 } from './officeAi';
 
@@ -130,6 +131,28 @@ describe('Office AI request boundaries', () => {
     }, 503));
     await expect(requestOfficeAi('session-token', { action: 'draft', workspaceId: '*', prompt: 'Write a short note.' }, fetcher))
       .rejects.toMatchObject({ code: 'AI_NOT_CONFIGURED', message: 'Cloud AI is not configured on this deployment yet.' });
+  });
+
+  it('extracts the safe JSON error body from a Supabase FunctionsHttpError', async () => {
+    const error = await officeAiInvokeError({
+      message: 'Edge Function returned a non-2xx status code',
+      context: jsonResponse({
+        error: 'WORKSPACE_AI_CONTROL_UNAVAILABLE',
+        message: 'Workspace AI permissions could not be checked. Try again later.',
+      }, 503),
+    });
+    expect(error).toMatchObject({
+      code: 'WORKSPACE_AI_CONTROL_UNAVAILABLE',
+      message: 'Workspace AI permissions could not be checked. Try again later.',
+    });
+  });
+
+  it('keeps a useful fallback when a Supabase function error has no JSON body', async () => {
+    const error = await officeAiInvokeError(new Error('Failed to send a request to the Edge Function'));
+    expect(error).toMatchObject({
+      code: 'AI_REQUEST_FAILED',
+      message: 'Failed to send a request to the Edge Function',
+    });
   });
 });
 
