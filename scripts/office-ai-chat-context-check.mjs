@@ -9,6 +9,7 @@ const migration = read('../supabase/migrations/20261109104406_office_ai_message_
 const aiUi = read('../src/OfficeAiWorkspace.tsx');
 const aiTest = read('../src/OfficeAiWorkspace.test.tsx');
 const chatUi = read('../src/OfficeChatPanel.tsx');
+const workspaceAiMigration = read('../supabase/migrations/20261112150000_fix_office_workspace_ai_enabled_membership_schema.sql');
 
 test('COCCE AI uses authenticated relevance search and excludes deleted fallback messages', () => {
   assert.match(edge, /office_search_ai_messages/);
@@ -73,4 +74,10 @@ test('restored message-search migration retains server-side membership and ACL g
   assert.match(migration, /SECURITY DEFINER/);
   assert.match(migration, /revoke all on function/i);
   assert.match(migration, /grant execute on function .*authenticated, service_role/i);
+});
+
+test('workspace AI permission migration uses the real private schema, not a nested public schema', () => {
+  assert.match(workspaceAiMigration, /if not office_private\.is_active_member\(p_workspace_id\)/);
+  assert.doesNotMatch(workspaceAiMigration, /public\.office_private/);
+  assert.match(workspaceAiMigration, /grant execute on function public\.office_get_workspace_ai_enabled\(uuid\) to authenticated/i);
 });
