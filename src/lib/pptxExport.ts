@@ -130,7 +130,8 @@ function pptxSlideContent(xml: string, index: number, notesXml?: string): {
   const shapes = Array.from(document.getElementsByTagName('p:sp'));
   const blocks = shapes.map((shape) => ({ text: shapeText(shape), top: shapeTop(shape) })).filter((block) => block.text && block.text !== 'COCCE OFFICE');
   const first = blocks[0];
-  const imageCount = document.getElementsByTagName('p:pic').length;\n  const imageOmitted = imageCount > 0;
+  const imageCount = document.getElementsByTagName('p:pic').length;
+  const imageOmitted = imageCount > 0;
   let title = first?.text ?? 'Slide ' + index;
   let body = blocks.slice(1).map((block) => block.text).join('\n\n');
   let layout: 'title-content' | 'two-column' | 'quote' | 'section-divider' = 'title-content';
@@ -229,7 +230,8 @@ export async function importPptxFile(
     return {
       id: 'pptx-slide-' + (index + 1), title: parsed.title, body: parsed.body, notes: parsed.notes, layout: parsed.layout,
       image,
-      imageOmitted: parsed.imageOmitted && !image,\n      extraImageCount: Math.max(0, parsed.imageCount - (image ? 1 : 0)),
+      imageOmitted: parsed.imageOmitted && !image,
+      extraImageCount: Math.max(0, parsed.imageCount - (image ? 1 : 0)),
     };
   });
   const title = file.name.replace(/\.pptx$/i, '').slice(0, 300) || 'Imported PowerPoint';
@@ -241,6 +243,7 @@ export async function importPptxFile(
       ...(image ? { imageAltText: image.altText } : {}),
     })),
   }), workspaceId);
+  imported.omittedImageCount += slideDrafts.reduce((sum, slide) => sum + slide.extraImageCount, 0);
   let installedBytes = 0;
   let installedCount = 0;
   try {
