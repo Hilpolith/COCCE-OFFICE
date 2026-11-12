@@ -104,10 +104,11 @@ describe('per-record Office cloud sync consent', () => {
     expect(screen.getByText(/Offline · connect to enable cloud sync/)).toBeTruthy();
     expect(api.reserve).not.toHaveBeenCalled();
 
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     await act(async () => {
       window.dispatchEvent(new Event('online'));
     });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Waiting for connection' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enable sync for this item' })).toBeTruthy());
     expect(api.reserve).not.toHaveBeenCalled();
     expect(snapshot).not.toHaveBeenCalled();
   });

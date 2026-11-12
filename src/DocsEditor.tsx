@@ -492,7 +492,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         canUndo: activeEditor.can().undo(),
         canRedo: activeEditor.can().redo(),
         empty: activeEditor.isEmpty,
-        wordCount: activeEditor.getText().trim() ? activeEditor.getText().trim().split(/\s+/u).length : 0,
+        wordCount: (() => { const text = activeEditor.state.doc.textBetween(0, activeEditor.state.doc.content.size, '\n').trim(); return text ? text.split(/\s+/u).length : 0; })(),
         tableActive: Boolean(activeTable),
         tableRows: activeTable?.rows ?? 0,
         tableColumns: activeTable?.columns ?? 0,
