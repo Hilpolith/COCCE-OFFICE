@@ -1,4 +1,4 @@
-import type { OfficeSheetChart } from './localStore';
+import type { OfficeSheetChart, OfficeSheetChartType } from './localStore';
 import {
   isSupportedFormulaWithinVisibleGrid,
   MAX_SHEETS_CLIPBOARD_CELL_CHARS,
@@ -18,7 +18,7 @@ export const MAX_XLSX_TOTAL_TEXT_CHARS = MAX_SHEETS_CLIPBOARD_CHARS;
 export const MAX_XLSX_CELL_TEXT_CHARS = MAX_SHEETS_CLIPBOARD_CELL_CHARS;
 
 const XLSX_IMPORT_FIDELITY_WARNING = 'Cell styles/themes, workbook properties (including the original title/author), row/column sizing, print/view settings, calculation-chain metadata, and cached formula results are not retained. The new workbook title comes from the filename. Date/error cells and non-default cell-style assignments are refused rather than converted.';
-export const XLSX_IMPORT_WARNING = `Import creates a new local workbook from exactly one visible worksheet within the ${SHEET_VISIBLE_ROWS} × ${SHEET_VISIBLE_COLUMNS} grid (288 cells maximum; 5 MB compressed, 25 MB expanded, 256 ZIP entries, 8 MB per entry, 2 MB per XML part, 65,536 text/formula characters total and 16,384 per cell). It preserves ordinary text, finite numbers, booleans, and same-sheet formulas supported by the local engine. ${XLSX_IMPORT_FIDELITY_WARNING} Multi-sheet/hidden workbooks, hidden or grouped rows/columns, merged cells, charts/drawings, macros, external links, and unsupported worksheet content are refused before saving. Text values that look like numbers or booleans, or begin with =, cannot be represented by the current Sheets model and are refused. Files stay on this device and are not uploaded. Continue?`;
+export const XLSX_IMPORT_WARNING = `Import creates a new local workbook from exactly one visible worksheet within the ${SHEET_VISIBLE_ROWS} × ${SHEET_VISIBLE_COLUMNS} grid (288 cells maximum; 5 MB compressed, 25 MB expanded, 256 ZIP entries, 8 MB per entry, 2 MB per XML part, 65,536 text/formula characters total and 16,384 per cell). It preserves ordinary text, finite numbers, booleans, and same-sheet formulas supported by the local engine. ${XLSX_IMPORT_FIDELITY_WARNING} Multi-sheet/hidden workbooks, hidden or grouped rows/columns, merged cells, macros, external links, and unsupported worksheet content are refused before saving. Simple single-series bar/line charts with adjacent category/value columns are imported; unsupported drawings or chart references are refused. Text values that look like numbers or booleans, or begin with =, cannot be represented by the current Sheets model and are refused. Files stay on this device and are not uploaded. Continue?`;
 export const XLSX_EXPORT_WARNING = `Export one local worksheet as a simple XLSX file, capped at ${MAX_XLSX_CELLS} cells and 65,536 text/formula characters total (16,384 per cell). Canonical numeric values and uppercase TRUE/FALSE are exported as typed values; noncanonical numeric/boolean-like text and whitespace-only values are refused rather than silently coerced. Formulas must use the supported local subset. Formatting, metadata, dates, multiple worksheets, merged cells, and unsupported Excel formulas are not included. Supported bar and line charts are exported as native Excel chart objects; charts are not imported back into COCCE Sheets yet. Excel will recalculate formulas when opened; formula results may differ from Excel because only the local formula subset is implemented. The file is created locally and is not uploaded. Continue?`;
 
 const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
@@ -34,6 +34,7 @@ export interface ImportedXlsx {
   title: string;
   sheetName: string;
   cells: Record<string, string>;
+  charts: Array<Pick<OfficeSheetChart, 'title' | 'type' | 'range'>>;
   warnings: string[];
 }
 
@@ -648,19 +649,19 @@ function validateMetadataTree(element: Element, allowed: Record<string, string[]
   }
 }
 
-function parseWorksheet(xml: string, sharedStrings: string[], sheetName: string): Record<string, string> {
+function parseWorksheet(xml: string, sharedStrings: string[], sheetName: string, allowDrawing = false): Record<string, string> {
   const document = parseXml(xml, 'Worksheet');
   const root = document.documentElement;
   if (root.localName !== 'worksheet' || root.namespaceURI !== MAIN_NS) fail('The XLSX worksheet XML is not supported.');
   assertOnlyAttributes(root, [], 'worksheet');
   const forbidden: Record<string, string> = {
     mergeCells: 'Merged cells', autoFilter: 'filters', conditionalFormatting: 'conditional formatting',
-    dataValidations: 'data validation', hyperlinks: 'hyperlinks', tableParts: 'tables', drawing: 'drawings or charts',
+    dataValidations: 'data validation', hyperlinks: 'hyperlinks', tableParts: 'tables',
     legacyDrawing: 'legacy drawings or comments', legacyDrawingHF: 'legacy headers or footers',
     sheetProtection: 'sheet protection', protectedRanges: 'protected ranges', scenarios: 'what-if scenarios',
     extLst: 'extended worksheet features', customSheetViews: 'custom worksheet views',
   };
-  const allowedTop = new Set(['sheetPr', 'dimension', 'sheetViews', 'sheetFormatPr', 'cols', 'sheetData', 'printOptions', 'pageMargins', 'pageSetup']);
+  const allowedTop = new Set(['sheetPr', 'dimension', 'sheetViews', 'sheetFormatPr', 'cols', 'sheetData', 'printOptions', 'pageMargins', 'pageSetup', 'drawing']);
   const metadataChildren: Record<string, string[]> = {
     sheetPr: ['tabColor', 'outlinePr', 'pageSetUpPr'],
     tabColor: [], outlinePr: [], pageSetUpPr: [],
@@ -668,11 +669,17 @@ function parseWorksheet(xml: string, sharedStrings: string[], sheetName: string)
     sheetFormatPr: [], cols: ['col'], col: [], printOptions: [], pageMargins: [], pageSetup: [],
   };
   const topChildren = allElementChildren(root);
+  const drawingNodes = elementChildren(root, 'drawing');
+  if (drawingNodes.length > 1 || (drawingNodes.length > 0 && !allowDrawing)) fail('Drawings or charts are not supported in this XLSX import.');
+  for (const drawing of drawingNodes) {
+    assertOnlyAttributes(drawing, ['id'], 'worksheet drawing');
+    if (allElementChildren(drawing).length || (drawing.textContent ?? '').trim() || !drawing.getAttributeNS(OFFICE_REL_NS, 'id')) fail('The worksheet drawing reference is malformed.');
+  }
   for (const child of topChildren) {
     if (child.namespaceURI !== MAIN_NS) fail('The worksheet contains an unsupported namespace or extension.');
     if (forbidden[child.localName]) fail(`${forbidden[child.localName]} are not supported in XLSX import; nothing was imported.`);
     if (!allowedTop.has(child.localName)) fail('The worksheet contains unsupported content; nothing was imported.');
-    if (child.localName !== 'dimension' && child.localName !== 'sheetData') validateMetadataTree(child, metadataChildren);
+    if (child.localName !== 'dimension' && child.localName !== 'sheetData' && child.localName !== 'drawing') validateMetadataTree(child, metadataChildren);
   }
   const dimensionNodes = elementChildren(root, 'dimension');
   if (dimensionNodes.length > 1) fail('The worksheet contains multiple used-range declarations.');
