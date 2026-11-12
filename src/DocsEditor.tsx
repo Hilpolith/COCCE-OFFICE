@@ -734,10 +734,8 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     editor.chain().focus().setMark('docsLink', { href }).run();
   };
 
-  const insertImage = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || !editor) return;
+  const insertImageFile = async (file: File) => {
+    if (!editor) return;
     setImageNotice('');
     try {
       const src = await prepareDocsImage(file);
@@ -749,7 +747,14 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       }
     } catch (reason) {
       setImageNotice(reason instanceof Error ? reason.message : 'The image could not be inserted.');
+      throw reason;
     }
+  };
+
+  const insertImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) await insertImageFile(file);
   };
 
   const exportMarkdown = async () => {
@@ -788,7 +793,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </div>
     </div>
 
-    {cloudEnabled && cloudOpen && onRestoreCloudCopy && <div id="docs-cloud-area"><DocsCloudPanel key={document.id} document={document} hasUnsavedChanges={hasUnsavedChanges} onRestore={onRestoreCloudCopy} onGoToTeam={onGoToTeam} /></div>}
+    {cloudEnabled && cloudOpen && onRestoreCloudCopy && <div id="docs-cloud-area"><DocsCloudPanel key={document.id} document={document} hasUnsavedChanges={hasUnsavedChanges} onRestore={onRestoreCloudCopy} onInsertImage={insertImageFile} onGoToTeam={onGoToTeam} /></div>}
 
     <OfficeWorkbenchLayout className="docs-workbench-layout" rail={<OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} defaultExpanded />}>
       <div className="docs-editor-main">
