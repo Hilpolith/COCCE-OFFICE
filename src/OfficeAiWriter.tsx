@@ -110,6 +110,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
     setResult('');
     setPreviewTarget(null);
     setDocumentSummaryConfirmation(null);
+    return () => { editorRequestGeneration.current += 1; };
   }, [editor]);
 
   useEffect(() => {
