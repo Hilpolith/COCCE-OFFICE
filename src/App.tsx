@@ -4,7 +4,7 @@ import {
   Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness, Building2,
   Check, ChevronLeft, CircleHelp, CloudOff, Command,
   FileSpreadsheet, FileText, FolderOpen, Grid2X2,
-  LockKeyhole, Menu, MessageCircle, Plus, Search, UserRound,
+  LockKeyhole, Menu, MessageCircle, MessageSquareText, Plus, Search, UserRound,
   ShieldCheck, Sparkles, Sun, X,
 } from 'lucide-react';
 import {
@@ -53,7 +53,7 @@ const toolkitNav = [
   { id: 'team', label: 'Team & collaboration', icon: MessageCircle, detail: 'Local planner and separate Office Team' },
 ] as const;
 
-type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'pdf' | 'drive' | 'team' | 'chats' | 'ai' | 'vault' | 'industry' | 'settings';
+type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'pdf' | 'drive' | 'team' | 'chats' | 'ai-chat' | 'ai' | 'vault' | 'industry' | 'settings';
 const documentPageIds: readonly PageId[] = ['docs', 'sheets', 'slides', 'pdf', 'drive', 'vault'];
 type DialogMode = 'workspace' | 'delete' | null;
 
@@ -401,7 +401,10 @@ function App() {
           <button type="button" className={`visionos-dock-button ${page === 'chats' ? 'is-active' : ''}`} aria-label="Chats" title="Chats · direct messages, groups and workspace channels" onClick={() => goTo('chats')}>
             <MessageCircle size={21} strokeWidth={1.8} />
           </button>
-          <button type="button" className={`visionos-dock-button ${page === 'ai' ? 'is-active' : ''}`} aria-label="COCCE AI" title="COCCE AI · permission-aware conversation assistant" onClick={() => goTo('ai')}>
+          <button type="button" className={`visionos-dock-button ${page === 'ai-chat' ? 'is-active' : ''}`} aria-label="AI Chat" title="AI Chat · private saved conversations" onClick={() => goTo('ai-chat')}>
+            <MessageSquareText size={21} strokeWidth={1.8} />
+          </button>
+          <button type="button" className={`visionos-dock-button ${page === 'ai' ? 'is-active' : ''}`} aria-label="COCCE AI" title="COCCE AI · permission-aware workspace intelligence" onClick={() => goTo('ai')}>
             <Sparkles size={21} strokeWidth={1.8} />
           </button>
           <span className="visionos-dock-divider" aria-hidden="true" />
@@ -443,7 +446,7 @@ function App() {
           {page === 'industry' && <IndustrySuitesWorkspace key={`${serverWorkspace?.workspaceId ?? 'local'}-${serverWorkspace?.suiteId ?? 'none'}-${industryFocus ?? 'all'}`} preferredIndustryId={industryFocus} activeWorkspace={serverWorkspace} onCreateTeam={openIndustryTeam} />}
           {page === 'team' && <Suspense fallback={<div className="page" role="status">Opening local Team planner…</div>}><TeamWorkspace workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? 'Personal space'} query={query} industryTeamSetup={industryTeamSetup} onIndustryTeamLinked={returnToIndustryOffice} /></Suspense>}
           {page === 'chats' && <ChatsWorkspace />}
-          {page === 'ai' && <OfficeAiWorkspace initialWorkspaceId={aiContext?.workspaceId ?? serverWorkspace?.workspaceId} initialPrompt={aiContext?.prompt} />}
+          {page === 'ai-chat' && <OfficeAiWorkspace mode="chat" initialWorkspaceId={serverWorkspace?.workspaceId} />}\n          {page === 'ai' && <OfficeAiWorkspace mode="assistant" initialWorkspaceId={aiContext?.workspaceId ?? serverWorkspace?.workspaceId} initialPrompt={aiContext?.prompt} />}
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
@@ -464,7 +467,7 @@ function pageTitle(page: PageId, editing: boolean, industryFocus: IndustryId | n
   if (page === 'settings') return 'Preferences';
   if (page === 'industry') return industryFocus ? getIndustryDefinition(industryFocus).shortLabel : 'Office suites';
   if (page === 'chats') return 'Chats';
-  if (page === 'ai') return 'COCCE AI';
+  if (page === 'ai-chat') return 'AI Chat';\n  if (page === 'ai') return 'COCCE AI';
   return documentNav.find((item) => item.id === page)?.label ?? toolkitNav.find((item) => item.id === page)?.label ?? 'Overview';
 }
 
