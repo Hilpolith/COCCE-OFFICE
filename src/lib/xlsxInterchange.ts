@@ -674,7 +674,7 @@ function parseWorksheet(xml: string, sharedStrings: string[], sheetName: string,
   const drawingNodes = elementChildren(root, 'drawing');
   if (drawingNodes.length > 1 || (drawingNodes.length > 0 && !allowDrawing)) fail('Drawings or charts are not supported in this XLSX import.');
   for (const drawing of drawingNodes) {
-    assertOnlyAttributes(drawing, ['id'], 'worksheet drawing');
+    assertOnlyAttributes(drawing, ['r:id'], 'worksheet drawing');
     if (allElementChildren(drawing).length || (drawing.textContent ?? '').trim() || !drawing.getAttributeNS(OFFICE_REL_NS, 'id')) fail('The worksheet drawing reference is malformed.');
   }
   for (const child of topChildren) {
@@ -800,7 +800,7 @@ function columnLabel(value: number): string {
 }
 
 function chartFormulaRange(formula: string, sheetName: string): { column: number; firstRow: number; lastRow: number } {
-  const match = /^'((?:[^']|'')+)'!\\$([A-Z]{1,2})\\$(\\d+):\\$([A-Z]{1,2})\\$(\\d+)$/.exec(formula.trim());
+  const match = /^'((?:[^']|'')+)'!\$([A-Z]{1,2})\$(\d+):\$([A-Z]{1,2})\$(\d+)$/.exec(formula.trim());
   if (!match || match[1]!.replaceAll("''", "'") !== sheetName
     || match[2] !== match[4]) fail('The XLSX chart must reference one contiguous column on the imported worksheet.');
   const column = columnNumber(match[2]!);
@@ -887,7 +887,7 @@ function parseXlsxDrawingCharts(
   if (worksheetRelationships.length !== 1
     || worksheetRelationships[0]!.id !== drawingId
     || !worksheetRelationships[0]!.type.endsWith('/drawing')
-    || !/^xl\\/drawings\\/drawing\\d+\\.xml$/.test(worksheetRelationships[0]!.target)) {
+    || !/^xl\/drawings\/drawing\d+\.xml$/.test(worksheetRelationships[0]!.target)) {
     fail('The worksheet drawing relationship is not a supported internal drawing.');
   }
   const drawingPath = worksheetRelationships[0]!.target;
@@ -920,7 +920,7 @@ function parseXlsxDrawingCharts(
   return chartIds.map((id) => {
     const relationship = byId.get(id);
     if (!relationship || !relationship.type.endsWith('/chart')
-      || !/^xl\\/charts\\/chart\\d+\\.xml$/.test(relationship.target)) fail('The XLSX drawing references an unsupported chart part.');
+      || !/^xl\/charts\/chart\d+\.xml$/.test(relationship.target)) fail('The XLSX drawing references an unsupported chart part.');
     const chartXml = archive.parts.get(relationship.target);
     if (!chartXml) fail('The XLSX chart part is missing.');
     return parseSimpleXlsxChart(chartXml, sheetName);
