@@ -1,9 +1,25 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { escapeMarkdownText, initialDocumentHtml, plainTextToRichHtml, richTextToMarkdown, richTextToPlainText, sanitizeRichTextHtml, sanitizeRichTextHtmlWithWarnings } from './documentEditor';
+import { escapeMarkdownText, initialDocumentHtml, markdownToRichHtml, plainTextToRichHtml, richTextToMarkdown, richTextToPlainText, sanitizeRichTextHtml, sanitizeRichTextHtmlWithWarnings } from './documentEditor';
 import { DOCS_TABLE_LIMITS } from './docsTableLimits';
 
 describe('local Docs content conversion and safety', () => {
+  it('imports common Markdown blocks into sanitized editable HTML', () => {
+    const converted = markdownToRichHtml('# Report\\n\\nA **bold** and *italic* note with [a safe link](https://example.com).\\n\\n- First\\n- Second\\n\\n> Keep this quote\\n\\n| Name | Total |\\n| --- | --- |\\n| COCCE | 12 |\\n\\n```txt\\nplain <script>text</script>\\n```');
+    expect(converted.html).toContain('<h1>Report</h1>');
+    expect(converted.html).toContain('<strong>bold</strong>');
+    expect(converted.html).toContain('<em>italic</em>');
+    expect(converted.html).toContain('<a href="https://example.com">a safe link</a>');
+    expect(converted.html).toContain('<ul>');
+    expect(converted.html).toContain('<blockquote>');
+    expect(converted.html).toContain('<table>');
+    expect(converted.html).toContain('<pre>');
+    expect(converted.html).not.toContain('<script>');
+  });
+  it('refuses external Markdown images and bounds Markdown source size', () => {
+    expect(markdownToRichHtml('![tracking](https://example.com/image.png)').html).not.toContain('<img');
+    expect(markdownToRichHtml('x'.repeat(1_000_001)).warnings[0]).toContain('1,000,000');
+  });
   it('keeps empty drafts empty for the writing placeholder', () => {
     expect(plainTextToRichHtml('')).toBe('');
   });
