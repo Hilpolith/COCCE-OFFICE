@@ -693,7 +693,9 @@ function parseWorksheet(xml: string, sharedStrings: string[], sheetName: string,
   if (drawingNodes.length > 1 || (drawingNodes.length > 0 && !allowDrawing)) fail('Drawings or charts are not supported in this XLSX import.');
   for (const drawing of drawingNodes) {
     assertOnlyAttributes(drawing, ['r:id'], 'worksheet drawing');
-    if (allElementChildren(drawing).length || (drawing.textContent ?? '').trim() || !drawing.getAttributeNS(OFFICE_REL_NS, 'id')) fail('The worksheet drawing reference is malformed.');
+    const relationshipId = drawing.getAttributeNS(OFFICE_REL_NS, 'id') || drawing.getAttribute('r:id')
+      || Array.from(drawing.attributes).find((attribute) => attribute.localName === 'id' && attribute.namespaceURI === OFFICE_REL_NS)?.value;
+    if (allElementChildren(drawing).length || (drawing.textContent ?? '').trim() || !relationshipId) fail('The worksheet drawing reference is malformed.');
   }
   for (const child of topChildren) {
     if (child.namespaceURI !== MAIN_NS) fail('The worksheet contains an unsupported namespace or extension.');
