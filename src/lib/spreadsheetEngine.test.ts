@@ -1,7 +1,63 @@
 import { describe, expect, it } from 'vitest';
-import { cellAddress, columnLabel, csvRowsToCells, displayCellValue, evaluateCellValue, isCsvFileSizeAllowed, isFormulaTextWithinLimit, MAX_CSV_FILE_BYTES, MAX_SHEETS_CRITERIA_CHARS, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, MAX_SHEETS_FORMULA_CHARS, parseCsv, parseTsv, parseTsvMatrix, serializeCsv, serializeTsvRange } from './spreadsheetEngine';
+import { cellAddress, columnLabel, csvRowsToCells, displayCellValue, evaluateCellValue, isCsvFileSizeAllowed, isFormulaTextWithinLimit, isSupportedFormulaWithinVisibleGrid, MAX_CSV_FILE_BYTES, MAX_SHEETS_CRITERIA_CHARS, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, MAX_SHEETS_FORMULA_CHARS, parseCsv, parseTsv, parseTsvMatrix, serializeCsv, serializeTsvRange } from './spreadsheetEngine';
 
 describe('spreadsheet formula engine', () => {
+  it('evaluates common numeric and text formulas within the supported local grid', () => {
+    const cells = {
+      A1: '-12.345',
+      A2: '=ROUNDUP(A1,2)',
+      A3: '=ROUNDDOWN(A1,2)',
+      A4: '=PRODUCT(2,3,A1)',
+      A5: '=LEN("COCCE")',
+      A6: '=LEFT("COCCE Office",5)',
+      A7: '=RIGHT("COCCE Office",6)',
+      A8: '=MID("COCCE Office",7,6)',
+      A9: '=UPPER("Cocce")',
+      A10: '=LOWER("COCCE")',
+      A11: '=TRIM("  COCCE   Office  ")',
+      A12: '=LEFT("x",0)',
+      A13: '=MID("abc",2,0)',
+      A14: '=ROUNDUP(1.234,2)',
+      A15: '=ROUNDDOWN(-1.239,2)',
+      A16: '=ROUNDUP(1234.0000000000002,0)',
+      A17: '=ROUNDDOWN(1234.0000000000002,0)',
+      A18: '=LEFT("x",-1)',
+      A19: '=MID("abc",0,1)',
+      A20: '=ROUNDUP(1,13)',
+      A21: '=PRODUCT(1E308,1E308)',
+    };
+    expect(evaluateCellValue(cells, 'A2')).toBe(-12.35);
+    expect(evaluateCellValue(cells, 'A3')).toBe(-12.34);
+    expect(evaluateCellValue(cells, 'A4')).toBe(-74.07);
+    expect(evaluateCellValue(cells, 'A5')).toBe(5);
+    expect(evaluateCellValue(cells, 'A6')).toBe('COCCE');
+    expect(evaluateCellValue(cells, 'A7')).toBe('Office');
+    expect(evaluateCellValue(cells, 'A8')).toBe('Office');
+    expect(evaluateCellValue(cells, 'A9')).toBe('COCCE');
+    expect(evaluateCellValue(cells, 'A10')).toBe('cocce');
+    expect(evaluateCellValue(cells, 'A11')).toBe('COCCE Office');
+    expect(evaluateCellValue(cells, 'A12')).toBe('');
+    expect(evaluateCellValue(cells, 'A13')).toBe('');
+    expect(evaluateCellValue(cells, 'A14')).toBe(1.24);
+    expect(evaluateCellValue(cells, 'A15')).toBe(-1.23);
+    expect(evaluateCellValue(cells, 'A16')).toBe(1234);
+    expect(evaluateCellValue(cells, 'A17')).toBe(1234);
+    expect(evaluateCellValue(cells, 'A18')).toEqual({ error: '#VALUE!' });
+    expect(evaluateCellValue(cells, 'A19')).toEqual({ error: '#VALUE!' });
+    expect(evaluateCellValue(cells, 'A20')).toEqual({ error: '#NUM!' });
+    expect(evaluateCellValue(cells, 'A21')).toEqual({ error: '#NUM!' });
+  });
+
+  it('recognizes the new functions in the safe formula-fill validator and rejects invalid arity', () => {
+    for (const formula of [
+      '=PRODUCT(A1:A3)', '=ROUNDUP(A1,2)', '=ROUNDDOWN(A1,2)', '=LEN(A1)',
+      '=LEFT(A1,2)', '=RIGHT(A1,2)', '=MID(A1,2,3)', '=UPPER(A1)', '=LOWER(A1)', '=TRIM(A1)',
+    ]) expect(isSupportedFormulaWithinVisibleGrid(formula), formula).toBe(true);
+    for (const formula of ['=LEN(A1,A2)', '=MID(A1,2)', '=PRODUCT()', '=UPPER(A1,A2)']) {
+      expect(isSupportedFormulaWithinVisibleGrid(formula), formula).toBe(false);
+    }
+  });
+
   it('evaluates arithmetic with operator precedence and parentheses', () => {
     expect(displayCellValue({}, 'A1')).toBe('');
     const cells = { A1: '=2+3*4', A2: '=(2+3)*4', A3: '=-2^2', A4: '=2^3^2' };
