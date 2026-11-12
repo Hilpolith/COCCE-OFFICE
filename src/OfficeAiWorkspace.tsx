@@ -59,6 +59,8 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFilesOpen(false);
       setWorkspaceId('');
       setTurns([]);
+      setConversations([]);
+      setActiveConversationId(null);
       setPrompt('');
       setShowDriveConsent(false);
       setDriveFilesError('');
@@ -143,6 +145,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setDriveFilesLoading(false);
     setWorkspaceId(nextId);
     setTurns([]);
+    setActiveConversationId(null);
     setError('');
     setDriveFiles([]);
     setSelectedFileIds([]);
@@ -163,6 +166,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFilesLoading(false);
       setWorkspaceId(nextId);
       setTurns([]);
+      setActiveConversationId(null);
       setError('');
       setDriveFiles([]);
       setSelectedFileIds([]);
@@ -183,6 +187,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
       setDriveFilesLoading(false);
       setWorkspaceId('');
       setTurns([]);
+      setActiveConversationId(null);
       setPrompt('');
       setError('');
       setDriveFiles([]);
