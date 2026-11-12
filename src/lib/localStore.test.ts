@@ -58,6 +58,11 @@ describe('local preview storage', () => {
     expect(addWorksheetChart(withChart, created.workbook.id, sheet.id, {
       title: '', type: 'bar', range: 'A1:B6',
     })).toEqual(withChart);
+    expect(addWorksheetChart(withChart, created.workbook.id, sheet.id, {
+      title: 'Bad range', type: 'line', range: 'B6:A1',
+    })).toEqual(withChart);
+    const editedCells = updateWorksheetCells(withChart, created.workbook.id, sheet.id, { A1: 'Month', B1: 'Revenue', A2: 'Jan', B2: '120' });
+    expect(editedCells.workbooks[0].worksheets[0].charts).toEqual([chart]);
   });
 
   it('changes only the legacy implicit dark default to light and preserves saved office data', () => {
