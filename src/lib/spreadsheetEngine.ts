@@ -418,6 +418,7 @@ function evaluateCall(node: Extract<Node, { kind: 'call' }>, cells: Record<strin
       return Math.round((value + Math.sign(value) * Number.EPSILON) * factor) / factor;
     }
     case 'PRODUCT': {
+      if (!args.length) throw new FormulaFault('#VALUE!');
       const product = numbers.length ? numbers.reduce((total, value) => total * value, 1) : 0;
       if (!Number.isFinite(product)) throw new FormulaFault('#NUM!');
       return product;
