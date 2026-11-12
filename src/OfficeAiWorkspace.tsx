@@ -104,7 +104,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
           setStatus('ready');
           return;
         }
-        setWorkspaceId(initialWorkspaceId && spaces.some((space) => space.workspace_id === initialWorkspaceId) ? initialWorkspaceId : '*');
+        setWorkspaceId(initialWorkspaceId && spaces.some((space) => space.workspace_id === initialWorkspaceId) ? initialWorkspaceId : mode === 'chat' ? spaces[0].workspace_id : '*');
         setStatus('ready');
       } catch (reason) {
         if (isCurrent()) {
