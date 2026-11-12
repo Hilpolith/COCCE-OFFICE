@@ -15,6 +15,7 @@ import './officeAiWorkspace.css';
 function renderOfficeAiMarkdown(source: string): ReactNode {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
   const blocks: ReactNode[] = [];
+  const codeFence = String.fromCharCode(96).repeat(3);
   let index = 0;
   const inline = (value: string) => value.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_)/g).filter(Boolean).map((part, key) => {
     if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) return <strong key={key}>{part.slice(2, -2)}</strong>;
@@ -25,9 +26,9 @@ function renderOfficeAiMarkdown(source: string): ReactNode {
   while (index < lines.length) {
     const line = lines[index] ?? '';
     if (!line.trim()) { index += 1; continue; }
-    if (line.trim().startsWith('~~~')) {
+    if (line.trim().startsWith(codeFence)) {
       index += 1; const code: string[] = [];
-      while (index < lines.length && !lines[index]!.trim().startsWith('~~~')) code.push(lines[index++]!);
+      while (index < lines.length && !lines[index]!.trim().startsWith(codeFence)) code.push(lines[index++]!);
       if (index < lines.length) index += 1;
       blocks.push(<pre className="office-ai-code-block" key={blocks.length}><code>{code.join('\n')}</code></pre>);
       continue;
