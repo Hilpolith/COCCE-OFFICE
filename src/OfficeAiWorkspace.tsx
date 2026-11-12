@@ -43,6 +43,8 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const answerPaneRef = useRef<HTMLDivElement | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const historyLoadGeneration = useRef(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
   const [busy, setBusy] = useState(false);
   const [showDriveConsent, setShowDriveConsent] = useState(false);
@@ -238,9 +240,11 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
 
   useEffect(() => {
     let active = true;
+    const generation = ++historyLoadGeneration.current;
     const loadHistory = async () => {
       if (!client || typeof client.from !== 'function' || !userId || status !== 'ready' || !workspaceId || workspaceId === '*') {
         setConversations([]);
+        setHasMoreConversations(false);
         setActiveConversationId(null);
         return;
       }
@@ -250,18 +254,21 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
         .select('conversation_id,workspace_id,title,last_message_at')
         .eq('workspace_id', workspaceId)
         .order('last_message_at', { ascending: false })
-        .limit(30);
-      if (!active) return;
+        .range(0, 29);
+      if (!active || generation !== historyLoadGeneration.current) return;
       if (historyError) {
         setError('Saved AI conversations could not be loaded. Check workspace access and try again.');
         setConversations([]);
+        setHasMoreConversations(false);
       } else {
-        setConversations((data ?? []) as AiConversation[]);
+        const rows = (data ?? []) as AiConversation[];
+        setConversations(rows);
+        setHasMoreConversations(rows.length === 30);
       }
       setHistoryLoading(false);
     };
     void loadHistory();
-    return () => { active = false; };
+    return () => { active = false; historyLoadGeneration.current += 1; };
   }, [client, userId, status, workspaceId]);
 
   const visibleConversations = useMemo(() => {
@@ -273,6 +280,33 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     const pane = answerPaneRef.current;
     if (pane) pane.scrollTop = pane.scrollHeight;
   }, [turns, busy]);
+
+  const loadMoreConversations = async () => {
+    if (!client || !workspaceId || workspaceId === '*' || historyLoading || !hasMoreConversations) return;
+    const generation = historyLoadGeneration.current;
+    const offset = conversations.length;
+    setHistoryLoading(true);
+    try {
+      const { data, error: pageError } = await client
+        .from('office_ai_conversations')
+        .select('conversation_id,workspace_id,title,last_message_at')
+        .eq('workspace_id', workspaceId)
+        .order('last_message_at', { ascending: false })
+        .range(offset, offset + 29);
+      if (generation !== historyLoadGeneration.current) return;
+      if (pageError) throw pageError;
+      const rows = (data ?? []) as AiConversation[];
+      setConversations((current) => {
+        const known = new Set(current.map((conversation) => conversation.conversation_id));
+        return [...current, ...rows.filter((conversation) => !known.has(conversation.conversation_id))];
+      });
+      setHasMoreConversations(rows.length === 30);
+    } catch {
+      if (generation === historyLoadGeneration.current) setError('Older conversations could not be loaded. Please retry.');
+    } finally {
+      if (generation === historyLoadGeneration.current) setHistoryLoading(false);
+    }
+  };
 
   const openConversation = async (conversationId: string) => {
     if (!client || historyLoading || busy) return;
@@ -460,8 +494,12 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
             .select('conversation_id,workspace_id,title,last_message_at')
             .eq('workspace_id', workspaceId)
             .order('last_message_at', { ascending: false })
-            .limit(30);
-          if (!listError) setConversations((saved ?? []) as AiConversation[]);
+            .range(0, 29);
+          if (requestGeneration === aiRequestGeneration.current && !listError) {
+            const rows = (saved ?? []) as AiConversation[];
+            setConversations(rows);
+            setHasMoreConversations(rows.length === 30);
+          }
         } catch {
           setError('Your answer was generated, but this exchange could not be saved to conversation history. Retry by sending your message again if you need a saved copy.');
         }
@@ -505,6 +543,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
             <button type="button" className="office-ai-history-open" onClick={() => void openConversation(conversation.conversation_id)} disabled={busy}><strong>{conversation.title}</strong><small>{new Date(conversation.last_message_at).toLocaleString()}</small></button>
             <button type="button" className="office-ai-history-delete" aria-label={`Delete ${conversation.title}`} onClick={() => void deleteConversation(conversation.conversation_id)} disabled={busy}>×</button>
           </div>) : <small className="office-ai-history-hint">{conversationSearch.trim() ? 'No matching conversations.' : 'Your saved chats will appear here.'}</small>}
+          {hasMoreConversations && !conversationSearch.trim() && <button type="button" className="office-ai-inline-button office-ai-load-more" onClick={() => void loadMoreConversations()} disabled={historyLoading || busy}>{historyLoading ? 'Loading older chats…' : 'Load older chats'}</button>}
         </aside>
         <div className="office-ai-answer" aria-live="polite" ref={answerPaneRef}>{turns.length ? <><div className="office-ai-thread-toolbar"><span><span className="office-ai-presence-dot" /> {activeConversationId ? 'Saved conversation' : 'New conversation'} · {Math.floor(turns.length / 2)} messages</span><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy}>Clear thread</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div><p>{turn.content}</p></article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><div className="office-ai-empty-orb"><Sparkles size={23} /></div><strong>Start a conversation</strong><span>Ask a question, work through an idea, or get help with your workspace.</span><div className="office-ai-suggestions"><span>Summarise a document</span><span>Draft a project plan</span><span>Analyse a report</span></div></div>}</div>
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} maxLength={1600} placeholder={mode === 'chat' ? 'Message…' : 'Ask across your workspace…'} disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
