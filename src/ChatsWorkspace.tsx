@@ -12,7 +12,7 @@ export default function ChatsWorkspace() {
       </header>
       <section className="chats-workbench glass-card">
         
-        <OfficeTeamCollaboration />
+        <OfficeTeamCollaboration showStories />
       </section>
     </div>
   );
