@@ -2,14 +2,14 @@ import { useMemo, useRef, useState } from 'react';
 import { useFrostedConfirm } from './FrostedConfirm';
 import type { ChangeEvent, ClipboardEvent as ReactClipboardEvent, KeyboardEvent } from 'react';
 import {
-  ArrowLeft, ArrowUpRight, Check, Download, FileSpreadsheet, FunctionSquare,
-  LockKeyhole, Plus, Redo2, Table2, TrendingUp, Undo2, Upload,
+  ArrowLeft, ArrowUpRight, BarChart3, Check, Download, FileSpreadsheet, FunctionSquare,
+  LineChart, LockKeyhole, Plus, Redo2, Table2, TrendingUp, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
-  addWorkbook, addWorksheet, selectWorksheet, updateWorkbook,
+  addWorkbook, addWorksheet, addWorksheetChart, removeWorksheetChart, selectWorksheet, updateWorkbook,
   updateWorksheetCell, updateWorksheetCells,
 } from './lib/localStore';
-import type { OfficeWorkbook, PreviewState } from './lib/localStore';
+import type { OfficeSheetChart, OfficeSheetChartType, OfficeWorkbook, PreviewState } from './lib/localStore';
 import {
   canRedoSheetsHistory, canUndoSheetsHistory, createSheetsHistory,
   recordSheetsHistory, redoSheetsHistory, sameWorksheetCells, undoSheetsHistory,
@@ -83,6 +83,22 @@ function cellRange(anchorAddress: string, focusAddress: string) {
     endRow: Math.max(anchor.row, focus.row),
     endColumn: Math.max(anchor.column, focus.column),
   };
+}
+
+type SheetChartDatum = { label: string; value: number };
+
+function chartEntries(chart: OfficeSheetChart, displayedCells: Record<string, string>): SheetChartDatum[] {
+  const [first, last] = chart.range.split(':');
+  const range = cellRange(first, last);
+  if (!range || range.endRow - range.startRow < 1 || range.endColumn - range.startColumn < 1) return [];
+  const entries: SheetChartDatum[] = [];
+  for (let row = range.startRow + 1; row <= range.endRow; row += 1) {
+    const label = displayedCells[cellAddress(row, range.startColumn)]?.trim() || `Row ${row}`;
+    const raw = displayedCells[cellAddress(row, range.startColumn + 1)] ?? '';
+    const value = Number(raw.replace(/,/g, '').trim());
+    if (raw.trim() && Number.isFinite(value)) entries.push({ label: label.slice(0, 32), value });
+  }
+  return entries.slice(0, 23);
 }
 
 function nextCellAddress(address: string, direction: CellDirection | 'next' | 'previous') {
@@ -262,6 +278,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
   const [historyByWorksheet, setHistoryByWorksheet] = useState<Record<string, SheetsHistory>>({});
   const [exportingXlsx, setExportingXlsx] = useState(false);
   const [cloudOpen, setCloudOpen] = useState(false);
+  const [chartType, setChartType] = useState<OfficeSheetChartType>('bar');
   const cancelledEditAddress = useRef<string | null>(null);
   const cellRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const displayedCells = useMemo(() => {
@@ -286,6 +303,36 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
     if (!saved) setMessage('Changes were not saved; the last saved copy was kept.');
     return saved;
   };
+  const createChartFromSelection = () => {
+    if (selectedRange.endRow - selectedRange.startRow < 1 || selectedRange.endColumn - selectedRange.startColumn < 1) {
+      setMessage('Select at least two rows and two columns. Use the first row as headers, the first column as labels, and the second as numeric values.');
+      return;
+    }
+    const first = cellAddress(selectedRange.startRow, selectedRange.startColumn);
+    const last = cellAddress(selectedRange.endRow, selectedRange.endColumn);
+    const range = `${first}:${last}`;
+    const preview: OfficeSheetChart = { id: 'preview', title: 'Preview', type: chartType, range, createdAt: '' };
+    const entries = chartEntries(preview, displayedCells);
+    if (!entries.length) {
+      setMessage('No numeric values were found in the second selected column. Nothing was saved.');
+      return;
+    }
+    const category = displayedCells[first]?.trim() || 'Category';
+    const series = displayedCells[cellAddress(selectedRange.startRow, selectedRange.startColumn + 1)]?.trim() || 'Values';
+    const title = `${series} by ${category}`.slice(0, 80);
+    const next = addWorksheetChart(state, workbook.id, worksheet.id, { title, type: chartType, range });
+    if (next === state) {
+      setMessage('This worksheet already has 20 charts or the selected range is invalid.');
+      return;
+    }
+    if (saveState(next)) setMessage(`Created ${chartType} chart from ${range}. It updates when source cells change and stays on this device.`);
+  };
+
+  const deleteChart = (chartId: string) => {
+    const next = removeWorksheetChart(state, workbook.id, worksheet.id, chartId);
+    if (saveState(next)) setMessage('Chart removed from this local worksheet.');
+  };
+
   const saveWorksheetChange = (next: PreviewState, groupKey: string | null = null) => {
     const nextWorksheet = next.workbooks.find((item) => item.id === workbook.id)?.worksheets.find((item) => item.id === worksheet.id);
     if (!nextWorksheet || sameWorksheetCells(worksheet.cells, nextWorksheet.cells)) return false;
@@ -583,6 +630,31 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         <button type="button" className="button-secondary" aria-label="Fill formula" title={`Fill one supported seed formula down or right; ranges are limited to ${MAX_SHEETS_FORMULA_FILL_CELLS} visible cells`} onClick={applyFormulaFill}><FunctionSquare size={15} /> Fill formula</button>
         <span>Copies the first cell's formula through one selected row or column (up to {MAX_SHEETS_FORMULA_FILL_CELLS} cells), translating relative A1 references and keeping $ anchors. Cross-sheet, out-of-grid, unsupported, or malformed references are refused; populated targets require confirmation.</span>
       </div>
+      <div className="sheet-range-tools sheet-chart-tools" role="toolbar" aria-label="Spreadsheet chart creation">
+        <label className="sheet-chart-type"><span>Chart type</span><select value={chartType} onChange={(event) => setChartType(event.target.value as OfficeSheetChartType)}><option value="bar">Bar</option><option value="line">Line</option></select></label>
+        <button type="button" className="button-secondary" onClick={createChartFromSelection} disabled={Boolean(editingAddress)}><BarChart3 size={15} /> Create chart from selected range</button>
+        <span>Shift-select a range with a header row and at least two columns. First column = labels; second = numeric values. Charts are local and are not included in XLSX/cloud copies.</span>
+      </div>
+      {(worksheet.charts ?? []).map((chart) => {
+        const entries = chartEntries(chart, displayedCells);
+        const min = Math.min(0, ...entries.map((entry) => entry.value));
+        const max = Math.max(0, ...entries.map((entry) => entry.value));
+        const span = max - min || 1;
+        const zero = (0 - min) / span * 100;
+        const linePoints = entries.map((entry, index) => {
+          const x = 24 + (index / Math.max(1, entries.length - 1)) * 552;
+          const y = 178 - ((entry.value - Math.min(...entries.map((item) => item.value))) / (Math.max(...entries.map((item) => item.value)) - Math.min(...entries.map((item) => item.value)) || 1)) * 136;
+          return `${x},${y}`;
+        }).join(' ');
+        return <section className="sheet-chart-card" key={chart.id}>
+          <header><div><strong>{chart.title}</strong><small>{chart.type.toUpperCase()} · {chart.range} · {entries.length} plotted rows</small></div><button type="button" className="button-secondary" onClick={() => deleteChart(chart.id)} aria-label={`Delete chart ${chart.title}`}><Trash2 size={14} /> Remove</button></header>
+          {!entries.length ? <p className="sheet-chart-empty">No valid numeric values remain in this chart range.</p> : chart.type === 'bar' ? <div className="sheet-chart-bars">{entries.map((entry, index) => {
+            const width = Math.abs(entry.value) / span * 100;
+            const left = entry.value >= 0 ? zero : zero - width;
+            return <div className="sheet-chart-bar-row" key={`${entry.label}-${index}`}><span title={entry.label}>{entry.label}</span><div className="sheet-chart-bar-track"><i style={{ left: `${left}%`, width: `${width}%` }} /></div><strong>{entry.value.toLocaleString()}</strong></div>;
+          })}</div> : <div className="sheet-chart-line-wrap"><svg viewBox="0 0 600 210" role="img" aria-label={`${chart.title} line chart`}><line x1="24" y1="178" x2="576" y2="178" className="sheet-chart-axis" /><polyline points={linePoints} className="sheet-chart-line" />{entries.map((entry,index) => { const points=linePoints.split(' '); const [cx,cy]=points[index].split(','); return <circle key={index} cx={cx} cy={cy} r="4" className="sheet-chart-point"><title>{entry.label}: {entry.value}</title></circle>; })}</svg><div className="sheet-chart-line-labels">{entries.map((entry,index)=><span key={index} title={entry.label}>{entry.label}</span>)}</div></div>}
+        </section>;
+      })}
       <div className="sheet-grid-scroll" role="region" aria-label="Spreadsheet grid; scroll horizontally and vertically to see cells">
         <table className="sheet-grid">
           <thead><tr><th className="row-number-head" aria-label="Row number" />{Array.from({ length: GRID_COLUMNS }, (_, index) => <th key={index}>{cellAddress(1, index + 1).replace(/\d+$/, '')}</th>)}</tr></thead>
