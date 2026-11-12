@@ -41,10 +41,13 @@ before(async () => {
     );
     create function office_private.is_active_member(p_workspace_id uuid)
       returns boolean language sql stable security definer set search_path=''
-      as $$ select auth.uid() is not null and exists(
+      as $ select auth.uid() is not null and exists(
         select 1 from public.office_memberships m
         where m.workspace_id=p_workspace_id and m.user_id=auth.uid() and m.status='active'
-      ) $$;
+      ) $;
+    grant usage on schema auth, office_private to authenticated;
+    grant execute on function auth.uid() to authenticated;
+    grant execute on function office_private.is_active_member(uuid) to authenticated;
     insert into auth.users(id) values
       ('11111111-1111-4111-8111-111111111111'),
       ('22222222-2222-4222-8222-222222222222');
@@ -108,6 +111,16 @@ test('authenticated clients cannot directly insert, update or delete AI message 
         [conversationId, workspace, owner],
       ),
     );
+    await assert.rejects(
+      db.query('update public.office_ai_messages set content=$1 where conversation_id=$2', ['tamper', conversationId]),
+    );
+    await assert.rejects(
+      db.query('delete from public.office_ai_messages where conversation_id=$1', [conversationId]),
+    );
+    const anonSelect = await db.query(
+      `select has_table_privilege('anon','public.office_ai_messages','select') as allowed`,
+    );
+    assert.equal(anonSelect.rows[0].allowed, false);
   });
 });
 
