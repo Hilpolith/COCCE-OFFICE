@@ -299,9 +299,13 @@ describe('Docs Writing assistant', () => {
     expect(confirmation.textContent).toContain('Synthetic local report');
     expect(confirmation.textContent).toContain('complete plain-text content');
     expect(confirmation.textContent).toContain('OpenRouter');
-    expect(confirmation.textContent).toContain('Google AI Studio');
-    expect(confirmation.textContent).toContain('55-day prompt retention and no training');
-    expect(confirmation.textContent).toContain('No paid model or alternate provider fallback');
+    expect(confirmation.textContent).toContain('openrouter/free');
+    expect(confirmation.textContent).toContain('model identifiers marked free');
+    expect(confirmation.textContent).toContain('positive reported response cost');
+    expect(confirmation.textContent).toContain('Provider and model retention or training terms may differ');
+    expect(confirmation.textContent).toContain('no paid-model fallback');
+    expect(confirmation.textContent).not.toContain('Google AI Studio');
+    expect(confirmation.textContent).not.toContain('55-day prompt retention');
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Confirm and send full text' }));
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
 
