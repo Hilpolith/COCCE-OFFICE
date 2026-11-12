@@ -64,6 +64,8 @@ before(async () => {
       VALUES ('${mediaFile}','${workspace}','${owner}','${mediaRevision}');
   `);
   await db.exec(migration);
+  // Keep the generated expiry anchored to the same transaction timestamp as created_at.
+  await db.exec("ALTER TABLE public.office_stories ALTER COLUMN expires_at SET DEFAULT (transaction_timestamp() + interval '24 hours')");
 });
 
 after(async () => { await db?.close(); });
