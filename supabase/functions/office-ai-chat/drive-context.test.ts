@@ -179,13 +179,29 @@ describe('COCCE AI selected Drive context', () => {
   });
 
 
-  it('supports common source-code text while excluding likely secret and credential files', () => {
+  it('supports ordinary source files while excluding secret and credential paths server-side', () => {
     for (const name of ['src/main.ts','components/App.tsx','server/index.js','styles/theme.scss','db/schema.sql','scripts/build.py','README.mdx','config/app.toml']) {
       expect(isSupportedDriveTextFile(name)).toBe(true);
+      expect(isSupportedDriveContextFile(name)).toBe(true);
     }
-    for (const name of ['.env','.env.example','secrets.json','credentials.json','service-account.json','private-key.json','token.json','movie.mp4','archive.zip']) {
-      expect(isSupportedDriveTextFile(name)).toBe(false);
+    for (const name of [
+      '.env','.env.example','secrets.json','credentials.json','service-account.json','private-key.json','token.json',
+      'config/secrets.json','keys/private-key.pem','finance/password-export.csv','docs/credentials.yaml',
+      'certs/server.pem','signing/office.keystore','exports/passwords.csv','auth/tokens.json',
+      'infra/service_account.json','ssh/id_ecdsa','project/.npmrc','.aws/credentials',
+      '.docker/config.json','.git/config','deploy/kubeconfig','C:\\Users\\operator\\.ssh\\id_ed25519',
+      'movie.mp4','archive.zip',
+    ]) {
+      expect(isSupportedDriveTextFile(name), name).toBe(false);
+      expect(isSupportedDriveContextFile(name), name).toBe(false);
     }
+  });
+
+  it('rejects nested credential paths before issuing a private Bunny download', async () => {
+    const fetchImpl = vi.fn(async () => cloudLink({ displayName: 'backups/.aws/credentials.json' }));
+    await expect(loadSelectedDriveFiles([fileId], enabled, supabaseUrl, 'key', 'jwt', fetchImpl))
+      .rejects.toMatchObject({ status: 415, code: 'DRIVE_FILE_UNSUPPORTED_TYPE' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it('extracts bounded text from DOCX, XLSX and PPTX archives without executing embedded content', () => {
