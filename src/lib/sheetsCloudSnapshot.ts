@@ -145,9 +145,9 @@ function validateSnapshotData(value: unknown): SheetsCloudSnapshot {
         const createdAt = validateText(chart.createdAt, 'chart creation time', 40);
         if (!id || hasControlCharacters(id) || !title.trim() || hasControlCharacters(title)
           || (chart.type !== 'bar' && chart.type !== 'line')
-          || !/^([A-L])([1-9]|1\\d|2[0-4]):([A-L])([1-9]|1\\d|2[0-4])$/.test(range)
+          || !/^([A-L])([1-9]|1\d|2[0-4]):([A-L])([1-9]|1\d|2[0-4])$/.test(range)
           || !Number.isFinite(Date.parse(createdAt))) fail('a chart contains invalid data');
-        const match = /^([A-L])([1-9]|1\\d|2[0-4]):([A-L])([1-9]|1\\d|2[0-4])$/.exec(range)!;
+        const match = /^([A-L])([1-9]|1\d|2[0-4]):([A-L])([1-9]|1\d|2[0-4])$/.exec(range)!;
         if (match[3] <= match[1] || Number(match[4]) <= Number(match[2])) fail('a chart range must span at least two rows and columns');
         return { id, title, type: chart.type, range, createdAt };
       });
@@ -200,7 +200,7 @@ function parseEnvelope(bytes: Uint8Array): SheetsCloudEnvelope {
   }
   if (!isRecord(parsed) || !exactKeys(parsed, ENVELOPE_KEYS))
     fail('file contains unknown or missing fields');
-  if (parsed.format !== FORMAT || parsed.version !== VERSION)
+  if (parsed.format !== FORMAT || (parsed.version !== 1 && parsed.version !== VERSION))
     fail('file uses an unsupported format or version');
   const snapshot = validateSnapshotData({
     title: parsed.title,
