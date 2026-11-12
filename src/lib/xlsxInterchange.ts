@@ -1,3 +1,4 @@
+import type { OfficeSheetChart } from './localStore';
 import {
   isSupportedFormulaWithinVisibleGrid,
   MAX_SHEETS_CLIPBOARD_CELL_CHARS,
@@ -18,7 +19,7 @@ export const MAX_XLSX_CELL_TEXT_CHARS = MAX_SHEETS_CLIPBOARD_CELL_CHARS;
 
 const XLSX_IMPORT_FIDELITY_WARNING = 'Cell styles/themes, workbook properties (including the original title/author), row/column sizing, print/view settings, calculation-chain metadata, and cached formula results are not retained. The new workbook title comes from the filename. Date/error cells and non-default cell-style assignments are refused rather than converted.';
 export const XLSX_IMPORT_WARNING = `Import creates a new local workbook from exactly one visible worksheet within the ${SHEET_VISIBLE_ROWS} × ${SHEET_VISIBLE_COLUMNS} grid (288 cells maximum; 5 MB compressed, 25 MB expanded, 256 ZIP entries, 8 MB per entry, 2 MB per XML part, 65,536 text/formula characters total and 16,384 per cell). It preserves ordinary text, finite numbers, booleans, and same-sheet formulas supported by the local engine. ${XLSX_IMPORT_FIDELITY_WARNING} Multi-sheet/hidden workbooks, hidden or grouped rows/columns, merged cells, charts/drawings, macros, external links, and unsupported worksheet content are refused before saving. Text values that look like numbers or booleans, or begin with =, cannot be represented by the current Sheets model and are refused. Files stay on this device and are not uploaded. Continue?`;
-export const XLSX_EXPORT_WARNING = `Export one local worksheet as a simple XLSX file, capped at ${MAX_XLSX_CELLS} cells and 65,536 text/formula characters total (16,384 per cell). Canonical numeric values and uppercase TRUE/FALSE are exported as typed values; noncanonical numeric/boolean-like text and whitespace-only values are refused rather than silently coerced. Formulas must use the supported local subset. Formatting, metadata, dates, multiple worksheets, charts, merged cells, and unsupported Excel formulas are not included. Excel will recalculate formulas when opened; formula results may differ from Excel because only the local formula subset is implemented. The file is created locally and is not uploaded. Continue?`;
+export const XLSX_EXPORT_WARNING = `Export one local worksheet as a simple XLSX file, capped at ${MAX_XLSX_CELLS} cells and 65,536 text/formula characters total (16,384 per cell). Canonical numeric values and uppercase TRUE/FALSE are exported as typed values; noncanonical numeric/boolean-like text and whitespace-only values are refused rather than silently coerced. Formulas must use the supported local subset. Formatting, metadata, dates, multiple worksheets, merged cells, and unsupported Excel formulas are not included. Supported bar and line charts are exported as native Excel chart objects; charts are not imported back into COCCE Sheets yet. Excel will recalculate formulas when opened; formula results may differ from Excel because only the local formula subset is implemented. The file is created locally and is not uploaded. Continue?`;
 
 const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const OFFICE_REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -40,6 +41,7 @@ export interface XlsxExportInput {
   title: string;
   sheetName: string;
   cells: Record<string, string>;
+  charts?: OfficeSheetChart[];
 }
 
 interface XlsxArchive {
@@ -843,8 +845,63 @@ function classifyCellForExport(raw: string): 'formula' | 'boolean' | 'number' | 
   return 'text';
 }
 
+type XlsxChartRange = { startColumn: string; startRow: number; endColumn: string; endRow: number };
+
+function validateExportCharts(charts: OfficeSheetChart[] | undefined): XlsxChartRange[] {
+  if (charts === undefined) return [];
+  if (!Array.isArray(charts) || charts.length > 20) fail('XLSX export supports at most 20 charts on one worksheet.');
+  return charts.map((chart) => {
+    if (!chart || typeof chart !== 'object' || typeof chart.id !== 'string'
+      || typeof chart.title !== 'string' || !chart.title.trim() || chart.title.length > 80
+      || (chart.type !== 'bar' && chart.type !== 'line')
+      || typeof chart.createdAt !== 'string' || !Number.isFinite(Date.parse(chart.createdAt))) {
+      fail('A worksheet chart contains invalid metadata; nothing was exported.');
+    }
+    const match = /^([A-L])([1-9]|1\d|2[0-4]):([A-L])([1-9]|1\d|2[0-4])$/.exec(chart.range);
+    if (!match || match[3].charCodeAt(0) <= match[1].charCodeAt(0) || Number(match[4]) <= Number(match[2])) {
+      fail('A worksheet chart range is invalid or outside the visible grid; nothing was exported.');
+    }
+    return { startColumn: match[1]!, startRow: Number(match[2]), endColumn: match[3]!, endRow: Number(match[4]) };
+  });
+}
+
+function chartCellFormula(sheetName: string, column: string, startRow: number, endRow: number): string {
+  const quotedSheet = "'" + sheetName.replaceAll("'", "''") + "'";
+  const first = `${column}${startRow}`;
+  const last = `${column}${endRow}`;
+  return `${quotedSheet}!${first}:${last}`;
+}
+
+function xlsxChartXml(chart: OfficeSheetChart, range: XlsxChartRange, index: number, sheetName: string): string {
+  const chartNs = 'http://schemas.openxmlformats.org/drawingml/2006/chart';
+  const drawingNs = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const categoryFormula = chartCellFormula(sheetName, range.startColumn, range.startRow + 1, range.endRow);
+  const valueFormula = chartCellFormula(sheetName, range.endColumn, range.startRow + 1, range.endRow);
+  const seriesNameFormula = chartCellFormula(sheetName, range.endColumn, range.startRow, range.startRow);
+  const title = xmlText(chart.title);
+  const series = `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>${seriesNameFormula}</c:f></c:strRef></c:tx><c:cat><c:strRef><c:f>${categoryFormula}</c:f></c:strRef></c:cat><c:val><c:numRef><c:f>${valueFormula}</c:f></c:numRef></c:val>${chart.type === 'line' ? '<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>' : ''}<c:smooth val="0"/></c:ser>`;
+  const plot = chart.type === 'bar'
+    ? `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${series}<c:gapWidth val="150"/><c:overlap val="0"/><c:axId val="50010001"/><c:axId val="50010002"/></c:barChart>`
+    : `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${series}<c:marker val="1"/><c:smooth val="0"/><c:axId val="50010001"/><c:axId val="50010002"/></c:lineChart>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="${chartNs}" xmlns:a="${drawingNs}"><c:date1904 val="0"/><c:lang val="en-US"/><c:roundedCorners val="0"/><c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr/><a:r><a:rPr lang="en-US" sz="1400" b="1"/><a:t>${title}</a:t></a:r><a:endParaRPr lang="en-US"/></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>${plot}<c:catAx><c:axId val="50010001"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:tickLblPos val="nextTo"/><c:crossAx val="50010002"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx><c:valAx><c:axId val="50010002"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/><c:numFmt formatCode="General" sourceLinked="1"/><c:tickLblPos val="nextTo"/><c:crossAx val="50010001"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx></c:plotArea><c:legend><c:legendPos val="b"/><c:layout/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/><c:showDLblsOverMax val="0"/></c:chart><c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings></c:chartSpace>`;
+}
+
+function xlsxDrawingXml(count: number): string {
+  const anchors = Array.from({ length: count }, (_, index) => {
+    const row = index * 16;
+    return `<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>8</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${row + 15}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${index + 2}" name="Chart ${index + 1}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId${index + 1}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${anchors}</xdr:wsDr>`;
+}
+
+function xlsxDrawingRelationships(count: number): string {
+  const relationships = Array.from({ length: count }, (_, index) => `<Relationship Id="rId${index + 1}" Type="${REL_TYPE_PREFIX}chart" Target="../charts/chart${index + 1}.xml"/>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${PACKAGE_REL_NS}">${relationships}</Relationships>`;
+}
+
 export async function createXlsxBlob(input: XlsxExportInput): Promise<Blob> {
   validateSheetName(input.sheetName);
+  const chartRanges = validateExportCharts(input.charts);
   if (!input.cells || typeof input.cells !== 'object' || Array.isArray(input.cells)) fail('The workbook cells are invalid.');
   const addresses = Object.keys(input.cells);
   if (addresses.length > MAX_XLSX_CELLS) fail(`XLSX export is limited to ${MAX_XLSX_CELLS} cells in the visible grid.`);
@@ -889,11 +946,16 @@ export async function createXlsxBlob(input: XlsxExportInput): Promise<Blob> {
   const sharedStringsXml = sharedStrings.length
     ? `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="${MAIN_NS}" count="${sharedStrings.length}" uniqueCount="${sharedStrings.length}">${sharedStrings.map((value) => `<si><t xml:space="preserve">${xmlText(value)}</t></si>`).join('')}</sst>`
     : null;
-  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${CONTENT_TYPES_NS}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>${sharedStringsXml ? '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' : ''}</Types>`;
+  const chartContentTypes = chartRanges.map((_, index) => `<Override PartName="/xl/charts/chart${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join('');
+  const drawingContentType = chartRanges.length ? '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : '';
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${CONTENT_TYPES_NS}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>${sharedStringsXml ? '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' : ''}${drawingContentType}${chartContentTypes}</Types>`;
   const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${PACKAGE_REL_NS}"><Relationship Id="rId1" Type="${REL_TYPE_PREFIX}officeDocument" Target="xl/workbook.xml"/></Relationships>`;
   const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${MAIN_NS}" xmlns:r="${OFFICE_REL_NS}"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="${xmlAttribute(input.sheetName)}" sheetId="1" r:id="rId1"/></sheets><calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`;
   const workbookRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${PACKAGE_REL_NS}"><Relationship Id="rId1" Type="${REL_TYPE_PREFIX}worksheet" Target="worksheets/sheet1.xml"/>${sharedStringsXml ? `<Relationship Id="rId2" Type="${REL_TYPE_PREFIX}sharedStrings" Target="sharedStrings.xml"/>` : ''}</Relationships>`;
-  const worksheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${MAIN_NS}"><dimension ref="A1:${lastColumn}${maxRow}"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData>${rowsXml}</sheetData></worksheet>`;
+  const worksheetRelsXml = chartRanges.length
+    ? `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${PACKAGE_REL_NS}"><Relationship Id="rId1" Type="${REL_TYPE_PREFIX}drawing" Target="../drawings/drawing1.xml"/></Relationships>`
+    : null;
+  const worksheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${MAIN_NS}" xmlns:r="${OFFICE_REL_NS}"><dimension ref="A1:${lastColumn}${maxRow}"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData>${rowsXml}</sheetData>${chartRanges.length ? '<drawing r:id="rId1"/>' : ''}</worksheet>`;
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': new TextEncoder().encode(contentTypesXml),
     '_rels/.rels': new TextEncoder().encode(rootRelsXml),
@@ -902,6 +964,14 @@ export async function createXlsxBlob(input: XlsxExportInput): Promise<Blob> {
     'xl/worksheets/sheet1.xml': new TextEncoder().encode(worksheetXml),
   };
   if (sharedStringsXml) files['xl/sharedStrings.xml'] = new TextEncoder().encode(sharedStringsXml);
+  if (worksheetRelsXml) {
+    files['xl/worksheets/_rels/sheet1.xml.rels'] = new TextEncoder().encode(worksheetRelsXml);
+    files['xl/drawings/drawing1.xml'] = new TextEncoder().encode(xlsxDrawingXml(chartRanges.length));
+    files['xl/drawings/_rels/drawing1.xml.rels'] = new TextEncoder().encode(xlsxDrawingRelationships(chartRanges.length));
+    input.charts!.forEach((chart, index) => {
+      files[`xl/charts/chart${index + 1}.xml`] = new TextEncoder().encode(xlsxChartXml(chart, chartRanges[index]!, index, input.sheetName));
+    });
+  }
   const { zipSync } = await import('fflate');
   const archive = zipSync(files, { level: 6 });
   if (archive.byteLength === 0 || archive.byteLength > MAX_XLSX_FILE_BYTES) fail('The generated XLSX exceeds the 5 MB local export limit.');
