@@ -9,6 +9,7 @@ import { getOfficeTeamClient, resolveOfficeTeamConfig } from './lib/officeTeamSu
 import type { OfficeWorkspace } from './lib/officeTeamApi';
 import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 import { officeAiInvokeError } from './lib/officeAi';
+import { parseOfficeAiActionProposal } from './lib/officeAiActionProposal';
 import './officeAiWorkspace.css';
 
 
@@ -134,6 +135,9 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const [shareCloudInventory, setShareCloudInventory] = useState(false);
   const [includeSectorRecords, setIncludeSectorRecords] = useState(false);
   const [shareSectorRecords, setShareSectorRecords] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ReturnType<typeof parseOfficeAiActionProposal>['proposal']>(null);
+  const [pendingActionKey, setPendingActionKey] = useState('');
+  const [actionStatus, setActionStatus] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -234,6 +238,9 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   }, [initialPrompt, initialWorkspaceId]);
 
   const changeWorkspace = (nextId: string) => {
+    setPendingAction(null);
+    setPendingActionKey('');
+    setActionStatus('');
     aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
     setBusy(false);
@@ -555,6 +562,42 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     });
   };
 
+  const approveProposedAction = async () => {
+    if (!client || !pendingAction || !pendingActionKey || workspaceId === '*' || busy) return;
+    const workspace = workspaces.find((item) => item.workspace_id === workspaceId);
+    if (!workspace) {
+      setActionStatus('Select one authorised workspace before applying this action.');
+      return;
+    }
+    const accepted = await confirm({
+      title: 'Approve this Office task?',
+      description: `Create “${pendingAction.title}” in workspace “${workspace.name}”?${pendingAction.reference ? ` Reference: ${pendingAction.reference}.` : ''}${pendingAction.dueDate ? ` Due: ${pendingAction.dueDate}.` : ''} This creates one generic industry work item. No other records will be changed.`,
+      confirmLabel: 'Approve and create',
+    });
+    if (!accepted) return;
+    setBusy(true);
+    setActionStatus('Creating the approved task…');
+    try {
+      const { data, error: actionError } = await client.rpc('office_industry_create_work_item', {
+        p_workspace_id: workspaceId,
+        p_idempotency_key: pendingActionKey,
+        p_title: pendingAction.title,
+        p_reference: pendingAction.reference,
+        p_assignee_user_id: null,
+        p_due_date: pendingAction.dueDate,
+        p_notes: '',
+      });
+      if (actionError || typeof data !== 'string') throw actionError ?? new Error('The Office task was not created.');
+      setPendingAction(null);
+      setPendingActionKey('');
+      setActionStatus(`Created “${pendingAction.title}” in ${workspace.name}.`);
+    } catch {
+      setActionStatus('The task was not confirmed as created. Your proposal is still available; retry safely or dismiss it.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const ask = async (confirmedDriveSharing = false) => {
     if (!client || !workspaceId || !prompt.trim() || busy) return;
     setShowDriveConsent(false);
@@ -577,7 +620,11 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
       if (requestGeneration !== aiRequestGeneration.current) return;
       if (invokeError) throw await officeAiInvokeError(invokeError);
       if (typeof data?.text !== 'string' || !data.text.trim()) throw new Error(data?.message || 'COCCE AI returned no answer.');
-      setTurns((current) => [...current, { role: 'user' as const, content: question }, { role: 'assistant' as const, content: data.text }].slice(-100));
+      const parsedAnswer = parseOfficeAiActionProposal(data.text);
+      setPendingAction(workspaceId === '*' ? null : parsedAnswer.proposal);
+      setPendingActionKey(workspaceId !== '*' && parsedAnswer.proposal ? crypto.randomUUID() : '');
+      setActionStatus('');
+      setTurns((current) => [...current, { role: 'user' as const, content: question }, { role: 'assistant' as const, content: parsedAnswer.displayText }].slice(-100));
       setPrompt('');
       if (workspaceId !== '*') {
         try {
@@ -595,7 +642,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
           const { error: saveError } = await client.rpc('office_ai_save_exchange', {
             p_conversation_id: conversationId,
             p_user_content: question,
-            p_assistant_content: data.text,
+            p_assistant_content: parsedAnswer.displayText,
             p_model: typeof data.model === 'string' ? data.model : 'unknown',
           });
           if (saveError) throw saveError;
@@ -660,6 +707,18 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
           {hasMoreConversations && !conversationSearch.trim() && <button type="button" className="office-ai-inline-button office-ai-load-more" onClick={() => void loadMoreConversations()} disabled={historyLoading || busy}>{historyLoading ? 'Loading older chats…' : 'Load older chats'}</button>}
         </aside>
         <div className="office-ai-answer" aria-live="polite" ref={answerPaneRef}>{turns.length ? <><div className="office-ai-thread-toolbar"><span><span className="office-ai-presence-dot" /> {activeConversationId ? 'Saved conversation' : 'New conversation'} · {Math.floor(turns.length / 2)} messages</span><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy}>Clear thread</button></div><div className="office-ai-thread">{turns.map((turn, index) => <article className={`office-ai-message office-ai-message-${turn.role}`} key={`${turn.role}-${index}`}><div className="office-ai-message-label">{turn.role === 'assistant' ? <><Sparkles size={13} /> COCCE AI</> : 'YOU'}</div>{turn.role === 'assistant' ? <div className="office-ai-rich-content">{renderOfficeAiMarkdown(turn.content)}</div> : <p>{turn.content}</p>}</article>)}{busy && <div className="office-ai-thinking"><LoaderCircle className="spin" size={15} /> COCCE AI is thinking…</div>}</div></> : <div className="office-ai-empty"><div className="office-ai-empty-orb"><Sparkles size={23} /></div><strong>Start a conversation</strong><span>Ask a question, work through an idea, or get help with your workspace.</span><div className="office-ai-suggestions"><span>Summarise a document</span><span>Draft a project plan</span><span>Analyse a report</span></div></div>}</div>
+        {pendingAction && workspaceId !== '*' && <section className="office-ai-action-proposal" aria-label="Proposed Office action">
+          <div><span className="eyebrow">REQUIRES YOUR APPROVAL</span><h3>Proposed task</h3></div>
+          <strong>{pendingAction.title}</strong>
+          {pendingAction.reference && <span>Reference: {pendingAction.reference}</span>}
+          {pendingAction.dueDate && <span>Due: {pendingAction.dueDate}</span>}
+          <p>COCCE AI has only drafted this task. Nothing is changed until you approve it. The authenticated Office RPC will check workspace membership when creating it.</p>
+          <div className="office-ai-action-buttons">
+            <button type="button" className="button-primary" disabled={busy} onClick={() => void approveProposedAction()}>Approve and create task</button>
+            <button type="button" className="button-secondary" disabled={busy} onClick={() => { setPendingAction(null); setPendingActionKey(''); setActionStatus('Proposal dismissed. No task was created.'); }}>Dismiss</button>
+          </div>
+        </section>}
+        {actionStatus && <p className="office-ai-action-status" role="status">{actionStatus}</p>}
         <form className="office-ai-compose" onSubmit={event => { event.preventDefault(); void ask(); }}><textarea value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void ask(); } }} maxLength={1600} placeholder={mode === 'chat' ? 'Message…' : 'Ask across your workspace…'} aria-label={mode === 'chat' ? 'Message' : 'Ask across your workspace'} disabled={!workspaceId || busy} /><button type="submit" disabled={!workspaceId || !prompt.trim() || busy} aria-label="Send to COCCE AI">{busy ? <LoaderCircle className="spin" size={18} /> : <ArrowUp size={19} />}</button></form>
         {showDriveConsent && <div className="office-ai-consent-backdrop">
           <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
