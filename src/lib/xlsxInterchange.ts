@@ -888,7 +888,7 @@ function worksheetDrawingId(xml: string): string | null {
   const root = parseXml(xml, 'Worksheet drawing reference').documentElement;
   const drawings = elementChildren(root, 'drawing');
   if (!drawings.length) return null;
-  const matches = [...xml.matchAll(/<(?:[A-Za-z_][\\w.-]*:)?drawing\\b[^>]*\\br:id=(["'])([^"']{1,128})\\1/gi)];
+  const matches = [...xml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?drawing\b[^>]*\br:id=(["'])([^"']{1,128})\1/gi)];
   const id = matches[0]?.[2];
   if (matches.length !== 1 || !id) fail('The worksheet drawing relationship is invalid.');
   return id;
@@ -920,7 +920,7 @@ function parseXlsxDrawingCharts(
   if (anchors.length < 1 || anchors.length > 20 || anchors.some((anchor) => anchor.localName !== 'twoCellAnchor' || anchor.namespaceURI !== DRAWING_NS)) {
     fail('The XLSX drawing contains unsupported anchors or too many charts.');
   }
-  const chartReferenceMatches = [...drawingXml.matchAll(/<(?:[A-Za-z_][\\w.-]*:)?chart\\b[^>]*\\br:id=(["'])([^"']{1,128})\\1/gi)];
+  const chartReferenceMatches = [...drawingXml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?chart\b[^>]*\br:id=(["'])([^"']{1,128})\1/gi)];
   if (chartReferenceMatches.length !== anchors.length) fail('The XLSX drawing contains missing or extra chart references.');
   const chartIds: string[] = [];
   for (const [anchorIndex, anchor] of anchors.entries()) {
