@@ -241,7 +241,7 @@ export default function SheetsWorkspace({ state, onState, onGoToTeam }: { state:
       {notice && <div className="sheet-notice" role="status"><Check size={15} />{notice}</div>}
       <section className="sheet-limit-card glass-card">
         <div className="sheet-limit-icon"><Table2 size={19} /></div>
-        <div><strong>A useful local spreadsheet foundation</strong><p>Cell references, ranges, arithmetic, comparisons, and common functions are evaluated locally. CSV is supported, along with a bounded one-sheet XLSX subset; Excel formatting, dates, charts, merged cells, macros, and live cloud sync are not included.</p></div>
+        <div><strong>A useful local spreadsheet foundation</strong><p>Cell references, ranges, arithmetic, comparisons, and common functions are evaluated locally. CSV and a bounded one-sheet XLSX subset are supported. Native bar and line charts are included in XLSX exports and versioned cloud copies, but are not imported from external XLSX files yet; Excel formatting, dates, merged cells, macros, and live workbook collaboration are not included.</p></div>
         <span className="local-only-chip"><LockKeyhole size={13} /> This device</span>
       </section>
 
@@ -655,7 +655,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
       <div className="sheet-range-tools sheet-chart-tools" role="toolbar" aria-label="Spreadsheet chart creation">
         <label className="sheet-chart-type"><span>Chart type</span><select value={chartType} onChange={(event) => setChartType(event.target.value as OfficeSheetChartType)}><option value="bar">Bar</option><option value="line">Line</option></select></label>
         <button type="button" className="button-secondary" onClick={createChartFromSelection} disabled={Boolean(editingAddress)}>{chartType === 'bar' ? <BarChart3 size={15} /> : <LineChart size={15} />} Create chart from selected range</button>
-        <span>Shift-select a range with a header row and at least two columns. First column = labels; second = numeric values. Charts are local and are not included in XLSX/cloud copies.</span>
+        <span>Shift-select a range with a header row and at least two columns. First column = labels; second = numeric values. Charts stay editable in this workbook and are preserved in versioned cloud copies and supported XLSX exports. External XLSX chart import is not supported yet.</span>
       </div>
       {(worksheet.charts ?? []).map((chart) => {
         const entries = chartEntries(chart, displayedCells);
