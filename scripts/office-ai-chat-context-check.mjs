@@ -42,19 +42,18 @@ test('selected Drive file context remains bounded and pinned to Bunny', () => {
 test('selected Drive content requires per-request external provider consent', () => {
   assert.match(aiUi, /showDriveConsent/);
   assert.match(aiUi, /Share selected Drive content with COCCE AI/);
-  assert.match(aiUi, /OpenRouter's Google AI Studio free-model provider/);
+  assert.match(aiUi, /OpenRouter's free-model router/);
   assert.match(aiUi, /Send selected content/);
   assert.match(aiUi, /This is not a zero-data-retention guarantee/);
   assert.match(aiTest, /requires explicit consent/);
 });
 
-test('AI provider is pinned to the free Google AI Studio route without fallback', () => {
-  assert.match(edge, /google\/gemma-4-31b-it:free/);
-  assert.match(edge, /only: \["google-ai-studio"\], allow_fallbacks: false/);
-  assert.match(edge, /result\?\.model !== FREE_MODEL/);
-  assert.match(edge, /positiveCost/);
-  assert.match(edge, /\|\| positiveCost/);
-  assert.match(edge, /OPENROUTER_API_KEY/);
+test('AI provider delegates to the authenticated OpenRouter free router and rejects paid responses', () => {
+  assert.ok(edge.includes('/api/office-ai-provider'));
+  assert.ok(edge.includes('const FREE_MODEL = "openrouter/free"'));
+  assert.ok(edge.includes('model !== FREE_MODEL && !model.endsWith(":free")'));
+  assert.ok(edge.includes('result?.cost !== 0'));
+  assert.doesNotMatch(edge, /OPENROUTER_API_KEY/);
 });
 
 test('chat media previews use a strict MIME allowlist and release object URLs', () => {

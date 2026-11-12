@@ -3,8 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { isUuid, loadSelectedDriveFiles, MAX_DRIVE_FILES, type DriveContextError } from "./drive-context.ts";
 import { extractPdfText } from "./pdf-extract.ts";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const FREE_MODEL = "google/gemma-4-31b-it:free";
+const AI_PROVIDER_URL = "https://cocce-office.vercel.app/api/office-ai-provider";
+const FREE_MODEL = "openrouter/free";
 const ALLOWED_ORIGINS = new Set(["https://cocce-office.vercel.app", "http://localhost:5173"]);
 
 function isAllowedOrigin(origin: string): boolean {
@@ -23,7 +23,6 @@ const MAX_HISTORY = 24;
 const MAX_BODY_BYTES = 48_000;
 const MAX_CHAT_HISTORY = 12;
 const MAX_CHAT_TURN_CHARS = 3_000;
-const FREE_FAILURES = new Set([404, 408, 424, 429, 500, 502, 503, 504]);
 const requests = new Map<string, { startedAt: number; count: number }>();
 
 function cors(origin: string | null) {
@@ -60,9 +59,6 @@ function rateAllowed(userId: string) {
 }
 
 
-function freeError(status: number, code?: string) {
-  return FREE_FAILURES.has(status) || ["model_not_found", "no_endpoints_found", "no_available_provider", "free_model_unavailable"].includes(code ?? "");
-}
 
 function isValidChatHistory(value: unknown): value is Array<{ role: "user" | "assistant"; content: string }> {
   if (!Array.isArray(value) || value.length > MAX_CHAT_HISTORY || value.length % 2 !== 0) return false;
@@ -92,7 +88,6 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
-  const openRouterKey = Deno.env.get("OPENROUTER_API_KEY")?.trim() ?? "";
   if (!supabaseUrl || !anonKey) return json(origin, 503, { error: "AUTH_CONFIGURATION", message: "COCCE Auth is not configured for this service." });
 
   const client = createClient(supabaseUrl, anonKey, {
@@ -116,7 +111,16 @@ Deno.serve(async (req) => {
   }
 
   if (body.action === "status") {
-    return json(origin, 200, { configured: Boolean(openRouterKey), model: FREE_MODEL });
+    try {
+      const providerStatus = await fetch(AI_PROVIDER_URL, { method: "GET", signal: AbortSignal.timeout(8_000) });
+      const status = await providerStatus.json();
+      return json(origin, providerStatus.ok ? 200 : 503, {
+        configured: providerStatus.ok && status?.configured === true,
+        model: FREE_MODEL,
+      });
+    } catch {
+      return json(origin, 503, { error: "AI_PROVIDER_STATUS_UNAVAILABLE", message: "The COCCE AI provider could not be reached." });
+    }
   }
   if (Object.keys(body).some((key) => !["action", "workspaceId", "prompt", "includeConversations", "fileIds", "history"].includes(key))
     || body.action !== "chat"
@@ -132,7 +136,6 @@ Deno.serve(async (req) => {
   const prompt = body.prompt;
   const chatHistory = body.history === undefined ? [] : body.history as Array<{ role: "user" | "assistant"; content: string }>;
   if (!rateAllowed(authData.user.id)) return json(origin, 429, { error: "RATE_LIMITED", message: "The short-term AI request limit has been reached. Please wait and try again." });
-  if (!openRouterKey) return json(origin, 503, { error: "AI_NOT_CONFIGURED", message: "OPENROUTER_API_KEY is not configured in Supabase Edge Function secrets." });
 
   // Every context read uses the caller's COCCE JWT and the existing membership-aware RPCs.
   const { data: workspaces, error: workspaceError } = await client.rpc("office_list_workspaces");
@@ -257,38 +260,37 @@ Deno.serve(async (req) => {
   ].join(" ");
 
   try {
-    const upstream = await fetch(OPENROUTER_URL, {
+    const messages = [
+      { role: "system", content: system },
+      ...history,
+      ...chatHistory,
+      { role: "user", content: body.prompt.trim() },
+    ];
+    const upstream = await fetch(AI_PROVIDER_URL, {
       method: "POST",
-      headers: { Authorization: `Bearer ${openRouterKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: FREE_MODEL,
-        messages: [
-          { role: "system", content: system },
-          ...history,
-          ...chatHistory,
-          { role: "user", content: body.prompt.trim() },
-        ],
-        max_tokens: 1200,
-        temperature: 0.25,
-        provider: { only: ["google-ai-studio"], allow_fallbacks: false },
-      }),
-      signal: AbortSignal.timeout(25_000),
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: body.workspaceId, messages }),
+      signal: AbortSignal.timeout(30_000),
     });
     if (!upstream.ok) {
-      let code = "";
-      try { code = String((await upstream.json())?.error?.code ?? ""); } catch { /* sanitized */ }
-      return freeError(upstream.status, code)
-        ? json(origin, 503, { error: "FREE_MODEL_UNAVAILABLE", message: "The selected free model is unavailable or rate-limited. COCCE Office will not switch to a paid model." })
-        : json(origin, 502, { error: "AI_PROVIDER_ERROR", message: "OpenRouter could not complete this request." });
+      let providerError: Record<string, unknown> = {};
+      try { providerError = await upstream.json(); } catch { /* sanitized */ }
+      const code = String(providerError.error ?? "");
+      if (upstream.status === 401) return json(origin, 401, { error: "AUTH_REQUIRED", message: "Your COCCE session is invalid or expired." });
+      if (upstream.status === 403) return json(origin, 403, { error: code || "WORKSPACE_ACCESS_DENIED", message: "COCCE AI is not enabled for this workspace or account." });
+      return json(origin, upstream.status === 429 ? 429 : 503, {
+        error: code || "FREE_MODEL_UNAVAILABLE",
+        message: typeof providerError.message === "string" ? providerError.message : "OpenRouter could not serve a free model. No paid model fallback is enabled.",
+      });
     }
     const result = await upstream.json();
-    const answer = result?.choices?.[0]?.message?.content;
-    const cost = result?.usage?.cost;
-    const positiveCost = (typeof cost === "number" && cost > 0) || (typeof cost === "string" && Number(cost) > 0);
-    if (result?.model !== FREE_MODEL || positiveCost || typeof answer !== "string" || !answer.trim()) {
-      return json(origin, 503, { error: "FREE_MODEL_NOT_VERIFIED", message: "A zero-cost response from the pinned free model could not be verified." });
+    const answer = result?.text;
+    const model = result?.model;
+    if (typeof answer !== "string" || !answer.trim() || typeof model !== "string"
+      || (model !== FREE_MODEL && !model.endsWith(":free")) || result?.cost !== 0) {
+      return json(origin, 503, { error: "FREE_MODEL_NOT_VERIFIED", message: "A zero-cost response from OpenRouter's free-model router could not be verified." });
     }
-    return json(origin, 200, { text: answer.trim(), model: FREE_MODEL, contextMessages, contextConversations: contextConversationCount, contextWorkspaces: contextWorkspaceCount, contextFiles: driveFiles.length });
+    return json(origin, 200, { text: answer.trim(), model, cost: 0, contextMessages, contextConversations: contextConversationCount, contextWorkspaces: contextWorkspaceCount, contextFiles: driveFiles.length });
   } catch {
     return json(origin, 503, { error: "FREE_MODEL_UNAVAILABLE", message: "The free model could not be reached. No paid fallback is enabled." });
   }
