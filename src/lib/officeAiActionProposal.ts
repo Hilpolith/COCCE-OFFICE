@@ -5,8 +5,17 @@ export type OfficeAiActionProposal = {
   dueDate: string | null;
 };
 
-const PROPOSAL_BLOCK = /\`\`\`office-action\s*\n([\s\S]*?)\n\`\`\`/gi;
+const FENCE = String.fromCharCode(96).repeat(3);
+const PROPOSAL_BLOCK = new RegExp(`${FENCE}office-action\\s*\\n([\\s\\S]*?)\\n${FENCE}`, 'gi');
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+function hasControlCharacters(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
 
 function validDate(value: unknown): value is string | null {
   if (value === null) return true;
@@ -30,9 +39,9 @@ export function parseOfficeAiActionProposal(content: string): {
     if (Object.keys(row).sort().join(',') !== 'dueDate,reference,title,type'
       || row.type !== 'create_work_item'
       || typeof row.title !== 'string' || !row.title.trim() || row.title.length > 140
-      || /[\u0000-\u001f\u007f]/.test(row.title)
+      || hasControlCharacters(row.title)
       || typeof row.reference !== 'string' || row.reference.length > 100
-      || /[\u0000-\u001f\u007f]/.test(row.reference)
+      || hasControlCharacters(row.reference)
       || !validDate(row.dueDate)) return { displayText: content, proposal: null };
     const displayText = (content.slice(0, match.index) + content.slice(match.index! + match[0].length)).replace(/\n{3,}/g, '\n\n').trim();
     return {
