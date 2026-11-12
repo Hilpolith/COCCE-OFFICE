@@ -113,8 +113,10 @@ export default function OfficeStories({
     setError('');
     try {
       if (story.author_id !== userId && !story.viewed_by_me) {
-        await officeTeamApi.markStoryViewed(client, story.story_id);
-        setStories((current) => current.map((item) => item.story_id === story.story_id ? { ...item, viewed_by_me: true, view_count: item.view_count + 1 } : item));
+        try {
+          await officeTeamApi.markStoryViewed(client, story.story_id);
+          setStories((current) => current.map((item) => item.story_id === story.story_id ? { ...item, viewed_by_me: true, view_count: item.view_count + 1 } : item));
+        } catch { /* A view-count write failure must not block reading the story. */ }
       }
       if (story.media_file_id) {
         const sync = await cloud.getSyncState(story.media_file_id);

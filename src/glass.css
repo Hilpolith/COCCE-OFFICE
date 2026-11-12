@@ -132,7 +132,7 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
-  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .drive-storage-dialog-backdrop, .mobile-scrim, .slides-present-overlay, .docs-format-toolbar, .team-panel, .office-collab-panel, .frosted-confirm-backdrop, .office-ai-chat-shell, .office-ai-context, .office-ai-thread-toolbar, .office-ai-compose, .office-ai-history-search, .chats-vision-header, .office-chats-page, .office-collab-column, .office-subpanel, .office-chat-workspace, .office-chat-toolbar, .office-chat-messages, .office-chat-message, .office-chat-recording, .office-chat-composer) {
+  :root :is(.modal-backdrop, .office-ai-confirm-backdrop, .drive-modal-scrim, .drive-storage-dialog-backdrop, .mobile-scrim, .slides-present-overlay, .docs-format-toolbar, .team-panel, .office-collab-panel, .frosted-confirm-backdrop, .office-ai-chat-shell, .office-ai-context, .office-ai-thread-toolbar, .office-ai-compose, .office-ai-history-search, .chats-vision-header, .office-chats-page, .office-collab-column, .office-subpanel, .office-chat-workspace, .office-chat-toolbar, .office-chat-messages, .office-chat-message, .office-chat-recording, .office-chat-composer, .office-stories, .office-story-backdrop) {
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }

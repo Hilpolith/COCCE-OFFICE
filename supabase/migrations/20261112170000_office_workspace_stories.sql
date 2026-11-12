@@ -235,6 +235,7 @@ CREATE TRIGGER office_cloud_protect_active_story_media
   BEFORE UPDATE OF deleted_at ON public.office_cloud_files
   FOR EACH ROW EXECUTE FUNCTION office_private.protect_active_story_media();
 
+REVOKE ALL ON FUNCTION office_private.protect_active_story_media() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.office_list_stories(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.office_create_story(uuid,text,uuid,text,text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.office_mark_story_viewed(uuid) FROM PUBLIC, anon, authenticated;
