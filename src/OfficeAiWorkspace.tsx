@@ -632,7 +632,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
         setActionStatus('The task was not confirmed as created. Your proposal is still available; retry safely or dismiss it.');
       }
     } finally {
-      setBusy(false);
+      if (contextGeneration === workspaceContextGeneration.current) setBusy(false);
     }
   };
 
