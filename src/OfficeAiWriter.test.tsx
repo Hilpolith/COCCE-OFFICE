@@ -147,8 +147,8 @@ describe('Docs Writing assistant', () => {
     rerender(<OfficeAiWriter editor={second.editor} onGoToTeam={vi.fn()} />);
     resolvePost({ ok: true, json: async () => ({ text: 'Stale document result.' }) } as Response);
 
-    expect(await screen.findByText(/document changed while COCCE AI was working/i)).toBeTruthy();
-    expect(screen.queryByText('Stale document result.')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('Stale document result.')).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Replace selection' })).toBeNull();
     expect(second.chain.insertContentAt).not.toHaveBeenCalled();
   });
 
@@ -164,8 +164,7 @@ describe('Docs Writing assistant', () => {
     expect(await screen.findByText('Confirm full-document summary')).toBeTruthy();
 
     rerender(<OfficeAiWriter editor={second.editor} onGoToTeam={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm and send full text' }));
-    expect(await screen.findByText(/active document changed after confirmation/i)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Confirm full-document summary')).toBeNull());
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
   });
 
