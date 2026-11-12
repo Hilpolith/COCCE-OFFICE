@@ -28,8 +28,8 @@ import type { OfficeTeamEnvironment } from './lib/officeTeamSupabase';
 type Selection = { from: number; to: number; text: string; isCellSelection: boolean };
 type Availability = 'unknown' | 'checking' | 'available' | 'not-configured' | 'unavailable';
 type AuthStatus = 'loading' | 'signed-in' | 'signed-out' | 'misconfigured';
-type PreviewTarget = { kind: 'selection' | 'draft' | 'document-summary'; from: number; to: number; selectedText: string; doc: ProseMirrorNode; sourceChars?: number };
-type DocumentSummaryConfirmation = { payload: OfficeAiDocumentSummaryRequest; title: string; doc: ProseMirrorNode; position: number };
+type PreviewTarget = { kind: 'selection' | 'draft' | 'document-summary'; from: number; to: number; selectedText: string; doc: ProseMirrorNode; editor: Editor; sourceChars?: number };
+type DocumentSummaryConfirmation = { payload: OfficeAiDocumentSummaryRequest; title: string; doc: ProseMirrorNode; editor: Editor; position: number };
 
 function readLocalWorkflows(): OfficeAiWorkflow[] {
   try {
@@ -85,6 +85,8 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
   const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(null);
   const [documentSummaryConfirmation, setDocumentSummaryConfirmation] = useState<DocumentSummaryConfirmation | null>(null);
   const documentSummaryTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
   const documentSummaryConfirmRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -219,6 +221,10 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         return;
       }
       const output = await requestOfficeAi(token, payload);
+      if (editorRef.current !== editor) {
+        setError('The document changed while COCCE AI was working. Its result was discarded and cannot be applied to another document.');
+        return;
+      }
       setAvailability('available');
       setResult(output);
       setPreviewTarget({
@@ -227,6 +233,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         to: isDraft ? current.to : current.to,
         selectedText: isDraft ? '' : current.text,
         doc: sourceDoc,
+        editor,
       });
     } catch (requestError) {
       setAvailability(requestError instanceof OfficeAiError && requestError.code === 'AI_NOT_CONFIGURED' ? 'not-configured' : 'unavailable');
@@ -249,6 +256,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         payload,
         title: documentTitle.trim() || 'Untitled document',
         doc: sourceDoc,
+        editor,
         position: editor.state.selection.to,
       });
     } catch (requestError) {
@@ -260,6 +268,11 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
   const confirmDocumentSummary = async () => {
     const pending = documentSummaryConfirmation;
     if (!editor || !pending || busy) return;
+    if (editor !== pending.editor || editorRef.current !== pending.editor) {
+      setDocumentSummaryConfirmation(null);
+      setError('The active document changed after confirmation was shown. Nothing was sent; review the current document and confirm again.');
+      return;
+    }
     const currentTitle = documentTitle.trim() || 'Untitled document';
     const snapshotMatches = editor.state.doc.eq(pending.doc)
       && extractOfficeAiDocumentText(editor.state.doc) === pending.payload.documentText
@@ -305,6 +318,10 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         return;
       }
       const output = await requestOfficeAi(token, pending.payload);
+      if (editorRef.current !== pending.editor) {
+        setError('The document changed while COCCE AI was working. Its summary was discarded and cannot be applied to another document.');
+        return;
+      }
       setAvailability('available');
       setResult(output);
       setPreviewTarget({
@@ -313,6 +330,7 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
         to: pending.position,
         selectedText: '',
         doc: pending.doc,
+        editor: pending.editor,
         sourceChars: pending.payload.documentText.length,
       });
     } catch (requestError) {
@@ -373,6 +391,10 @@ export default function OfficeAiWriter({ editor, documentTitle = 'Untitled docum
 
   const applyResult = () => {
     if (!editor || !result || !previewTarget) return;
+    if (editor !== previewTarget.editor || editorRef.current !== previewTarget.editor) {
+      setError('The document changed while this preview was open. Run the action again in the current document before applying it.');
+      return;
+    }
     if (!editor.state.doc.eq(previewTarget.doc)) {
       setError('The document changed while the preview was open. Run the action again on the current text before inserting it.');
       return;
