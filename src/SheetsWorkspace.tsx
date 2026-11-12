@@ -632,7 +632,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
       </div>
       <div className="sheet-range-tools sheet-chart-tools" role="toolbar" aria-label="Spreadsheet chart creation">
         <label className="sheet-chart-type"><span>Chart type</span><select value={chartType} onChange={(event) => setChartType(event.target.value as OfficeSheetChartType)}><option value="bar">Bar</option><option value="line">Line</option></select></label>
-        <button type="button" className="button-secondary" onClick={createChartFromSelection} disabled={Boolean(editingAddress)}><BarChart3 size={15} /> Create chart from selected range</button>
+        <button type="button" className="button-secondary" onClick={createChartFromSelection} disabled={Boolean(editingAddress)}>{chartType === 'bar' ? <BarChart3 size={15} /> : <LineChart size={15} />} Create chart from selected range</button>
         <span>Shift-select a range with a header row and at least two columns. First column = labels; second = numeric values. Charts are local and are not included in XLSX/cloud copies.</span>
       </div>
       {(worksheet.charts ?? []).map((chart) => {
@@ -655,7 +655,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
           {!entries.length ? <p className="sheet-chart-empty">No valid numeric values remain in this chart range.</p> : chart.type === 'bar' ? <div className="sheet-chart-bars">{entries.map((entry, index) => {
             const width = Math.abs(entry.value) / span * 100;
             const left = entry.value >= 0 ? zero : zero - width;
-            return <div className="sheet-chart-bar-row" key={`${entry.label}-${index}`}><span title={entry.label}>{entry.label}</span><div className="sheet-chart-bar-track"><i style={{ left: `${left}%`, width: `${width}%` }} /></div><strong>{entry.value.toLocaleString()}</strong></div>;
+            return <div className="sheet-chart-bar-row" key={`${entry.label}-${index}`}><span title={entry.label}>{entry.label}</span><div className="sheet-chart-bar-track"><span className="sheet-chart-zero" style={{ left: `${zero}%` }} /><i style={{ left: `${left}%`, width: `${width}%` }} /></div><strong>{entry.value.toLocaleString()}</strong></div>;
           })}</div> : <div className="sheet-chart-line-wrap"><svg viewBox="0 0 600 210" role="img" aria-label={`${chart.title} line chart`}><line x1="24" y1="178" x2="576" y2="178" className="sheet-chart-axis" /><polyline points={linePoints} className="sheet-chart-line" />{lineCoordinates.map((coordinate,index) => { const [cx,cy]=coordinate.split(','); const entry=entries[index]; return <circle key={index} cx={cx} cy={cy} r="4" className="sheet-chart-point"><title>{entry?.label ?? 'Data'}: {entry?.value ?? 0}</title></circle>; })}</svg><div className="sheet-chart-line-labels">{entries.map((entry,index)=><span key={index} title={entry.label}>{entry.label}</span>)}</div></div>}
         </section>;
       })}
