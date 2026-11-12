@@ -643,7 +643,7 @@ async function verifyOfficeWalletPin(
   pin: string,
   fetcher: Fetcher,
 ): Promise<WalletPinFailure | null> {
-  if (!/^\\d{4}$/.test(pin)) {
+  if (!/^\d{4}$/.test(pin)) {
     return { status: 400, error: 'INVALID_WALLET_PIN_FORMAT', message: 'Enter your four-digit COCCE Wallet PIN.' };
   }
   try {
