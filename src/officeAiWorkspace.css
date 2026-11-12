@@ -118,3 +118,23 @@
 
 .office-ai-chat-shell .office-ai-load-more{justify-self:start;min-height:32px;margin:3px 5px 0;padding:0 11px;border:1px solid rgba(255,255,255,.13);border-radius:999px;background:rgba(255,255,255,.045);color:var(--muted);font-size:9px}
 .office-ai-chat-shell .office-ai-load-more:disabled{opacity:.55;cursor:wait}
+
+
+/* Rich assistant response typography */
+.office-ai-rich-content{display:grid;gap:10px;min-width:0;color:var(--text);font-size:13px;line-height:1.75;overflow-wrap:anywhere}
+.office-ai-rich-content>p{margin:0;white-space:pre-wrap;line-height:1.75}
+.office-ai-rich-content h2,.office-ai-rich-content h3,.office-ai-rich-content h4{margin:5px 0 0;color:var(--text);font-weight:800;letter-spacing:-.025em;line-height:1.3}
+.office-ai-rich-content h2{font-size:18px;color:#bdb2ff}
+.office-ai-rich-content h3{font-size:15px;color:#a9c8ff}
+.office-ai-rich-content h4{font-size:13px;color:#9bd9d1}
+.office-ai-rich-content strong{color:#e0d9ff;font-weight:800}
+.office-ai-rich-content em{color:#c9d9f4}
+.office-ai-rich-content ul,.office-ai-rich-content ol{display:grid;gap:6px;margin:0;padding-left:22px}
+.office-ai-rich-content li{padding-left:3px}
+.office-ai-rich-content li::marker{color:#9b8cff}
+.office-ai-rich-content blockquote{margin:2px 0;padding:9px 13px;border-left:3px solid rgba(157,139,255,.72);border-radius:0 12px 12px 0;background:rgba(150,135,255,.09);color:var(--muted)}
+.office-ai-rich-content blockquote p{margin:0}
+.office-ai-rich-content code{padding:2px 6px;border:1px solid rgba(160,150,255,.2);border-radius:6px;background:rgba(120,110,210,.13);color:#c8c0ff;font-family:ui-monospace,SFMono-Regular,monospace;font-size:.9em}
+.office-ai-rich-content .office-ai-code-block{max-width:100%;margin:0;padding:13px;overflow:auto;border:1px solid rgba(160,150,255,.2);border-radius:12px;background:rgba(12,17,32,.58);color:#dce7ff}
+.office-ai-rich-content .office-ai-code-block code{padding:0;border:0;background:transparent;color:inherit;white-space:pre;font-size:11px;line-height:1.6}
+.office-ai-rich-content hr{width:100%;border:0;border-top:1px solid var(--border);margin:3px 0}
