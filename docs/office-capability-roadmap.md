@@ -411,7 +411,7 @@ This entry supersedes earlier same-day notes that said the Stories migration had
 - **PDF:** The local copy-based toolset now includes page extraction, rotation, reorder, merge, page removal, insertion of pages from another PDF at the selected position, and centered PNG/JPEG insertion. Existing text search, annotations, annotation backup/restore and flattened visual-mark copies remain. These operations create a new local copy and do not mutate the source; advanced PDF metadata/signatures may not be preserved.
 - **Validation:** Latest focused checks include 30 Slides/PPTX and Slides workspace tests, 77 combined Slides/PDF regression tests across five files, 44 PDF tests in the preceding focused run, 28 Docs/import tests, 15 AI-provider/story database checks, plus successful production TypeScript/Vite builds. GitHub CI passed for the latest Story migration / provider changes; later PDF/PPTX changes have focused local validation and their own CI runs must be checked before release.
 - **Deployment:** Latest production deployment still runs commit `257c28d`. Vercel rejected subsequent deployment creation with HTTP 402 because the team's 100-deployments-per-day API allowance was exhausted (retry window 24 hours). The production app remains reachable; newer `main` commits are not yet live. Do not claim deployment completion until a newer deployment reaches READY.
-- **Remaining:** Run an authenticated live COCCE AI Chat smoke test with a test account; restore embedded PPTX images during import; complete remaining cloud sync/offline, editor, AI automation and ten-sector workflows; re-run full CI on the latest commit; deploy after Vercel's quota resets and verify production workflows.
+- **Remaining:** Run an authenticated live COCCE AI Chat smoke test with a test account; complete remaining cloud sync/offline, editor, AI automation and ten-sector workflows; keep validating the latest source with full CI. Production deployment and live workflow verification are a separate release step.
 
 ## 2026-11-12 — AI permission recovery, wallet safety and editor interchange follow-up
 
@@ -441,3 +441,12 @@ This entry supersedes earlier same-day notes that said the Stories migration had
 - Regression coverage added for tab-resume sync recovery, stale AI conversation creation across a workspace switch, and nested Drive secret/credential filename exclusions. These changes do not change AI provider/model selection, workspace authorization RPCs, or wallet behavior.
 - The native XLSX chart exporter emits absolute cell references in bar/line series formulas. The chart import boundary remains unchanged: external chart/drawing packages are still refused rather than partially imported.
 - Validation for this tranche is running on GitHub Actions; no deployment claim is made until the full test suite and production build pass.
+
+
+## 2026-11-12 — AI context privacy and sync lifecycle follow-up
+
+- Drive context exclusion now covers plural password/token/private-key names, alternate service-account and SSH key names, and common credential-bearing paths such as `.aws`, `.ssh`, `.kube`, `.docker`, `.git`, `.npmrc`, `.pypirc`, `.netrc`, Git credentials and kubeconfig. Path segments are normalized before matching, including Windows separators.
+- Regression coverage verifies these names and nested paths remain unavailable for AI context while ordinary source files remain selectable. This is a conservative filename/path filter, not a substitute for secret scanning or a guarantee that every sensitive file has a recognizable name.
+- Cloud sync now cancels a queued tab-resume retry when its control unmounts, preventing a delayed retry callback from running after the editor surface is gone. Tests cover both visibility-change recovery after a transient failure and cleanup of a queued focus retry.
+- The main validation workflow now runs Oxlint static analysis before the full unit, integration and sector acceptance suites, followed by the production TypeScript/Vite build.
+- Full validation for the current source tranche is running on GitHub Actions. No Vercel deployment is being initiated as part of this work.
