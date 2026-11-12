@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { CheckCheck, Download, Mic, Paperclip, Pencil, Play, Radio, Reply, Send, Square, Trash2, X } from 'lucide-react';
 import { createOfficeCloudApi } from './lib/officeCloudFiles';
+import { stripControlCharacters } from './lib/textSafety';
 import type { CloudFile } from './lib/officeCloudFiles';
 import { officeTeamApi } from './lib/officeTeamApi';
 import type { OfficeChatAttachment, OfficeConversationRead, OfficeRichMessage } from './lib/officeTeamApi';

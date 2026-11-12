@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { Bell, Check, CircleAlert, LogIn, LogOut, MessageCircle, Plus, RefreshCw, Shield, Users, X } from 'lucide-react';
 import { officeTeamApi } from './lib/officeTeamApi';
+import { hasControlCharacters } from './lib/textSafety';
 import OfficePersonIdentity from './OfficePersonIdentity';
 import OfficeChatPanel from './OfficeChatPanel';
 import OfficeStories from './OfficeStories';

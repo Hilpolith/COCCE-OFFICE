@@ -1,4 +1,4 @@
-export const CLOUD_PENDING_KEY = 'cocce-office-cloud-pending-v1';
+import { hasControlCharacters } from './textSafety';\n\nexport const CLOUD_PENDING_KEY = 'cocce-office-cloud-pending-v1';
 const MAX_RECORDS = 20;
 const MAX_BYTES = 64 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

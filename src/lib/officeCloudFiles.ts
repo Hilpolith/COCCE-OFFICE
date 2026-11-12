@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { hasControlCharacters } from './textSafety';
 
 const API_ORIGIN = 'https://nresyncmhdybucenhxbw.supabase.co';
 const API_URL = `${API_ORIGIN}/functions/v1/office-cloud-files`;

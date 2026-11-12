@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { OfficeRecordsKeyConfig } from "./officePrivateRecordsCrypto";
+import type { OfficeRecordsKeyConfig } from "./officePrivateRecordsCrypto";\nimport { hasControlCharacters } from "./textSafety";
 
 export type BusinessRole =
   | "business_admin"

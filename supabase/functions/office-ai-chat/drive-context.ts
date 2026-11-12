@@ -2,6 +2,17 @@ import { unzipSync } from 'fflate';
 export type DriveContextError = { status: number; code: string; message: string };
 
 export const MAX_DRIVE_FILES = 3;
+function stripXmlControlCharacters(value: string): string {
+  let result = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]!;
+    const code = value.charCodeAt(index);
+    if (code === 0x7f || (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d)) continue;
+    result += character;
+  }
+  return result;
+}
+
 const MAX_DRIVE_FILE_BYTES = 512 * 1024;
 const MAX_DRIVE_FILE_CHARS = 8_000;
 const MAX_DRIVE_CONTEXT_CHARS = 20_000;

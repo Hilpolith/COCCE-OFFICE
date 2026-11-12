@@ -1,3 +1,5 @@
+import { hasControlCharacters } from './textSafety';
+
 const MAX_PLAINTEXT_BYTES = 20 * 1024 * 1024;
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;

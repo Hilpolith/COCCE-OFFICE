@@ -1,4 +1,5 @@
 import type { OfficeDocument } from './localStore';
+import { hasControlCharacters } from './textSafety';
 import {
   initialDocumentHtml,
   richTextToPlainText,
@@ -193,7 +194,7 @@ export function safeDocsCloudFilename(title: string): string {
     typeof title === 'string' ? title.normalize('NFC').trim() : '';
   const base =
     normalized
-      .replace(/[\\/\u0000-\u001f\u007f]/g, '-')
+      .replaceAll('/', '-').replaceAll('\\\\', '-').split('').map((character) => hasControlCharacters(character) ? '-' : character).join('')
       .replace(/[<>:"|?*]/g, '-')
       .replace(/\s+/g, ' ')
       .replace(/[. ]+$/g, '')
