@@ -202,3 +202,39 @@ A read-only production catalog check found 257 Office tables with RLS enabled, z
 Monthly Cloud Drive storage subscriptions remain disabled: the billing migration is not applied to production and the Vercel approval flag is absent. Do not enable wallet deductions until the owner explicitly approves the commercial pricing and terms.
 
 The sector-management acceptance chain is green, but this does not mean full Microsoft Office/GenOffice feature parity or statutory/regulatory certification. Existing local editor compatibility limits and the remaining roadmap items above remain in force.
+
+
+---
+
+## 2026-11-12 — wallet lockout, billing and deployment checkpoint
+
+This checkpoint supersedes earlier statements in this document that monthly Cloud Drive billing is disabled. A read-only query of the connected production database on 2026-11-12 found:
+
+- `office_cloud_storage_billing_config.enabled = true`, with both price approval and wallet-security approval timestamps present.
+- All six active monthly plans match the approved price schedule: 5 GB / 2,000 coins; 25 GB / 5,000; 100 GB / 12,000; 250 GB / 25,000; 1 TB / 60,000; 2 TB / 100,000.
+- This confirms billing is enabled in production configuration. It does not prove a successful authenticated user purchase or renewal; no real wallet debit was executed during this checkpoint.
+
+### Wallet PIN lockout implementation
+
+- Added `office_cloud_wallet_pin_attempts`, a durable per-user attempt table with a 15-minute window and lockout after five attempts.
+- Added `office_cloud_wallet_pin_attempt(uuid, boolean)`, serialized with a per-user transaction advisory lock. Only the service role can execute it.
+- RLS is enabled on the attempt table; anonymous and authenticated roles have no table SELECT access. Anonymous and authenticated roles cannot execute the lockout RPC.
+- The `office-cloud-files` Edge Function now reserves an attempt before reading the existing wallet PIN, returns HTTP 429 while locked, and clears the attempt state after a successful PIN verification. Purchase and renewal still use the existing COCCE wallet RPCs and ledger.
+- Production migration history records version `20261112074001` (`office_wallet_pin_attempt_lockout`). The source migration filename must match that version.
+- `office-cloud-files` is ACTIVE at version 10 with JWT verification enabled.
+
+The rate-limit unit test was added to `core.test.ts`, but the full Vitest/Node/PostgreSQL CI suite has not yet been verified for this change. Do not treat the unit test as passed until CI or an equivalent test run reports it.
+
+### Release state
+
+- The Vercel production deployment for application commit `997cc7d43ff95c0c982a6c0956e62905419ad7d8` reached READY. Its Vercel build completed successfully.
+- `https://cocce-office.vercel.app` returned HTTP 200 and served the corresponding application bundle.
+- Vercel build output still warns about large chunks (main JS approximately 954 kB; Docs editor approximately 535 kB). This is a performance warning, not a build failure.
+- The GitHub combined commit status currently reports Vercel deployment checks only. A successful full GitHub Actions run for the latest commit has not been independently confirmed.
+- No authenticated production PIN, purchase, renewal, balance or wallet-ledger end-to-end test was run.
+
+### Remaining explicit limitations
+
+- The production Bunny storage zone remains `cocce-kyc` with the existing S3-compatible signed-upload implementation. The requested `coccesuperapp/cocce-office/` migration has not been performed; production files have not been redirected.
+- Biometric authorization has not been implemented or verified in the Office web flow.
+- The editor and sector limitations documented above remain; this checkpoint does not claim full Office-format parity or 100% product completion.
