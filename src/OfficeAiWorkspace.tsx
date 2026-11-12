@@ -111,6 +111,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
   const [status, setStatus] = useState<'loading' | 'ready' | 'signed-out' | 'misconfigured' | 'not-configured'>('loading');
   const [busy, setBusy] = useState(false);
   const [showDriveConsent, setShowDriveConsent] = useState(false);
+  const [shareCloudInventory, setShareCloudInventory] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -530,13 +531,19 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     if (selectedFileIds.length > 0 && !confirmedDriveSharing) { setShowDriveConsent(true); return; }
     setShowDriveConsent(false);
     const question = prompt.trim();
+    const wantsCloudInventory = /\b(?:cloud|drive)\b|\b(?:what|which|list|show|find|search|summari[sz]e?|describe).{0,80}\b(?:files?|documents?|folders?)\b/i.test(question);
+    if ((selectedFileIds.length > 0 || wantsCloudInventory) && !confirmedDriveSharing) {
+      setShareCloudInventory(wantsCloudInventory);
+      setShowDriveConsent(true);
+      return;
+    }
     const history = turns.slice(-12).map((turn) => ({ role: turn.role, content: turn.content.slice(-3000) }));
     const requestGeneration = ++aiRequestGeneration.current;
     setBusy(true);
     setError('');
     try {
       const { data, error: invokeError } = await client.functions.invoke('office-ai-chat', {
-        body: { action: 'chat', workspaceId, prompt: question, includeConversations: includeWorkspaceContext, ...(history.length ? { history } : {}), ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}) },
+        body: { action: 'chat', workspaceId, prompt: question, includeConversations: includeWorkspaceContext, ...(history.length ? { history } : {}), ...(selectedFileIds.length ? { fileIds: selectedFileIds } : {}), ...(wantsCloudInventory ? { includeDriveInventory: true } : {}) },
       });
       if (requestGeneration !== aiRequestGeneration.current) return;
       if (invokeError) throw await officeAiInvokeError(invokeError);
@@ -627,15 +634,15 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
         {showDriveConsent && <div className="office-ai-consent-backdrop">
           <section className="office-ai-consent glass-card" role="dialog" aria-modal="true" aria-labelledby="office-ai-consent-title" aria-describedby="office-ai-consent-description">
             <div className="office-ai-consent-mark"><AlertCircle size={19} /></div>
-            <div><span className="eyebrow">EXTERNAL AI DATA SHARING</span><h3 id="office-ai-consent-title">Share selected Drive content with COCCE AI?</h3></div>
-            <p id="office-ai-consent-description">The selected file contents will be read from private Office Drive by the authenticated server and sent to OpenRouter's free-model router to generate this answer. OpenRouter currently lists Google AI Studio as retaining prompts for 55 days (and not training on them); review its <a href="https://openrouter.ai/providers" target="_blank" rel="noopener noreferrer">provider retention details</a> before sharing confidential records. The file contents are not stored in the COCCE AI chat history. This is not a zero-data-retention guarantee.</p>
-            <ul>{selectedFileIds.map((fileId) => {
+            <div><span className="eyebrow">EXTERNAL AI DATA SHARING</span><h3 id="office-ai-consent-title">{shareCloudInventory ? "Let COCCE AI inspect your cloud files for this answer?" : "Share selected Drive content with COCCE AI?"}</h3></div>
+            <p id="office-ai-consent-description">{shareCloudInventory ? "COCCE AI will list file names, workspace names, sizes and dates from your AI-enabled workspaces, then read up to three recent supported files for relevant content. Access is checked against your signed-in account and workspace membership; sensitive credential/key files are excluded. This request sends the inventory and extracted excerpts to OpenRouter's free-model router. " : "The selected file contents will be read from private Office Drive by the authenticated server and sent to OpenRouter's free-model router to generate this answer. "}OpenRouter provider retention policies may apply; review its <a href="https://openrouter.ai/providers" target="_blank" rel="noopener noreferrer">provider retention details</a> before sharing confidential records. File contents are not stored in COCCE AI chat history. This is not a zero-data-retention guarantee.</p>
+            {selectedFileIds.length > 0 && <ul>{selectedFileIds.map((fileId) => {
               const file = driveFiles.find((item) => item.fileId === fileId);
               return <li key={fileId}>{file?.displayName ?? 'Selected Drive file'}</li>;
-            })}</ul>
+            })}</ul>}
             <div className="office-ai-consent-actions">
               <button type="button" className="button-secondary" onClick={() => setShowDriveConsent(false)}>Cancel</button>
-              <button type="button" className="button-primary" onClick={() => void ask(true)} disabled={busy}>Send selected content</button>
+              <button type="button" className="button-primary" onClick={() => void ask(true)} disabled={busy}>{shareCloudInventory ? "Share cloud context" : "Send selected content"}</button>
             </div>
           </section>
         </div>}
