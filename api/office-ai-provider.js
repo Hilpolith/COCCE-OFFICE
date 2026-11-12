@@ -1,6 +1,7 @@
 const SUPABASE_URL = 'https://nresyncmhdybucenhxbw.supabase.co';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FREE_ROUTER_MODEL = 'openrouter/free';
+const MAX_RATE_LIMIT_ENTRIES = 10_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const requests = new Map();
 
@@ -59,7 +60,11 @@ async function verifyWorkspace(workspaceId, token, env, fetchImpl) {
 function rateAllowed(id, now = Date.now()) {
   for (const [key, item] of requests) if (now - item.started >= 600000) requests.delete(key);
   const item = requests.get(id);
-  if (!item || now - item.started >= 600000) { requests.set(id, { started: now, count: 1 }); return true; }
+  if (!item || now - item.started >= 600000) {
+    if (!item && requests.size >= MAX_RATE_LIMIT_ENTRIES) return false;
+    requests.set(id, { started: now, count: 1 });
+    return true;
+  }
   if (item.count >= 12) return false;
   item.count += 1; return true;
 }
