@@ -45,7 +45,7 @@ test('guarded check-in persists both reservation and room changes and rejects by
   const property=(await cmd('save_record',{resource:'properties',data:{code:'P-CHECK',name:'Check In',jurisdiction:'mainland',currency:'TZS',timezone:'Africa/Dar_es_Salaam',address_public:'Public'}}));
   const room=(await cmd('save_record',{resource:'rooms',data:{property_id:property.id,code:'301',room_type:'standard',capacity:2,nightly_rate:'100.00'}}));
   const clean=await cmd('transition_record',{resource:'rooms',id:room.id,expected_version:1,to_state:'clean'});
-  const inspected=await cmd('transition_record',{resource:'rooms',id:room.id,expected_version:clean.version,to_state:'inspected'});
+  const _inspected=await cmd('transition_record',{resource:'rooms',id:room.id,expected_version:clean.version,to_state:'inspected'});
   const guestId='30000000-0000-4000-8000-000000000002';
   await cmd('save_guest',{id:guestId,data:{property_id:property.id,code:'G-CHECK',lawful_basis:'consent',notice_reference:'N-CHECK',retention_until:'2099-12-31',nonce:'bm9uY2U=',ciphertext:'Y2lwaGVy'}});
   const reservation=await cmd('save_record',{resource:'reservations',data:{property_id:property.id,room_id:room.id,guest_id:guestId,code:'R-CHECK',check_in_on:'2026-11-01',check_out_on:'2026-12-01',adults:1,children:0,source:'direct',source_reference:'manual',nightly_rate:'100.00'}});
