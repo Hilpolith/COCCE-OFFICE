@@ -84,9 +84,9 @@ describe('COCCE Office free AI provider boundary', () => {
 
     const missingAuthConfig = harness({ env: { VITE_COCCE_SUPABASE_ANON_KEY: '' } });
     const authFailure = await invoke(missingAuthConfig.handler, { body: payload(missingAuthConfig.workspaceId) });
-    expect(authFailure.statusCode).toBe(503);
-    expect(authFailure.body.error).toBe('AUTH_UNAVAILABLE');
-    expect(missingAuthConfig.calls).toHaveLength(1);
+    expect(authFailure.statusCode).toBe(401);
+    expect(authFailure.body.error).toBe('AUTH_REQUIRED');
+    expect(missingAuthConfig.calls).toHaveLength(0);
   });
 
   it('requires a valid bearer session and rejects malformed or oversized request bodies', async () => {
@@ -167,7 +167,7 @@ describe('COCCE Office free AI provider boundary', () => {
     }
   });
 
-  it('uses authenticated per-user throttling before making paid-provider requests', async () => {
+  it('uses authenticated per-user throttling before making free-provider requests', async () => {
     const test = harness();
     const results = [];
     for (let index = 0; index < 13; index += 1) {
