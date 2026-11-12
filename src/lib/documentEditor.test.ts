@@ -9,7 +9,7 @@ describe('local Docs content conversion and safety', () => {
     expect(converted.html).toContain('<h1>Report</h1>');
     expect(converted.html).toContain('<strong>bold</strong>');
     expect(converted.html).toContain('<em>italic</em>');
-    expect(converted.html).toContain('<a href="https://example.com" target="_blank" rel="noopener noreferrer">a safe link</a>');
+    expect(converted.html).toContain('<a href="https://example.com/" target="_blank" rel="noopener noreferrer">a safe link</a>');
     expect(converted.html).toContain('<ul>');
     expect(converted.html).toContain('<blockquote>');
     expect(converted.html).toContain('<table>');
