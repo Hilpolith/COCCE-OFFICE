@@ -426,9 +426,9 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
     }
     setExportingXlsx(true);
     try {
-      const blob = await createXlsxBlob({ title: workbook.title, sheetName: worksheet.name, cells: worksheet.cells });
+      const blob = await createXlsxBlob({ title: workbook.title, sheetName: worksheet.name, cells: worksheet.cells, charts: worksheet.charts ?? [] });
       downloadBlob(safeXlsxFilename(workbook.title), blob);
-      setMessage('Single-sheet XLSX downloaded locally. No file was uploaded.');
+      setMessage('Single-sheet XLSX downloaded locally, including supported charts. No file was uploaded.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'XLSX export failed. No file was created.');
     } finally {
