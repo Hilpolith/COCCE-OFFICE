@@ -6,6 +6,7 @@ import { createOfficeCloudApi } from './lib/officeCloudFiles';
 import type { CloudFile } from './lib/officeCloudFiles';
 import { officeTeamApi } from './lib/officeTeamApi';
 import type { OfficeChatAttachment, OfficeConversationRead, OfficeRichMessage } from './lib/officeTeamApi';
+import { buildAudioWaveform, buildLiveAudioWaveform } from './lib/officeAudioWaveform';
 import './officeChat.css';
 
 type Props = {
@@ -81,10 +82,16 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
   const [live, setLive] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [waveforms, setWaveforms] = useState<Record<string, number[]>>({});
+  const [recordingWaveform, setRecordingWaveform] = useState<number[]>([]);
+  const [playbackProgress, setPlaybackProgress] = useState<Record<string, number>>({});
   const fileInput = useRef<HTMLInputElement>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const recordingStream = useRef<MediaStream | null>(null);
   const recordingParts = useRef<BlobPart[]>([]);
+  const recordingConversation = useRef<string | null>(null);
+  const recordingAudioContext = useRef<AudioContext | null>(null);
+  const recordingAnalyser = useRef<AnalyserNode | null>(null);
+  const recordingAnimation = useRef<number | null>(null);
   const previewUrlsRef = useRef<Record<string, string>>({});
   const scopeRef = useRef(conversationId);
 
@@ -99,7 +106,24 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     previewUrlsRef.current = {};
     setPreviewUrls({});
     setWaveforms({});
+    setPlaybackProgress({});
+    setRecordingWaveform([]);
+    if (recorder.current?.state === 'recording') recorder.current.stop();
   }, [conversationId]);
+
+  useEffect(() => () => {
+    const activeRecorder = recorder.current;
+    if (activeRecorder) {
+      activeRecorder.ondataavailable = null;
+      activeRecorder.onstop = null;
+      if (activeRecorder.state === 'recording') activeRecorder.stop();
+    }
+    recordingStream.current?.getTracks().forEach((track) => track.stop());
+    recordingStream.current = null;
+    if (recordingAnimation.current !== null) window.cancelAnimationFrame(recordingAnimation.current);
+    void recordingAudioContext.current?.close().catch(() => undefined);
+    for (const url of Object.values(previewUrlsRef.current)) URL.revokeObjectURL(url);
+  }, []);
 
   const refresh = useCallback(async () => {
     const [nextMessages, nextReads] = await Promise.all([
@@ -221,18 +245,45 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recordingStream.current = stream;
+      recordingConversation.current = conversationId;
       recordingParts.current = [];
       const preferred = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : undefined;
       const instance = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
       recorder.current = instance;
       instance.ondataavailable = (event) => { if (event.data.size) recordingParts.current.push(event.data); };
+      if (typeof window.AudioContext === 'function') {
+        try {
+          const audioContext = new AudioContext();
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 128;
+          audioContext.createMediaStreamSource(stream).connect(analyser);
+          recordingAudioContext.current = audioContext;
+          recordingAnalyser.current = analyser;
+          const bins = new Uint8Array(analyser.frequencyBinCount);
+          const drawWaveform = () => {
+            if (!recordingAnalyser.current) return;
+            recordingAnalyser.current.getByteFrequencyData(bins);
+            setRecordingWaveform(buildLiveAudioWaveform(bins));
+            recordingAnimation.current = window.requestAnimationFrame(drawWaveform);
+          };
+          void audioContext.resume().then(drawWaveform, drawWaveform);
+        } catch { setRecordingWaveform(Array.from({ length: 40 }, (_, index) => 18 + ((index * 17) % 29))); }
+      }
       instance.onstop = () => {
         const blob = new Blob(recordingParts.current, { type: instance.mimeType || 'audio/webm' });
+        if (recordingAnimation.current !== null) window.cancelAnimationFrame(recordingAnimation.current);
+        recordingAnimation.current = null;
+        recordingAnalyser.current = null;
+        void recordingAudioContext.current?.close().catch(() => undefined);
+        recordingAudioContext.current = null;
+        setRecordingWaveform([]);
         stream.getTracks().forEach((track) => track.stop());
         recordingStream.current = null;
         recorder.current = null;
         setRecording(false);
-        if (blob.size) void uploadFiles([new File([blob], 'voice-message-' + Date.now() + (blob.type.includes('mp4') ? '.m4a' : blob.type.includes('ogg') ? '.ogg' : '.webm'), { type: blob.type })]);
+        const belongsToOpenConversation = recordingConversation.current === scopeRef.current;
+        recordingConversation.current = null;
+        if (blob.size && belongsToOpenConversation) void uploadFiles([new File([blob], 'voice-message-' + Date.now() + (blob.type.includes('mp4') ? '.m4a' : blob.type.includes('ogg') ? '.ogg' : '.webm'), { type: blob.type })]);
       };
       instance.start(250);
       setRecording(true);
@@ -332,13 +383,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
           context = new window.AudioContext();
           const decoded = await context.decodeAudioData(await blob.arrayBuffer());
           const samples = decoded.getChannelData(0);
-          const bars = Array.from({ length: 36 }, (_, index) => {
-            const start = Math.floor(index * samples.length / 36);
-            const end = Math.max(start + 1, Math.floor((index + 1) * samples.length / 36));
-            let peak = 0;
-            for (let cursor = start; cursor < Math.min(end, samples.length); cursor += 1) peak = Math.max(peak, Math.abs(samples[cursor]));
-            return Math.max(7, Math.round(peak * 100));
-          });
+          const bars = buildAudioWaveform(samples, 48);
           if (scopeRef.current === scope) setWaveforms((current) => ({ ...current, [attachment.fileId]: bars }));
         } catch { /* Audio playback remains available when waveform decoding is unsupported. */ }
         finally { await context?.close().catch(() => undefined); }
@@ -380,8 +425,8 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
                 {previewUrl && mime.startsWith('image/') && <img className="office-chat-image-preview" src={previewUrl} alt={attachment.name} loading="lazy" />}
                 {previewUrl && mime.startsWith('video/') && <video className="office-chat-video-preview" src={previewUrl} controls preload="metadata" />}
                 {previewUrl && mime.startsWith('audio/') && <div className="office-chat-audio-preview">
-                  {waveforms[attachment.fileId] && <div className="office-chat-waveform" aria-hidden="true">{waveforms[attachment.fileId].map((height, index) => <span key={index} style={{ height: height + '%' }} />)}</div>}
-                  <audio src={previewUrl} controls preload="metadata" />
+                  {waveforms[attachment.fileId] && <div className="office-chat-waveform" aria-label="Audio waveform">{waveforms[attachment.fileId].map((height, index) => <span key={index} className={index / waveforms[attachment.fileId].length <= (playbackProgress[attachment.fileId] ?? 0) ? 'is-played' : ''} style={{ height: height + '%' }} />)}</div>}
+                  <audio src={previewUrl} controls preload="metadata" onTimeUpdate={(event) => { const audio = event.currentTarget; setPlaybackProgress((current) => ({ ...current, [attachment.fileId]: audio.duration > 0 ? audio.currentTime / audio.duration : 0 })); }} onEnded={() => setPlaybackProgress((current) => ({ ...current, [attachment.fileId]: 1 }))} />
                 </div>}
               </div>;
             })}
@@ -397,6 +442,7 @@ export default function OfficeChatPanel({ client, user, publicKey, workspaceId, 
     </div>
     {reply && <div className="office-chat-composer-context"><Reply size={14} /><span>Replying to {reply.author_name}: {reply.body || 'Attachment'}</span><button type="button" onClick={() => setReply(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
     {pending.length > 0 && <div className="office-chat-pending">{pending.map((item) => <span key={item.fileId}>{item.name}<button type="button" onClick={() => setPending((current) => current.filter((entry) => entry.fileId !== item.fileId))} aria-label={'Remove ' + item.name}><X size={12} /></button></span>)}</div>}
+    {recording && <div className="office-chat-recording" role="status" aria-label="Live audio recording waveform"><span className="office-chat-recording-dot" /><strong>Recording voice note</strong><div className="office-chat-waveform is-live" aria-hidden="true">{(recordingWaveform.length ? recordingWaveform : Array(40).fill(12)).map((height, index) => <span key={index} style={{ height: height + '%' }} />)}</div><small>Tap stop to send</small></div>}
     <form className="office-chat-composer" onSubmit={send}>
       <input ref={fileInput} type="file" multiple hidden onChange={onFiles} />
       <button type="button" title="Attach files" aria-label="Attach files" disabled={disabled || uploading} onClick={() => fileInput.current?.click()}><Paperclip size={17} /></button>
