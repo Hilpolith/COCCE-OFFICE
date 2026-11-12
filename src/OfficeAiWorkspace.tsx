@@ -346,6 +346,12 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     setDriveFileHasMore(false);
     setDriveFilesOpen(false);
     setShowDriveConsent(false);
+    setShareCloudInventory(false);
+    setShareSectorRecords(false);
+    setIncludeSectorRecords(false);
+    setPendingAction(null);
+    setPendingActionKey('');
+    setActionStatus('');
   }, [initialWorkspaceId, workspaces, workspaceId]);
 
   useEffect(() => {
