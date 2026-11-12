@@ -80,6 +80,26 @@ describe('COCCE AI workspace context', () => {
     expect(screen.getByText('Start a conversation')).toBeTruthy();
   });
 
+  it('sends on Enter and preserves multiline drafting on Shift+Enter', async () => {
+    render(<OfficeAiWorkspace mode="chat" />);
+    await screen.findByRole('combobox', { name: 'Workspace' });
+    const composer = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'Prepare a short agenda.' } });
+    fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true });
+    expect(composer.value).toBe('Prepare a short agenda.');
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(composer, { key: 'Enter', shiftKey: false });
+    expect(await screen.findByText('A tested workspace summary.')).toBeTruthy();
+    expect(mocks.invoke).toHaveBeenLastCalledWith('office-ai-chat', {
+      body: {
+        action: 'chat',
+        workspaceId: 'workspace-one',
+        prompt: 'Prepare a short agenda.',
+        includeConversations: false,
+      },
+    });
+  });
+
   it('requires confirmation before permanently deleting a saved conversation', async () => {
     const conversation = {
       conversation_id: '55555555-5555-4555-8555-555555555555',
