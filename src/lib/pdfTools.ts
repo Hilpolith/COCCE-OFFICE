@@ -191,6 +191,35 @@ export async function rotatePdfPage(source: Uint8Array, pageNumber: number, byDe
   return saveBoundedPageCopy(document);
 }
 
+export async function insertPdfPagesAt(
+  source: Uint8Array,
+  insertedSource: Uint8Array,
+  beforePageNumber: number,
+): Promise<Uint8Array> {
+  assertPdfMergeInputLimits([source.byteLength, insertedSource.byteLength]);
+  const original = await loadPageCopySource(source);
+  const inserted = await loadPageCopySource(insertedSource);
+  if (!Number.isInteger(beforePageNumber) || beforePageNumber < 1 || beforePageNumber > original.getPageCount() + 1) {
+    throw new Error(`Choose an insertion position between page 1 and page ${original.getPageCount() + 1}.`);
+  }
+  const totalPages = original.getPageCount() + inserted.getPageCount();
+  if (totalPages > MAX_PDF_PAGE_OPERATION_PAGES) {
+    throw new Error(`Inserted PDFs are limited to ${MAX_PDF_PAGE_OPERATION_PAGES} total pages.`);
+  }
+  const output = await PDFDocument.create();
+  try {
+    const insertedPages = await output.copyPages(inserted, inserted.getPageIndices());
+    const originalPages = await output.copyPages(original, original.getPageIndices());
+    for (let index = 0; index <= originalPages.length; index += 1) {
+      if (index === beforePageNumber - 1) insertedPages.forEach((page) => output.addPage(page));
+      if (index < originalPages.length) output.addPage(originalPages[index]!);
+    }
+  } catch {
+    throw new Error('The selected PDF pages could not be inserted safely; no output was created.');
+  }
+  return saveBoundedPageCopy(output);
+}
+
 export async function mergePdfFiles(sources: Uint8Array[]): Promise<Uint8Array> {
   if (!Array.isArray(sources) || sources.length < 2) throw new Error('Select at least two PDF files to merge.');
   assertPdfMergeInputLimits(sources.map((source) => source.byteLength));
