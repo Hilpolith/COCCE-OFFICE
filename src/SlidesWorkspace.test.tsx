@@ -395,8 +395,8 @@ describe('Slides workspace', () => {
       slides: [{ id: 'slide-a', title: 'Overview', body: 'Local transfer only', notes: '', layout: 'title-content', imageOmitted: true, imageAltText: 'Team board' }],
     };
     const file = new File([JSON.stringify(transfer)], 'transfer.cocce-slides.json', { type: 'application/json' });
-    fireEvent.change(screen.getByLabelText('Choose a presentation JSON file'), { target: { files: [file] } });
-    await waitFor(() => expect(document.querySelector('.slides-editor-footer')?.textContent).toMatch(/1 local image was not included/));
+    fireEvent.change(screen.getByLabelText('Choose a PowerPoint or COCCE presentation file'), { target: { files: [file] } });
+    await waitFor(() => expect(document.querySelector('.slides-editor-footer')?.textContent).toMatch(/1 embedded image was not imported/));
     expect((screen.getByRole('textbox', { name: 'Image description' }) as HTMLInputElement).value).toBe('Team board');
     expect(document.querySelector('.slides-workbench .slide-local-image')).toBeNull();
     const imported = JSON.parse(window.localStorage.getItem(SLIDES_STORAGE_KEY)!);
