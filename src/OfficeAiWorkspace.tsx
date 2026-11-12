@@ -499,7 +499,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
           </div>}
         </section>}
         <aside className="office-ai-history" aria-label="Saved AI conversations">
-          <div className="office-ai-history-heading"><strong>Messages</strong><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy || historyLoading}>+ New</button></div>
+          <div className="office-ai-history-heading"><strong>Messages</strong><button type="button" className="office-ai-inline-button" onClick={startNewConversation} disabled={busy || historyLoading}>New chat</button></div>
           {mode === "chat" && <input className="office-ai-history-search" type="search" value={conversationSearch} onChange={event => setConversationSearch(event.target.value)} placeholder="Search conversations" aria-label="Search conversations" />}
           {workspaceId === '*' ? <small className="office-ai-history-hint">Select one workspace to save and reopen conversations. All-workspace context remains available for one-off questions.</small> : historyLoading ? <small className="office-ai-history-hint">Loading saved conversations…</small> : visibleConversations.length ? visibleConversations.map((conversation) => <div className={`office-ai-history-row ${activeConversationId === conversation.conversation_id ? 'is-active' : ''}`} key={conversation.conversation_id}>
             <button type="button" className="office-ai-history-open" onClick={() => void openConversation(conversation.conversation_id)} disabled={busy}><strong>{conversation.title}</strong><small>{new Date(conversation.last_message_at).toLocaleString()}</small></button>
