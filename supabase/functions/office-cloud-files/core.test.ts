@@ -779,25 +779,54 @@ describe('Office cloud Edge Function', () => {
     expect(rpcPayload(rpc)).toEqual({ p_actor_id: actorId, p_workspace_id: workspaceId });
   });
 
-  it('fails closed for storage purchases until a secure server-side wallet PIN verifier exists', async () => {
-    const { fetchImpl, calls } = routedFetch(() => {
-      throw new Error('No wallet profile read or debit RPC is permitted without a secure PIN verifier.');
+  it('verifies the existing COCCE Wallet PIN server-side before allowing storage purchase', async () => {
+    const { fetchImpl, calls } = routedFetch((url, init) => {
+      if (url.pathname === '/rest/v1/profiles') {
+        expect(url.searchParams.get('select')).toBe('wallet_pin_hash');
+        expect(url.searchParams.get('id')).toBe(`eq.${actorId}`);
+        expect(new Headers(init.headers).get('Authorization')).toBe('Bearer synthetic-service-role-token');
+        return Response.json([{ wallet_pin_hash: '2468' }]);
+      }
+      expect(url.pathname).toBe('/rest/v1/rpc/office_cloud_purchase_storage_subscription');
+      expect(JSON.parse(String(init.body))).toEqual({
+        p_actor_id: actorId, p_workspace_id: workspaceId, p_plan_code: 'storage_5gb_monthly',
+        p_idempotency_key: '88888888-8888-4888-8888-888888888888', p_auto_renew: false,
+      });
+      return Response.json({
+        subscription_id: '77777777-7777-4777-8777-777777777777', plan_code: 'storage_5gb_monthly',
+        display_name: '5 GB', quota_bytes: 5000000000, monthly_coins: 2000, status: 'active',
+        auto_renew: false, current_period_end: '2026-12-04T11:00:00.000Z', balance: 8000, replayed: false,
+      });
     });
     const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
     const response = await handler(request({
       action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
       idempotencyKey: '88888888-8888-4888-8888-888888888888', walletPin: '2468',
     }));
-    expect(response.status).toBe(409);
-    expect((await response.json()).error).toBe('WALLET_PIN_VERIFIER_UNAVAILABLE');
-    expect(calls.some((call) => call.url === 'https://nresyncmhdybucenhxbw.supabase.co/rest/v1/profiles')).toBe(false);
+    expect(response.status).toBe(200);
+    expect((await response.json()).purchase.monthlyCoins).toBe(2000);
+    expect(calls.some((call) => call.url.includes('/rest/v1/profiles?'))).toBe(true);
+    expect(calls.some((call) => call.url.endsWith('/office_cloud_purchase_storage_subscription'))).toBe(true);
+    expect(JSON.stringify(calls.map((call) => call.init.body))).not.toContain('2468');
+  });
+
+  it('rejects an incorrect COCCE Wallet PIN without invoking the storage debit RPC', async () => {
+    const { fetchImpl, calls } = routedFetch((url) => {
+      if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: '2468' }]);
+      throw new Error('An invalid PIN must never reach a wallet debit RPC.');
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const response = await handler(request({
+      action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
+      idempotencyKey: '88888888-8888-4888-8888-888888888888', walletPin: '1357',
+    }));
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toBe('INVALID_WALLET_PIN');
     expect(calls.some((call) => call.url.endsWith('/office_cloud_purchase_storage_subscription'))).toBe(false);
   });
 
-  it('rejects malformed PIN input without reading wallet profile data', async () => {
-    const { fetchImpl, calls } = routedFetch(() => {
-      throw new Error('Malformed PIN must be rejected before any wallet query.');
-    });
+  it('rejects malformed PIN input before reading wallet profile data', async () => {
+    const { fetchImpl, calls } = routedFetch(() => { throw new Error('Malformed PIN must be rejected before any wallet query.'); });
     const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
     const response = await handler(request({
       action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
@@ -808,23 +837,39 @@ describe('Office cloud Edge Function', () => {
     expect(calls.some((call) => call.url.includes('/rest/v1/profiles'))).toBe(false);
   });
 
-  it('validates the auto-renew choice and still refuses billing without a secure PIN verifier', async () => {
-    const { fetchImpl, calls } = routedFetch(() => {
-      throw new Error('No wallet profile read or debit RPC is permitted without a secure PIN verifier.');
+  it('rejects purchases when no COCCE Wallet PIN is configured', async () => {
+    const { fetchImpl, calls } = routedFetch((url) => {
+      if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: null }]);
+      throw new Error('No debit is allowed without a configured wallet PIN.');
     });
     const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
-    const invalid = await handler(request({
+    const response = await handler(request({
       action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
-      idempotencyKey: '99999999-9999-4999-8999-999999999999', autoRenew: 'yes', walletPin: '2468',
+      idempotencyKey: '88888888-8888-4888-8888-888888888888', walletPin: '2468',
     }));
-    expect(invalid.status).toBe(400);
-    const blocked = await handler(request({
-      action: 'purchase_storage', workspaceId, planCode: 'storage_5gb_monthly',
-      idempotencyKey: '99999999-9999-4999-8999-999999999999', autoRenew: false, walletPin: '2468',
-    }));
-    expect(blocked.status).toBe(409);
-    expect((await blocked.json()).error).toBe('WALLET_PIN_VERIFIER_UNAVAILABLE');
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toBe('WALLET_PIN_NOT_SET');
     expect(calls.some((call) => call.url.endsWith('/office_cloud_purchase_storage_subscription'))).toBe(false);
+  });
+
+  it('verifies the COCCE Wallet PIN before enabling storage auto-renew', async () => {
+    const { fetchImpl, calls } = routedFetch((url) => {
+      if (url.pathname === '/rest/v1/profiles') return Response.json([{ wallet_pin_hash: '2468' }]);
+      if (url.pathname === '/rest/v1/rpc/office_cloud_set_storage_subscription_auto_renew') {
+        return Response.json({
+          subscription_id: '77777777-7777-4777-8777-777777777777', auto_renew: true,
+          cancel_at_period_end: false, current_period_end: '2026-12-04T11:00:00.000Z',
+        });
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    const handler = createOfficeCloudHandler({ env: secretEnv, fetchImpl, now: () => fixedNow });
+    const response = await handler(request({
+      action: 'set_storage_auto_renew', subscriptionId: '77777777-7777-4777-8777-777777777777',
+      autoRenew: true, walletPin: '2468',
+    }));
+    expect(response.status).toBe(200);
+    expect(calls.some((call) => call.url.includes('/rest/v1/profiles?'))).toBe(true);
   });
 
 });
