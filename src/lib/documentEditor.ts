@@ -106,7 +106,7 @@ function isSupportedCellNode(node: Node): boolean {
   if (node.nodeType !== Node.ELEMENT_NODE) return true;
   const element = node as Element;
   const tag = element.tagName.toUpperCase();
-  if (DROP_CONTENT_TAGS.has(tag)) return true;
+  if (DROP_CONTENT_TAGS.has(tag) || tag === 'IMG') return true;
   if (!SUPPORTED_TABLE_CELL_TAGS.has(tag)) return false;
   return Array.from(element.childNodes).every(isSupportedCellNode);
 }
@@ -116,7 +116,7 @@ function plainTextForFlattenedNode(node: Node): string {
   if (node.nodeType !== Node.ELEMENT_NODE) return '';
   const element = node as Element;
   const tag = element.tagName.toUpperCase();
-  if (DROP_CONTENT_TAGS.has(tag)) return '';
+  if (DROP_CONTENT_TAGS.has(tag) || tag === 'IMG') return '';
   if (tag === 'BR') return ' ';
   return Array.from(element.childNodes, plainTextForFlattenedNode).join('');
 }
