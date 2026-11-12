@@ -223,6 +223,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     setDriveFileHasMore(false);
     setDriveFilesOpen(false);
     setTurns([]);
+    setActiveConversationId(null);
     setShowDriveConsent(false);
   }, [initialWorkspaceId, workspaces]);
 
