@@ -328,6 +328,32 @@ describe('COCCE AI workspace context', () => {
     expect(screen.queryByText('A tested workspace summary.')).toBeNull();
   });
 
+  it('does not attach a delayed conversation save to the newly selected workspace', async () => {
+    let resolveCreate: ((value: { data: string; error: null }) => void) | null = null;
+    mocks.rpc.mockImplementation((name: string) => {
+      if (name === 'office_ai_create_conversation') {
+        return new Promise((resolve) => { resolveCreate = resolve; });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+    render(<OfficeAiWorkspace initialWorkspaceId="workspace-one" initialPrompt="Prepare the operations plan." />);
+    const selector = await screen.findByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement;
+    await waitFor(() => expect(selector.value).toBe('workspace-one'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send to COCCE AI' }));
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('office_ai_create_conversation', {
+      p_workspace_id: 'workspace-one',
+      p_title: 'Prepare the operations plan.',
+    }));
+    fireEvent.change(selector, { target: { value: 'workspace-two' } });
+    await waitFor(() => expect(selector.value).toBe('workspace-two'));
+    await act(async () => {
+      resolveCreate?.({ data: '55555555-5555-4555-8555-555555555555', error: null });
+    });
+    await waitFor(() => expect(screen.queryByText('A tested workspace summary.')).toBeNull());
+    expect(mocks.rpc).not.toHaveBeenCalledWith('office_ai_save_exchange', expect.anything());
+  });
+
+
   it('offers source-code text files while hiding likely secrets and credentials', async () => {
     const workspaceId = '11111111-1111-4111-8111-111111111111';
     mocks.listWorkspaces.mockResolvedValue([{ workspace_id: workspaceId, name: 'Operations', role: 'owner', created_at: '2026-11-09T00:00:00Z' }]);
