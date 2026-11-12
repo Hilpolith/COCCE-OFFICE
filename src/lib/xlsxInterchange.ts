@@ -935,7 +935,7 @@ function parseXlsxDrawingCharts(
     };
     visitChartNodes(frames[0]!);
     if (chartNodes.length !== 1) fail('The XLSX drawing frame does not reference exactly one chart.');
-    const id = chartNodes[0]!.getAttributeNS(OFFICE_REL_NS, 'id');
+    const id = chartNodes[0]!.getAttributeNS(OFFICE_REL_NS, 'id') || chartNodes[0]!.getAttribute('r:id');
     if (!id || chartIds.includes(id)) fail('The XLSX drawing contains an invalid or duplicate chart reference.');
     chartIds.push(id);
   }

@@ -160,7 +160,7 @@ describe('COCCE AI workspace context', () => {
       : name === 'office_industry_create_work_item'
         ? { data: '66666666-6666-4666-8666-666666666666', error: null }
         : { data: null, error: null });
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirmSpy = vi.fn(() => true); Object.defineProperty(window, 'confirm', { configurable: true, value: confirmSpy });
     render(<OfficeAiWorkspace mode="assistant" initialWorkspaceId="workspace-one" />);
     await screen.findByRole('combobox', { name: 'Workspace' });
     const composer = screen.getByRole('textbox', { name: 'Ask across your workspace' }) as HTMLTextAreaElement;
