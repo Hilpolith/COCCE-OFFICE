@@ -22,10 +22,20 @@ export interface OfficeDocument {
   updatedAt: string;
 }
 
+export type OfficeSheetChartType = 'bar' | 'line';
+export interface OfficeSheetChart {
+  id: string;
+  title: string;
+  type: OfficeSheetChartType;
+  range: string;
+  createdAt: string;
+}
+
 export interface OfficeWorksheet {
   id: string;
   name: string;
   cells: Record<string, string>;
+  charts?: OfficeSheetChart[];
 }
 
 export interface OfficeWorkbook {
@@ -96,7 +106,13 @@ function isWorksheet(value: unknown): value is OfficeWorksheet {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<OfficeWorksheet>;
   if (typeof candidate.id !== 'string' || typeof candidate.name !== 'string' || !candidate.cells || typeof candidate.cells !== 'object' || Array.isArray(candidate.cells)) return false;
-  return Object.entries(candidate.cells).every(([key, cell]) => /^[A-Z]{1,3}[1-9]\d*$/.test(key) && typeof cell === 'string');
+  const cellsValid = Object.entries(candidate.cells).every(([key, cell]) => /^[A-Z]{1,3}[1-9]\\d*$/.test(key) && typeof cell === 'string');
+  const charts = (candidate as OfficeWorksheet).charts;
+  return cellsValid && (charts === undefined || (Array.isArray(charts) && charts.length <= 20 && charts.every((chart) =>
+    !!chart && typeof chart.id === 'string' && typeof chart.title === 'string' && chart.title.length > 0 && chart.title.length <= 80
+    && (chart.type === 'bar' || chart.type === 'line')
+    && /^([A-L](?:[1-9]|1\\d|2[0-4])):([A-L](?:[1-9]|1\\d|2[0-4]))$/.test(chart.range)
+    && typeof chart.createdAt === 'string')));
 }
 
 function isWorkbook(value: unknown): value is OfficeWorkbook {
@@ -261,6 +277,59 @@ export function updateWorkbook(
     workbooks: state.workbooks.map((workbook) => workbook.id === workbookId
       ? { ...workbook, ...patch, updatedAt: now.toISOString() }
       : workbook),
+  };
+}
+
+export function addWorksheetChart(
+  state: PreviewState,
+  workbookId: string,
+  worksheetId: string,
+  input: Pick<OfficeSheetChart, 'title' | 'type' | 'range'>,
+  now = new Date(),
+): PreviewState {
+  const workbook = state.workbooks.find((item) => item.id === workbookId);
+  const worksheet = workbook?.worksheets.find((item) => item.id === worksheetId);
+  if (!workbook || !worksheet || (worksheet.charts?.length ?? 0) >= 20
+    || typeof input.title !== 'string' || input.title.trim().length < 1 || input.title.trim().length > 80
+    || !['bar', 'line'].includes(input.type)
+    || !/^([A-L](?:[1-9]|1\\d|2[0-4])):([A-L](?:[1-9]|1\\d|2[0-4]))$/.test(input.range)) return state;
+  const chart: OfficeSheetChart = {
+    id: makeId(),
+    title: input.title.trim(),
+    type: input.type,
+    range: input.range,
+    createdAt: now.toISOString(),
+  };
+  const updatedAt = now.toISOString();
+  return {
+    ...state,
+    workbooks: state.workbooks.map((item) => item.id !== workbookId ? item : {
+      ...item,
+      updatedAt,
+      worksheets: item.worksheets.map((sheet) => sheet.id === worksheetId
+        ? { ...sheet, charts: [...(sheet.charts ?? []), chart] }
+        : sheet),
+    }),
+  };
+}
+
+export function removeWorksheetChart(
+  state: PreviewState,
+  workbookId: string,
+  worksheetId: string,
+  chartId: string,
+  now = new Date(),
+): PreviewState {
+  return {
+    ...state,
+    workbooks: state.workbooks.map((item) => item.id !== workbookId ? item : {
+      ...item,
+      updatedAt: now.toISOString(),
+      worksheets: item.worksheets.map((sheet) => sheet.id !== worksheetId ? sheet : {
+        ...sheet,
+        charts: (sheet.charts ?? []).filter((chart) => chart.id !== chartId),
+      }),
+    }),
   };
 }
 
