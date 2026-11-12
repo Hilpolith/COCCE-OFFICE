@@ -167,7 +167,7 @@ export default function ManufacturingSupplierPrivatePanel({
       setSuppliers((result?.rows ?? []).filter((row) => typeof row.id === "string"));
       setSupplierOffset(result?.offset ?? offset);
       setSupplierHasMore(result?.has_more ?? false);
-    } catch (caught) {
+    } catch {
       if (current(token)) setError(safeError(caught));
     }
   };

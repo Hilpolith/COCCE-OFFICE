@@ -21,7 +21,6 @@ describe("Health Administration clinical root contract", () => {
   it("keeps PHI fail-closed when storage is unverified", () => {
     const source = "storage_ready";
     expect(source).toBe("storage_ready");
-    expect(false && source).toBe(false);
   });
 
   it("covers anonymous, membership, suspended and unassigned lifecycle states", () => {

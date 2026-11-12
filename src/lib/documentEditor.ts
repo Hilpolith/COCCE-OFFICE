@@ -275,7 +275,7 @@ function markdownInline(node: Node): string {
   if (tag === 'BR') return '\n';
   if (tag === 'IMG') {
     const src = safeDocsImageSrc(element.getAttribute('src') ?? '');
-    const alt = (element.getAttribute('alt') ?? '').replace(/[\[\]]/g, '');
+    const alt = (element.getAttribute('alt') ?? '').replaceAll('[', '').replaceAll(']', '');
     return src ? `![${alt}](${src})` : '';
   }
   if (tag === 'CODE') {

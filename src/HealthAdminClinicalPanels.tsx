@@ -16,7 +16,7 @@ const capability = (context: HealthAdminPanelProps["context"], name: string) => 
 const loadedRow = (records: Row[], selectedId: string) => selectedId ? records.find((row) => id(row) === selectedId) : undefined;
 const relatedFacility = (row: Row | undefined, facilityRows: Row[], selectedFacilityId?: string) => {
   const facilityId = selectedFacilityId || String(row?.facility_id ?? "");
-  return Boolean(facilityId && loadedRow(facilityRows, facilityId) && (!row?.facility_id || String(row.facility_id) === facilityId)) ? facilityId : "";
+  return facilityId && loadedRow(facilityRows, facilityId) && (!row?.facility_id || String(row.facility_id) === facilityId) ? facilityId : "";
 };
 
 function Notice({ children, tone = "info" }: { children: ReactNode; tone?: "info" | "warning" }) { return <div className={`health-admin-${tone === "warning" ? "privacy-note" : "alert"}`} role={tone === "warning" ? "note" : "status"}>{children}</div>; }
