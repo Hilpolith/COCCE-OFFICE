@@ -645,7 +645,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
             </div>
           </section>
         </div>}
-        <div className="office-ai-footnote">{mode === 'chat' ? 'Private AI Chat history is saved inside the selected workspace. Only your account can read these conversations.' : includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {mode === 'assistant' ? (selectedFileIds.length ? 'Selected text files and native Docs/Sheets cloud copies are read server-side from enabled workspaces, limited to 3 files, 512 KiB and 8,000 extracted characters each (20,000 total).' : 'Drive files are never read unless you explicitly select them.') : ''} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
+        <div className="office-ai-footnote">{mode === 'chat' ? 'Private AI Chat history is saved inside the selected workspace. Only your account can read these conversations.' : includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} Cloud-file questions can inspect up to 200 file records across up to 20 AI-enabled workspaces and read up to 3 recent supported file excerpts (512 KiB and 8,000 extracted characters per file; 20,000 total) after per-request confirmation. Explicitly attached files also require confirmation. AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
       </>}
       {error && status === 'ready' && <div className="office-ai-error" role="alert"><AlertCircle size={14} /> {error}</div>}
     </section>
