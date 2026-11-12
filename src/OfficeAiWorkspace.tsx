@@ -19,7 +19,7 @@ const AI_DRIVE_TEXT_EXTENSIONS = new Set([
 ]);
 const AI_DRIVE_SENSITIVE_NAME = /^(?:\.env(?:\..*)?|secrets?(?:\..*)?|credentials?(?:\..*)?|service-account(?:\..*)?|id_(?:rsa|ed25519))$|(?:^|[._-])(?:secret|credential|password|token|private[-_]?key)(?:[._-]|$)/i;
 
-export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }: { initialWorkspaceId?: string; initialPrompt?: string } = {}) {
+export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspaceId, initialPrompt }: { mode?: 'assistant' | 'chat'; initialWorkspaceId?: string; initialPrompt?: string } = {}) {
   const config = useMemo(() => resolveOfficeTeamConfig(import.meta.env as unknown as OfficeTeamEnvironment), []);
   const client = useMemo(() => getOfficeTeamClient(config), [config]);
   const [workspaces, setWorkspaces] = useState<OfficeWorkspace[]>([]);
@@ -35,7 +35,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
   const authGeneration = useRef(0);
   const aiRequestGeneration = useRef(0);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId ?? '');
-  const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(true);
+  const [includeWorkspaceContext, setIncludeWorkspaceContext] = useState(mode === 'assistant');
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
   const [turns, setTurns] = useState<AiChatTurn[]>([]);
   const [conversations, setConversations] = useState<AiConversation[]>([]);
@@ -456,17 +456,17 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
     <div className="office-ai-hero">
       <div className="office-ai-orbit office-ai-orbit-one" /><div className="office-ai-orbit office-ai-orbit-two" />
       <div className="office-ai-mark"><Sparkles size={25} /></div>
-      <div><span className="eyebrow">COCCE OFFICE · INTELLIGENCE</span><h1>COCCE AI</h1><p>Ask questions across the workspaces you belong to. Workspace owners can switch AI access off at any time.</p></div>
+      <div><span className="eyebrow">{mode === 'chat' ? 'COCCE OFFICE · AI CHAT' : 'COCCE OFFICE · INTELLIGENCE'}</span><h1>{mode === 'chat' ? 'AI Chat' : 'COCCE AI'}</h1><p>{mode === 'chat' ? 'Private AI conversations saved to your selected Office workspace.' : 'Ask questions across the workspaces you belong to. Workspace owners can switch AI access off at any time.'}</p></div>
       <span className="office-ai-free"><span /> FREE MODEL ONLY</span>
     </div>
     <section className="office-ai-shell glass-card">
-      <div className="office-ai-shell-heading"><div><span className="eyebrow">YOUR WORKSPACE ASSISTANT</span><h2><Bot size={20} /> Ask COCCE AI</h2></div><span className="office-ai-secure"><CheckCircle2 size={14} /> COCCE account required</span></div>
+      <div className="office-ai-shell-heading"><div><span className="eyebrow">{mode === 'chat' ? 'PRIVATE CONVERSATIONS' : 'YOUR WORKSPACE ASSISTANT'}</span><h2><Bot size={20} /> {mode === 'chat' ? 'AI Chat' : 'Ask COCCE AI'}</h2></div><span className="office-ai-secure"><CheckCircle2 size={14} /> COCCE account required</span></div>
       {status === 'loading' && <div className="office-ai-state"><LoaderCircle className="spin" size={18} /> Connecting securely to COCCE AI…</div>}
       {status === 'signed-out' && <div className="office-ai-state"><AlertCircle size={18} /> Sign in to your existing COCCE account in Office to use AI.</div>}
       {status === 'misconfigured' && <div className="office-ai-state"><AlertCircle size={18} /> COCCE Auth is not configured for this Office deployment.</div>}
       {status === 'not-configured' && <div className="office-ai-state"><AlertCircle size={18} /> {error || 'The OpenRouter free-model secret is not available to the Office AI service. Check Supabase Edge Function secrets.'}</div>}
       {status === 'ready' && <>
-        <div className="office-ai-context"><label>Workspace<select value={workspaceId} disabled={driveFilesLoading || busy || status !== 'ready'} onChange={event => void changeWorkspace(event.target.value)}><option value="*">All AI-enabled workspaces (up to 20)</option>{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label><label className="office-ai-context-toggle"><span>Team conversation context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · no team history'}</small></span></label></div>
+        <div className="office-ai-context"><label>Workspace<select value={workspaceId} disabled={driveFilesLoading || busy || status !== 'ready'} onChange={event => void changeWorkspace(event.target.value)}>{mode === 'assistant' && <option value="*">All AI-enabled workspaces (up to 20)</option>}{workspaces.map(space => <option key={space.workspace_id} value={space.workspace_id}>{space.name}</option>)}</select></label>{mode === 'assistant' && <label className="office-ai-context-toggle"><span>Team conversation context</span><span><input type="checkbox" checked={includeWorkspaceContext} onChange={event => setIncludeWorkspaceContext(event.target.checked)} /><small>{includeWorkspaceContext ? 'On · authorised team conversations' : 'Off · no team history'}</small></span></label>}</div>
         {!workspaces.length && <div className="office-ai-state">Create or join an Office workspace before using workspace-aware AI.</div>}
         <section className="office-ai-drive-context" aria-label="Selected Drive file context">
           <div className="office-ai-drive-heading"><div><strong>Drive file context</strong><small>Attach up to 3 private text, PDF, Word, Excel, PowerPoint or COCCE Docs/Sheets files. All-workspace mode shows the latest 5 per workspace; a single workspace starts with 50 and can load more. Contents are fetched server-side only after you ask.</small></div><button type="button" className="button-secondary" onClick={() => void openDriveFiles()} disabled={!workspaceId || !userId || busy}>{driveFilesOpen ? 'Hide files' : 'Browse Drive'}</button></div>
@@ -501,7 +501,7 @@ export default function OfficeAiWorkspace({ initialWorkspaceId, initialPrompt }:
             </div>
           </section>
         </div>}
-        <div className="office-ai-footnote">{includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {selectedFileIds.length ? 'Selected text files and native Docs/Sheets cloud copies are read server-side from enabled workspaces, limited to 3 files, 512 KiB and 8,000 extracted characters each (20,000 total).' : 'Drive files are never read unless you explicitly select them.'} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
+        <div className="office-ai-footnote">{mode === 'chat' ? 'Private AI Chat history is saved inside the selected workspace. Only your account can read these conversations.' : includeWorkspaceContext ? 'COCCE AI samples authorised team conversations from up to 20 enabled workspaces.' : 'Team conversation history is off.'} {mode === 'assistant' ? (selectedFileIds.length ? 'Selected text files and native Docs/Sheets cloud copies are read server-side from enabled workspaces, limited to 3 files, 512 KiB and 8,000 extracted characters each (20,000 total).' : 'Drive files are never read unless you explicitly select them.') : ''} AI responses use the pinned OpenRouter free model; no paid-model fallback is enabled.</div>
       </>}
       {error && status === 'ready' && <div className="office-ai-error" role="alert"><AlertCircle size={14} /> {error}</div>}
     </section>
