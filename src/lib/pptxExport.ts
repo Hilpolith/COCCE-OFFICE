@@ -159,7 +159,7 @@ type PptxImportedImage = { bytes: Uint8Array; mimeType: 'image/png' | 'image/jpe
 function resolvePptxMediaPath(slidePath: string, target: string): string | null {
   if (!target || target.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(target)) return null;
   const base = slidePath.split('/').slice(0, -1);
-  for (const part of [...base, ...target.split('/')]) {
+  for (const part of target.split('/')) {
     if (!part || part === '.') continue;
     if (part === '..') {
       if (!base.length) return null;
