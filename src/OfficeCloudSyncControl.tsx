@@ -226,7 +226,9 @@ export default function OfficeCloudSyncControl({
     const handleResume = () => {
       if (document.visibilityState === 'hidden') return;
       attempted.current = '';
-      setOnline(typeof navigator === 'undefined' || navigator.onLine);
+      const connected = typeof navigator === 'undefined' || navigator.onLine;
+      setOnline(connected);
+      if (connected) window.setTimeout(() => { void syncNowRef.current(false); }, 0);
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
