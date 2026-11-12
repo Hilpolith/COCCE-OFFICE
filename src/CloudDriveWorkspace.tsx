@@ -15,7 +15,7 @@ import { AlertCircle, ArrowDownToLine, AudioLines, Building2, Check, Cloud, File
 import './drive.css';
 
 type Category = 'all' | 'documents' | 'images' | 'video' | 'audio' | 'other';
-type Preview = { file: CloudFile; blob: Blob; url: string; docxHtml?: string; docxWarnings?: string[]; xlsx?: ImportedXlsx; pptx?: ImportedSlideDeck };
+type Preview = { file: CloudFile; blob: Blob; url: string; docxHtml?: string; docxWarnings?: string[]; xlsx?: ImportedXlsx; pptx?: ImportedSlideDeck; pptxImageUrls?: Record<string, string> };
 const extension = (name: string) => name.includes('.') ? name.split('.').pop()!.slice(0, 8).toUpperCase() : 'FILE';
 function mimeOf(file: CloudFile) {
   const name = file.displayName.toLowerCase();
@@ -105,6 +105,10 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
   const sequence = useRef(0);
   const accessGeneration = useRef(0);
   useLayoutEffect(() => { accessGeneration.current += 1; }, [workspaceId, userId]);
+  useEffect(() => () => {
+    if (preview?.url) URL.revokeObjectURL(preview.url);
+    for (const imageUrl of Object.values(preview?.pptxImageUrls ?? {})) URL.revokeObjectURL(imageUrl);
+  }, [preview]);
 
   const schemaReady = config.status === 'ready' ? config.schemaReady : false;
   // Billing stays disabled until the owner approves pricing and server-side wallet PIN verification is complete.
@@ -316,17 +320,28 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
         let docxWarnings: string[] | undefined;
         let xlsx: ImportedXlsx | undefined;
         let pptx: ImportedSlideDeck | undefined;
+        let pptxImageUrls: Record<string, string> | undefined;
         if (/\.pptx$/i.test(file.displayName)) {
           if (blob.size > 25 * 1024 * 1024) {
             setNotice('This PPTX exceeds the 25 MiB safe in-app preview limit. Use Download to open the full verified file.');
           } else {
             try {
+              const imageBlobs = new Map<string, Blob>();
+              let imageIndex = 0;
               pptx = await importPptxFile(
                 new globalThis.File([blob], file.displayName, { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }),
                 workspaceId,
-                async () => ({ id: 'preview-only' }),
+                async (imageBlob) => {
+                  const id = `preview-image-${++imageIndex}`;
+                  imageBlobs.set(id, imageBlob);
+                  return { id };
+                },
                 async () => undefined,
               );
+              pptxImageUrls = Object.fromEntries(pptx.deck.slides.flatMap((slide) => {
+                const imageBlob = slide.imageAssetId ? imageBlobs.get(slide.imageAssetId) : undefined;
+                return imageBlob && slide.imageAssetId ? [[slide.imageAssetId, URL.createObjectURL(imageBlob)]] : [];
+              }));
             } catch (cause) {
               setNotice(cause instanceof Error ? cause.message : 'This PPTX cannot be previewed safely. Download the verified original.');
             }
@@ -356,8 +371,11 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
             }
           }
         }
-        if (requestGeneration !== accessGeneration.current) return;
-        setPreview({ file, blob, url: URL.createObjectURL(blob), ...(docxHtml ? { docxHtml } : {}), ...(docxWarnings?.length ? { docxWarnings } : {}), ...(xlsx ? { xlsx } : {}), ...(pptx ? { pptx } : {}) });
+        if (requestGeneration !== accessGeneration.current) {
+          for (const imageUrl of Object.values(pptxImageUrls ?? {})) URL.revokeObjectURL(imageUrl);
+          return;
+        }
+        setPreview({ file, blob, url: URL.createObjectURL(blob), ...(docxHtml ? { docxHtml } : {}), ...(docxWarnings?.length ? { docxWarnings } : {}), ...(xlsx ? { xlsx } : {}), ...(pptx ? { pptx } : {}), ...(pptxImageUrls ? { pptxImageUrls } : {}) });
       } else { saveBlob(blob, file.displayName); setNotice(`Downloaded ${file.displayName} after cloud integrity verification.`); }
     } catch (cause) { if (requestGeneration === accessGeneration.current) setError(cause instanceof Error ? cause.message : 'The cloud file could not be downloaded.'); }
     finally { if (requestGeneration === accessGeneration.current) setBusy(false); }
@@ -525,6 +543,6 @@ export default function CloudDriveWorkspace({ query, initialWorkspaceId, managed
       })}</div>
       : <div className="drive-empty glass-card"><FolderOpen size={24}/><h3>{query ? 'No matching files' : trash ? 'Workspace trash is empty' : 'Your cloud Drive is ready'}</h3><p>{query ? 'Try another search.' : 'Upload files to make a private, integrity-checked workspace copy. Local files are never uploaded automatically.'}</p></div>}
     {hasMore && !loading && <div className="drive-cloud-load-more"><button type="button" className="button-secondary" onClick={() => void loadMore()} disabled={loadingMore || busy}>{loadingMore ? 'Loading more…' : 'Load more files'}</button></div>}
-    {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.docxWarnings?.length ? <p className="drive-feedback">{preview.docxWarnings.join(' ')}</p> : null}{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.xlsx ? <div className="drive-preview-sheet-wrap"><div className="drive-preview-sheet-heading"><strong>{preview.xlsx.sheetName}</strong><small>Read-only import preview · formulas shown as stored, not recalculated</small></div>{preview.xlsx.warnings.length ? <p className="drive-feedback">{preview.xlsx.warnings.join(' ')}</p> : null}<table className="drive-preview-sheet"><thead><tr><th scope="col">#</th>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).columns }, (_, column) => <th scope="col" key={column}>{xlsxColumnLabel(column)}</th>)}</tr></thead><tbody>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).rows }, (_, row) => <tr key={row}><th scope="row">{row + 1}</th>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).columns }, (_, column) => <td key={column}>{preview.xlsx!.cells[`${xlsxColumnLabel(column)}${row + 1}`] ?? ''}</td>)}</tr>)}</tbody></table></div> : preview.pptx ? <div className="drive-preview-pptx-wrap"><div className="drive-preview-sheet-heading"><strong>{preview.pptx.deck.title}</strong><small>{preview.pptx.deck.slides.length} slides · read-only preview</small></div>{preview.pptx.omittedImageCount > 0 || preview.pptx.deck.slides.some((slide) => slide.imageAssetId) ? <p className="drive-feedback">Embedded slide images are not rendered in this preview. Download the verified original to view the complete presentation.</p> : null}<div className="drive-preview-pptx-slides">{preview.pptx.deck.slides.map((slide, index) => <article className="drive-preview-pptx-slide" key={slide.id}><span>SLIDE {index + 1} · {slide.layout}</span><h3>{slide.title || `Slide ${index + 1}`}</h3><p>{slide.body}</p>{slide.notes ? <details><summary>Speaker notes</summary><p>{slide.notes}</p></details> : null}</article>)}</div></div> : preview.docxHtml ? <iframe className="drive-preview-pdf drive-preview-docx" title={preview.file.displayName} sandbox="" srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"></head><body style="font:15px/1.7 system-ui,sans-serif;color:#202433;padding:28px;max-width:850px;margin:auto">${preview.docxHtml}</body></html>`}/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? previewText || 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
+    {preview && <div className="drive-modal-scrim" onMouseDown={(event) => { if (event.target===event.currentTarget) setPreview(null); }}><section className="drive-modal glass-card" role="dialog" aria-modal="true" aria-label={preview.file.displayName}><button className="icon-button drive-modal-close" type="button" onClick={() => setPreview(null)} aria-label="Close preview"><X size={16}/></button><h2>{preview.file.displayName}</h2><div className="drive-preview-content">{preview.docxWarnings?.length ? <p className="drive-feedback">{preview.docxWarnings.join(' ')}</p> : null}{preview.blob.type.startsWith('image/') ? <img className="drive-preview-image" src={preview.url} alt={preview.file.displayName}/> : preview.blob.type.startsWith('video/') ? <video className="drive-preview-media" src={preview.url} controls/> : preview.blob.type.startsWith('audio/') ? <audio className="drive-preview-audio" src={preview.url} controls/> : preview.blob.type==='application/pdf' ? <iframe className="drive-preview-pdf" src={preview.url} title={preview.file.displayName} sandbox="allow-scripts"/> : preview.xlsx ? <div className="drive-preview-sheet-wrap"><div className="drive-preview-sheet-heading"><strong>{preview.xlsx.sheetName}</strong><small>Read-only import preview · formulas shown as stored, not recalculated</small></div>{preview.xlsx.warnings.length ? <p className="drive-feedback">{preview.xlsx.warnings.join(' ')}</p> : null}<table className="drive-preview-sheet"><thead><tr><th scope="col">#</th>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).columns }, (_, column) => <th scope="col" key={column}>{xlsxColumnLabel(column)}</th>)}</tr></thead><tbody>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).rows }, (_, row) => <tr key={row}><th scope="row">{row + 1}</th>{Array.from({ length: xlsxPreviewBounds(preview.xlsx.cells).columns }, (_, column) => <td key={column}>{preview.xlsx!.cells[`${xlsxColumnLabel(column)}${row + 1}`] ?? ''}</td>)}</tr>)}</tbody></table></div> : preview.pptx ? <div className="drive-preview-pptx-wrap"><div className="drive-preview-sheet-heading"><strong>{preview.pptx.deck.title}</strong><small>{preview.pptx.deck.slides.length} slides · read-only preview</small></div>{preview.pptx.omittedImageCount > 0 ? <p className="drive-feedback">{preview.pptx.omittedImageCount} embedded image(s) could not be rendered safely. Download the verified original to view the complete presentation.</p> : null}<div className="drive-preview-pptx-slides">{preview.pptx.deck.slides.map((slide, index) => <article className="drive-preview-pptx-slide" key={slide.id}><span>SLIDE {index + 1} · {slide.layout}</span><h3>{slide.title || `Slide ${index + 1}`}</h3><p>{slide.body}</p>{slide.imageAssetId && preview.pptxImageUrls?.[slide.imageAssetId] ? <img className="drive-preview-pptx-image" src={preview.pptxImageUrls[slide.imageAssetId]} alt={slide.imageAltText ?? ''} /> : null}{slide.notes ? <details><summary>Speaker notes</summary><p>{slide.notes}</p></details> : null}</article>)}</div></div> : preview.docxHtml ? <iframe className="drive-preview-pdf drive-preview-docx" title={preview.file.displayName} sandbox="" srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"></head><body style="font:15px/1.7 system-ui,sans-serif;color:#202433;padding:28px;max-width:850px;margin:auto">${preview.docxHtml}</body></html>`}/> : preview.blob.type.startsWith('text/') ? <pre className="drive-preview-text">{preview.blob.size <= 200000 ? previewText || 'Loading text preview…' : 'Text preview limited to 200 KB. Download to view the full file.'}</pre> : <p>Preview is not supported for this file type. Download it instead.</p>}</div><div className="drive-dialog-actions"><span className="drive-preview-size">{formatFileSize(preview.file.sizeBytes)} · Private workspace copy</span><button className="button-primary" type="button" onClick={() => saveBlob(preview.blob,preview.file.displayName)}><ArrowDownToLine size={15}/> Download</button></div></section></div>}
   </section>;
 }
