@@ -99,7 +99,7 @@ describe('COCCE AI workspace context', () => {
         ? { data: { configured: true }, error: null }
         : { data: { text: `## Workspace summary
 
-**Ready for review** with \\`verified\\` status and [the report](https://example.com/report)
+**Ready for review** with \`verified\` status and [the report](https://example.com/report)
 
 - First action
 - Second action` }, error: null }
