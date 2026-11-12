@@ -127,7 +127,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     });
     void initialize();
     return () => { active = false; subscription.unsubscribe(); };
-  }, [client, config.status, initialWorkspaceId]);
+  }, [client, config.status, initialWorkspaceId, mode]);
 
   useEffect(() => {
     aiRequestGeneration.current += 1;
