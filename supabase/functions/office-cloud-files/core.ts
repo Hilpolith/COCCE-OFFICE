@@ -638,7 +638,7 @@ type WalletPinFailure = { status: number; error: string; message: string };
  * cryptographic hash). Office must preserve that exact compatibility contract server-side.
  * Do not re-hash or change the Super App wallet flow as part of Office work.
  * This verifier reads only the profile PIN value and never reads, writes, or alters
- * wallet_transactions; Office's separate, existing atomic purchase RPC handles any debit.
+ * the shared wallet ledger; Office's separate, existing atomic purchase RPC handles any debit.
  */
 async function verifyOfficeWalletPin(
   config: CloudConfig,
