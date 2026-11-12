@@ -349,6 +349,7 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
     if (!requestedWorkspaceId || !workspaces.some((space) => space.workspace_id === requestedWorkspaceId)) return;
     pendingInitialWorkspaceId.current = undefined;
     if (workspaceId === requestedWorkspaceId) return;
+    workspaceContextGeneration.current += 1;
     aiRequestGeneration.current += 1;
     driveLoadGeneration.current += 1;
     setBusy(false);
@@ -621,12 +622,15 @@ export default function OfficeAiWorkspace({ mode = 'assistant', initialWorkspace
         p_due_date: pendingAction.dueDate,
         p_notes: '',
       });
+      if (contextGeneration !== workspaceContextGeneration.current) return;
       if (actionError || typeof data !== 'string') throw actionError ?? new Error('The Office task was not created.');
       setPendingAction(null);
       setPendingActionKey('');
       setActionStatus(`Created “${pendingAction.title}” in ${workspace.name}.`);
     } catch {
-      setActionStatus('The task was not confirmed as created. Your proposal is still available; retry safely or dismiss it.');
+      if (contextGeneration === workspaceContextGeneration.current) {
+        setActionStatus('The task was not confirmed as created. Your proposal is still available; retry safely or dismiss it.');
+      }
     } finally {
       setBusy(false);
     }
