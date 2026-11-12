@@ -186,6 +186,7 @@ describe('Cloud Drive workspace', () => {
       };
     });
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview-image');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     render(<CloudDriveWorkspace query="" initialWorkspaceId="workspace-1" />);
     await chooseWorkspace();
     fireEvent.click(await screen.findByRole('button', { name: /^PPTX illustrated\\.pptx/ }));
@@ -193,7 +194,8 @@ describe('Cloud Drive workspace', () => {
     expect(image.getAttribute('src')).toBe('blob:preview-image');
     expect(mocks.cloudApi.download).toHaveBeenCalledWith(presentation);
     expect(createObjectURL).toHaveBeenCalled();
-    createObjectURL.mockRestore();
+    fireEvent.click(screen.getByRole('button', { name: 'Close preview' }));
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:preview-image');
   });
 
   it('does not render malformed PPTX content and preserves the original download action', async () => {
