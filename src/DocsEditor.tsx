@@ -505,6 +505,10 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
     },
   });
 
+  const documentTextForCount = sourceMode ? sourceText : editor?.getText() ?? document.content;
+  const normalizedDocumentText = documentTextForCount.trim();
+  const documentWordCount = normalizedDocumentText ? normalizedDocumentText.split(/\s+/u).length : 0;
+
   const insertTable = () => {
     if (!editor) return;
     const rows = Number(insertRows);
@@ -1057,7 +1061,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         {editorState.empty && <p className="docs-writing-placeholder" aria-hidden="true">Start writing… Your draft is stored in this browser only.</p>}
         <EditorContent editor={editor} />
       </div>
-      <div className="document-editor-bottom"><span>{sourceMode ? <Code size={13} /> : hasUnsavedChanges ? <X size={13} /> : <Check size={13} />}{sourceMode ? 'Source preview · apply to update the rich-text document' : hasUnsavedChanges ? 'Export or retry before closing this tab' : 'Formatting saves locally as you type'}</span><span>{sourceMode ? sourceText.length.toLocaleString() : document.content.length.toLocaleString()} characters</span></div>
+      <div className="document-editor-bottom"><span>{sourceMode ? <Code size={13} /> : hasUnsavedChanges ? <X size={13} /> : <Check size={13} />}{sourceMode ? 'Source preview · apply to update the rich-text document' : hasUnsavedChanges ? 'Export or retry before closing this tab' : 'Formatting saves locally as you type'}</span><span>{sourceMode ? sourceText.length.toLocaleString() : document.content.length.toLocaleString()} characters · {documentWordCount.toLocaleString()} words</span></div>
     </article>
     <p className="editor-footnote"><LockKeyhole size={13} /> Drafts and review-comment sidecars stay in this browser. Simple bounded tables round-trip in DOCX; merged, nested, uneven, or over-limit imported tables become warned text, and unsupported export tables are refused. Review comments are not included in document exports or AI requests. Other Word structures may be omitted. {cloudEnabled ? 'Only an explicit, confirmed cloud-copy action sends document text and formatting to the chosen Office workspace. Documents with review comments are refused by this first copy format. Live sync and shared editing are not connected.' : 'Files are not uploaded, and cloud sync, sharing, and collaboration are not connected.'}</p>
       </div>

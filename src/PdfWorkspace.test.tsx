@@ -233,6 +233,24 @@ async function selectFirstPdfText() {
 }
 
 describe('PDF search overlays and navigation', () => {
+
+  it('exports bounded selectable PDF text locally without changing the source', async () => {
+    await openSyntheticPdf();
+    let downloaded: Blob | undefined;
+    let downloadName = '';
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => { downloaded = blob as Blob; return 'blob:synthetic-text'; });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { downloadName = this.download; });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export text' }));
+    await waitFor(() => expect(screen.getByText(/Downloaded extractable text from 3 pages/)).toBeTruthy());
+    expect(downloadName).toBe('synthetic-text.txt');
+    expect(downloaded).toBeInstanceOf(Blob);
+    expect(await downloaded!.text()).toContain('Page 1\nalpha alpha');
+    expect(await downloaded!.text()).toContain('Page 2\nmiddle');
+    expect(repository.saveFile).not.toHaveBeenCalled();
+  });
+
+
   it('highlights multiple matches, navigates and wraps across pages, scrolls the current hit, and preserves annotations', async () => {
     const { container } = await openSyntheticPdf();
     const annotationSnapshot = window.localStorage.getItem(PDF_ANNOTATION_STORAGE_KEY);

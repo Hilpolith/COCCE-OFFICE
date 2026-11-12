@@ -53,6 +53,8 @@ interface PageDimensions {
 interface VerifiedPdfSnapshot { file: DriveFile; bytes: Uint8Array; fingerprint: string }
 interface PdfAnnotationHistoryEntry { scope: string; added: PdfAnnotation[]; removed: PdfAnnotation[] }
 const MAX_PDF_ANNOTATION_HISTORY = 50;
+const MAX_PDF_TEXT_EXPORT_PAGES = 500;
+const MAX_PDF_TEXT_EXPORT_CHARS = 2_000_000;
 const PDF_PAGE_COPY_WARNING = 'This creates a separate browser-local PDF copy. Digital signatures may no longer be valid, and forms, embedded PDF features, bookmarks, attachments, or metadata may not be preserved. The local Office annotation sidecar is not copied. Original files and sidecars remain unchanged; nothing is uploaded.';
 
 const isPdf = (file: DriveFile) => file.mimeType === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -776,6 +778,47 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     finally { if (requestId === searchRequestIdRef.current) setSearching(false); }
   };
 
+  const exportExtractedText = async () => {
+    const documentToExport = pdfDocument;
+    const fileToExport = selectedFile;
+    if (!documentToExport || !fileToExport || busy) return;
+    if (documentToExport.numPages > MAX_PDF_TEXT_EXPORT_PAGES) {
+      setError('Text export is limited to ' + MAX_PDF_TEXT_EXPORT_PAGES + ' pages. This PDF has ' + documentToExport.numPages + ' pages.');
+      return;
+    }
+    const operationScope = annotationScope;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const pages: string[] = [];
+      let totalCharacters = 0;
+      for (let pageNumber = 1; pageNumber <= documentToExport.numPages; pageNumber += 1) {
+        if (annotationScopeRef.current !== operationScope) throw new Error('The selected PDF changed during text export. Nothing was downloaded.');
+        const page = await documentToExport.getPage(pageNumber);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item) => 'str' in item ? item.str : '').filter(Boolean).join(' ').trim();
+        totalCharacters += pageText.length;
+        if (totalCharacters > MAX_PDF_TEXT_EXPORT_CHARS) {
+          throw new Error('Extracted text is limited to ' + MAX_PDF_TEXT_EXPORT_CHARS.toLocaleString() + ' characters. Nothing was downloaded.');
+        }
+        pages.push('Page ' + pageNumber + '\n' + pageText);
+      }
+      if (annotationScopeRef.current !== operationScope) throw new Error('The selected PDF changed during text export. Nothing was downloaded.');
+      const extracted = pages.join('\n\n');
+      if (!extracted.replace(/Page \d+\s*/g, '').trim()) {
+        setNotice('This PDF contains no extractable text. Scanned pages need OCR; no empty text file was downloaded.');
+        return;
+      }
+      downloadLocalBlob(new Blob([extracted], { type: 'text/plain;charset=utf-8' }), fileToExport.name.replace(/\.pdf$/i, '') + '-text.txt');
+      setNotice('Downloaded extractable text from ' + documentToExport.numPages + ' pages. Scanned-image OCR is not included; the original PDF was not changed.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not export text from this PDF.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const navigateToSearchHit = (index: number) => {
     if (!searchHits.length) return;
     const nextIndex = (index + searchHits.length) % searchHits.length;
@@ -923,7 +966,7 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
                   <input ref={insertPdfInputRef} type="file" accept="application/pdf,.pdf" className="visually-hidden" aria-label="Choose PDF pages to insert" onChange={onInsertPdfFile} />
                 </div>
               </section>
-              <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => changeSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button>{searchTerm && <button className="button-tertiary pdf-search-clear" onClick={clearSearch} aria-label="Clear PDF search" title="Clear search"><X size={14} /> Clear</button>}</div>
+              <div className="pdf-search-row"><label className="pdf-search-input"><Search size={15} /><input aria-label="Search text in PDF" value={searchTerm} onChange={(event) => changeSearchTerm(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch(); }} placeholder="Find text in this PDF" /></label><button className="button-secondary" onClick={() => void runSearch()} disabled={searching || !searchTerm.trim()}>{searching ? 'Searching…' : 'Search'}</button><button className="button-tertiary" onClick={() => void exportExtractedText()} disabled={busy || searching || !pdfDocument}>Export text</button>{searchTerm && <button className="button-tertiary pdf-search-clear" onClick={clearSearch} aria-label="Clear PDF search" title="Clear search"><X size={14} /> Clear</button>}</div>
               {(searchHits.length > 0 || searchTruncated) && <div className="pdf-search-results" aria-label="PDF search results"><div className="pdf-search-heading"><strong>{searchHits.length} match{searchHits.length === 1 ? '' : 'es'}{searchTruncated ? ' (first 2,000 shown)' : ''}</strong>{searchHits.length > 0 && <div className="pdf-search-navigation"><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex - 1)} aria-label="Previous search match" title="Previous match"><ArrowLeft size={14} /></button><span aria-live="polite" aria-atomic="true">{currentSearchIndex + 1} / {searchHits.length} · Page {searchHits[currentSearchIndex]?.page ?? currentPage}</span><button className="icon-button" onClick={() => navigateToSearchHit(currentSearchIndex + 1)} aria-label="Next search match" title="Next match"><ArrowRight size={14} /></button></div>}</div>{searchHits.map((hit, index) => <button key={`${hit.page}-${hit.offset}`} className={index === currentSearchIndex ? 'pdf-search-result-active' : ''} aria-current={index === currentSearchIndex ? 'true' : undefined} onClick={() => navigateToSearchHit(index)}><span>Match {index + 1} · Page {hit.page}</span><small>{hit.excerpt}</small></button>)}{searchTruncated && <small className="pdf-search-truncated">Search stopped at 2,000 matches.</small>}</div>}
               <section className="pdf-edit-tools"><div className="pdf-tools-heading"><div><span className="eyebrow">COPY-BASED PAGE TOOLS</span><h2>Create a new PDF copy</h2></div><span className="pdf-original-badge">Original stays unchanged</span></div>
                 <p className="pdf-page-copy-note" role="note">Rotate, remove, extract, insert, reorder, and merge re-read selected files and verify their bytes before saving a separate local copy. Each source and output is limited to {formatBytes(MAX_LOCAL_FILE_BYTES)}; page copies are limited to {MAX_PDF_PAGE_OPERATION_PAGES} pages. Merges accept up to {MAX_PDF_MERGE_INPUTS} PDFs, {formatBytes(MAX_PDF_MERGE_TOTAL_INPUT_BYTES)} combined source bytes, and {MAX_PDF_PAGE_OPERATION_PAGES} total pages. Digital signatures and some embedded PDF features or metadata may not be preserved. For these four actions, Office sidecar annotations and comments are not copied; the separate “Flatten local marks” action below can include only verified visual marks, while comments and note text stay excluded. Source files and sidecars stay unchanged; nothing is uploaded.{pageCopyLimitMessage ? ` ${pageCopyLimitMessage}` : ''}</p>

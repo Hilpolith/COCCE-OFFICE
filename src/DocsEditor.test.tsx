@@ -635,6 +635,14 @@ describe('Docs tabbed ribbon', () => {
   });
 });
 
+  it('shows a live word count for the local rich-text document', async () => {
+    renderEditor();
+    expect(screen.getByText(/2 words/)).toBeTruthy();
+    const content = screen.getByRole('textbox', { name: 'Document content' });
+    fireEvent.input(content, { target: { textContent: 'A revised local draft with six words' } });
+    await waitFor(() => expect(screen.getByText(/7 words/)).toBeTruthy());
+  });
+
 
 describe('Docs HTML and Markdown source modes', () => {
   it('edits Markdown locally, previews it, and applies it to the rich-text document only on approval', async () => {
