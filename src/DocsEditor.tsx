@@ -1065,7 +1065,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       {reviewComments.length >= MAX_DOCS_REVIEW_COMMENTS_PER_DOCUMENT && <p className="docs-review-limit">This document has reached the {MAX_DOCS_REVIEW_COMMENTS_PER_DOCUMENT}-comment local limit.</p>}
     </section>
 
-    <article className={`document-canvas glass-card docs-page-${pageSetup.size.toLowerCase()} docs-page-${pageSetup.orientation}`} data-page-size={pageSetup.size} data-page-orientation={pageSetup.orientation} data-page-margins={pageSetup.margins} style={{ zoom: pageZoom, width: `min(100%, ${pageDimensions.width}px)`, minHeight: `${pageDimensions.height}px`, padding: `${pageDimensions.margin}px` }}>
+    <article className={`document-canvas glass-card docs-page-${pageSetup.size.toLowerCase()} docs-page-${pageSetup.orientation}`} data-page-size={pageSetup.size} data-page-orientation={pageSetup.orientation} data-page-margins={pageSetup.margins} style={{ zoom: pageZoom, width: '100%', maxWidth: `${pageDimensions.width}px`, minHeight: `${pageDimensions.height}px`, padding: `${pageDimensions.margin}px` }}>
       <input className="document-title-input" value={document.title} onChange={(event) => {
         if (editor) saveEditor(editor, { title: event.target.value });
         else onPatch({ title: event.target.value });

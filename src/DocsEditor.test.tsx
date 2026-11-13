@@ -700,7 +700,8 @@ describe('Docs page setup controls', () => {
     await waitFor(() => expect(canvas.getAttribute('data-page-size')).toBe('Letter'));
     expect(canvas.getAttribute('data-page-orientation')).toBe('landscape');
     expect(canvas.getAttribute('data-page-margins')).toBe('narrow');
-    expect(canvas.style.width).toBe('min(100%, 1056px)');
+    expect(canvas.style.width).toBe('100%');
+    expect(canvas.style.maxWidth).toBe('1056px');
     expect(canvas.style.minHeight).toBe('816px');
 
     const otherWorkspace = { ...syntheticDocument, workspaceId: 'workspace-b' };
