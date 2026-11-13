@@ -14,7 +14,7 @@
 You are responsible for completing the entire COCCE Office application.
 some work has been completed. 
 
-This is not a request for another audit, a roadmap, a list of recommendations, a prototype, or a partial implementation.
+This is not a request for another audit, a roadmap, a list of recommendations, a prototype, or a partial implementation
 
 I want you to CONTINUE FROM THE EXISTING IMPLEMENTATION, inspect what has already been completed, identify what remains, implement every outstanding capability, integrate all components, test everything, fix discovered problems, and deliver a fully functional production application.
 
