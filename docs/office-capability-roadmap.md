@@ -482,3 +482,8 @@ This entry supersedes earlier same-day notes that said the Stories migration had
 - The corrected commit has been pushed to `main`; its post-push validation must complete before release certification. This correction changes only the test fixture, not hospitality production behavior.
 - The last observed lint run still reports a large warning backlog (including effect-driven state updates, render-time ref access, fast-refresh export boundaries and minor cleanup). Oxlint exits successfully, but warning-free lint is not yet established.
 - The requested background-image refresh remains pending: the image-generation step did not produce an asset in this session, so no placeholder, guessed image path, or unverified asset has been added. The intended direction remains a bright, low-noise, softly blurred environment image that supports readable translucent glass surfaces on desktop and mobile.
+
+
+## Docs page setup increment
+
+The Docs editor now offers local, per-document page setup presets for A4, Letter and Legal paper; portrait and landscape orientation; and normal, narrow and wide margins. Settings are scoped by workspace and document, stored separately from document content, validated on read/write, and capped to a bounded local record set. The editing canvas reflects the selected paper dimensions and margin preset, and print CSS maps all six paper/orientation combinations to explicit page sizes. This does **not** implement automatic pagination, page breaks, headers/footers, page numbering, or full DOCX section/page-setup round trips; those remain unverified targets. The settings feature must pass the dedicated persistence/bounds tests plus full CI before being marked verified.
