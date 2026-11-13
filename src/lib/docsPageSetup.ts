@@ -58,12 +58,16 @@ export function writeDocsPageSetup(
     const raw = storage.getItem(DOCS_PAGE_SETUP_STORAGE_KEY);
     let records: Array<{ scope: string; value: DocsPageSetup }> = [];
     if (raw && raw.length <= 250_000) {
-      const parsed: unknown = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && 'records' in parsed && Array.isArray((parsed as { records?: unknown }).records)) {
-        records = (parsed as { records: unknown[] }).records.filter((record): record is { scope: string; value: DocsPageSetup } =>
-          Boolean(record && typeof record === 'object'
-            && typeof (record as { scope?: unknown }).scope === 'string'
-            && isPageSetup((record as { value?: unknown }).value)));
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && 'records' in parsed && Array.isArray((parsed as { records?: unknown }).records)) {
+          records = (parsed as { records: unknown[] }).records.filter((record): record is { scope: string; value: DocsPageSetup } =>
+            Boolean(record && typeof record === 'object'
+              && typeof (record as { scope?: unknown }).scope === 'string'
+              && isPageSetup((record as { value?: unknown }).value)));
+        }
+      } catch {
+        records = [];
       }
     }
     records = records.filter((record) => record.scope !== scope);
