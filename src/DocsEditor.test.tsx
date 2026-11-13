@@ -639,8 +639,10 @@ describe('Docs tabbed ribbon', () => {
     renderEditor();
     expect(screen.getByText(/2 words/)).toBeTruthy();
     const content = screen.getByRole('textbox', { name: 'Document content' });
+    selectEditorText(content, 'Before');
     pastePlainText(content, 'A revised local draft with six words');
-    await waitFor(() => expect(screen.getByText(/7 words/)).toBeTruthy());
+    // Replacing the first word in “Before table” with seven words leaves eight total.
+    await waitFor(() => expect(screen.getByText(/8 words/)).toBeTruthy());
   });
 
 
