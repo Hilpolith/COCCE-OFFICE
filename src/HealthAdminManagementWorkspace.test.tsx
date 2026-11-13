@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { HealthAdminPanelId } from "./healthAdminWorkspaceTypes";
+import { healthAdminPanelRoute, type HealthAdminPanelId } from "./healthAdminWorkspaceTypes";
 import type { HealthAdminBootstrap } from "./lib/officeHealthAdminManagement";
 import { createOfficeHealthAdminKeyConfig, openHealthAdminPrivateRecord, sealHealthAdminPrivateRecord, unlockOfficeHealthAdminKeys } from "./lib/officeHealthAdminCrypto";
 import { HEALTH_ADMIN_CAPABILITIES, officeHealthAdminApi } from "./lib/officeHealthAdminManagement";
@@ -16,6 +16,22 @@ describe("Health Administration clinical root contract", () => {
     expect(panelIds).toHaveLength(12);
     expect(new Set(panelIds).size).toBe(12);
     expect(panelIds).toEqual(["overview", "patients", "appointments", "encounters", "diagnostics", "inpatient", "pharmacy", "billing", "facilities", "assets", "privacy", "reports"]);
+  });
+
+  it("routes clinical and operational tabs to their matching panel family", () => {
+    const expected = [
+      ["overview", { kind: "clinical" }], ["patients", { kind: "clinical" }],
+      ["appointments", { kind: "clinical" }], ["encounters", { kind: "clinical" }],
+      ["diagnostics", { kind: "operations", area: "diagnostics" }],
+      ["inpatient", { kind: "operations", area: "inpatient" }],
+      ["pharmacy", { kind: "operations", area: "pharmacy" }],
+      ["billing", { kind: "operations", area: "billing" }],
+      ["facilities", { kind: "operations", area: "facilities" }],
+      ["assets", { kind: "operations", area: "assets" }],
+      ["privacy", { kind: "operations", area: "privacy" }],
+      ["reports", { kind: "operations", area: "reports" }],
+    ] as const;
+    for (const [panel, route] of expected) expect(healthAdminPanelRoute(panel)).toEqual(route);
   });
 
   it("keeps PHI fail-closed when storage is unverified", () => {

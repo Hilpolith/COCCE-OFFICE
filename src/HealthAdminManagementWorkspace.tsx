@@ -21,7 +21,7 @@ import { officeTeamApi } from "./lib/officeTeamApi";
 import { getOfficeTeamClient, resolveOfficeTeamConfig } from "./lib/officeTeamSupabase";
 import { HEALTH_ADMIN_CAPABILITIES, officeHealthAdminApi, officeHealthAdminResidencyApi, type HealthAdminAccessPurpose, type HealthAdminAction, type HealthAdminBootstrap, type HealthAdminCapabilities, type HealthAdminClient, type HealthAdminPage, type HealthAdminRecord, type HealthAdminResource, type HealthAdminRole, type HealthAdminResidencyAction, type HealthAdminResidencyPayload, type HealthAdminSettings } from "./lib/officeHealthAdminManagement";
 import { createOfficeHealthAdminKeyConfig, unlockOfficeHealthAdminKeys, openHealthAdminPrivateRecord, sealHealthAdminPrivateRecord, makeHealthAdminBlindIndex } from "./lib/officeHealthAdminCrypto";
-import type { HealthAdminIndexKind, HealthAdminPanelId, HealthAdminPanelProps, HealthAdminPrivateScope, HealthAdminWorkspaceContext } from "./healthAdminWorkspaceTypes";
+import { healthAdminPanelRoute, type HealthAdminIndexKind, type HealthAdminPanelId, type HealthAdminPanelProps, type HealthAdminPrivateScope, type HealthAdminWorkspaceContext } from "./healthAdminWorkspaceTypes";
 import HealthAdminClinicalPanels from "./HealthAdminClinicalPanels";
 import HealthAdminOperationsPanels from "./HealthAdminOperationsPanels";
 import "./healthAdminManagement.css";
@@ -170,6 +170,7 @@ function Workspace({ workspaceId, officeName = "COCCE Office", country = "Tanzan
   const activePanel = visiblePanels.some((item) => item.id === panel) ? panel : "overview";
   const rootStyle = { "--health-admin-accent": accent } as CSSProperties;
   const panelProps: HealthAdminPanelProps = { context };
+  const panelRoute = healthAdminPanelRoute(activePanel);
 
   return <main className="health-admin-workspace" style={rootStyle} aria-label="Health Administration workspace">
     <header className="health-admin-hero"><div className="health-admin-mark"><Activity size={24} aria-hidden="true" /></div><div><span className="health-admin-eyebrow">{country} · Pearl Light Glass HIMS</span><h1>{officeName}</h1><p>Facility-level records, routing and administration. Clinical decisions remain with authorized people.</p></div><span className="health-admin-role">{bootstrap?.role?.replaceAll("_", " ") ?? status}</span></header>
@@ -185,7 +186,7 @@ function Workspace({ workspaceId, officeName = "COCCE Office", country = "Tanzan
       <div className="office-suite-ai-toolbar"><OfficeSuiteAiAction workspaceId={workspaceId} suiteLabel="Health Administration" tabLabel={activePanel.replaceAll("_", " ")} /></div>
       <nav className="health-admin-tabs" aria-label="Health Administration sections">{visiblePanels.map((item) => <button key={item.id} className={activePanel === item.id ? "active" : ""} aria-current={activePanel === item.id ? "page" : undefined} onClick={() => { lockPrivate(); setPanel(item.id); }}><item.icon size={16} aria-hidden="true" />{item.label}</button>)}</nav>
       <section className="health-admin-key-panel" aria-label="Private records key"><div><span className="health-admin-eyebrow">Private records</span><strong>{recordsKey ? "Unlocked in memory" : "Locked"}</strong><p>Keys and decrypted clinical text never enter browser storage.</p></div>{recordsKey ? <Button onClick={() => { lockPrivate(); setFeedbackSafe("Private records locked and decrypted rows cleared."); }}><LockKeyhole size={15} /> Lock</Button> : <form className="health-admin-unlock-form" onSubmit={unlock}><label>Passphrase<input type="password" name="passphrase" autoComplete="off" required /></label><Button className="primary" disabled={busy}><LockKeyhole size={15} /> Unlock</Button></form>}</section>
-      <section className="health-admin-content" aria-live="polite">{activePanel === "overview" || ["patients", "appointments", "encounters", "diagnostics", "inpatient", "pharmacy", "billing"].includes(activePanel) ? <HealthAdminClinicalPanels {...panelProps} /> : <HealthAdminOperationsPanels {...panelProps} area={activePanel === "assets" ? "assets" : activePanel === "facilities" ? "facilities" : activePanel === "privacy" ? "privacy" : "reports"} />}</section>
+      <section className="health-admin-content" aria-live="polite">{panelRoute.kind === "clinical" ? <HealthAdminClinicalPanels {...panelProps} /> : <HealthAdminOperationsPanels {...panelProps} area={panelRoute.area} />}</section>
     </>}
   </main>;
 }

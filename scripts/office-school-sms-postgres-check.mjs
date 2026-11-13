@@ -4,7 +4,7 @@ import test, { before, beforeEach, afterEach, after } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 
 // Disposable in-memory PostgreSQL only. No network, credentials, real identities or files.
-const migration = await readFile(new URL('../docs/proposals/office-school-management-20261106.sql', import.meta.url), 'utf8');
+const migration = await readFile(new URL('../supabase/migrations/20261106214240_office_school_management.sql', import.meta.url), 'utf8');
 const paginationMigration = await readFile(new URL('../supabase/migrations/20261109152012_office_school_read_offset_pagination.sql', import.meta.url), 'utf8');
 const summaryMigration = await readFile(new URL('../supabase/migrations/20261110100000_office_school_server_kpis.sql', import.meta.url), 'utf8');
 const owner = '11111111-1111-4111-8111-111111111111';
@@ -107,7 +107,7 @@ async function expectSqlState(operation, code) {
   return caught;
 }
 
-test('integrated SMS proposal applies cleanly and exposes only the authenticated RPC boundary', async () => {
+test('committed School migration applies cleanly and exposes only the authenticated RPC boundary', async () => {
   const rows = await db.query(`SELECT p.proname, p.prosecdef, coalesce(p.proconfig,'{}') AS config
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='public' AND p.proname IN ('office_school_read','office_school_command') ORDER BY p.proname`);

@@ -487,3 +487,26 @@ This entry supersedes earlier same-day notes that said the Stories migration had
 ## Docs page setup increment
 
 The Docs editor now offers local, per-document page setup presets for A4, Letter and Legal paper; portrait and landscape orientation; and normal, narrow and wide margins. Settings are scoped by workspace and document, stored separately from document content, validated on read/write, and capped to a bounded local record set. The editing canvas reflects the selected paper dimensions and margin preset, and print CSS maps all six paper/orientation combinations to explicit page sizes. This does **not** implement automatic pagination, page breaks, headers/footers, page numbering, or full DOCX section/page-setup round trips; those remain unverified targets. The settings feature must pass the dedicated persistence/bounds tests plus full CI before being marked verified.
+
+
+## Current-main verification and bounded fixes — 13 November 2026
+
+The source baseline inspected for this pass was `f555ca0501a931a0e38b3482f92cb6617011b53f` on `main`. The CI build failure on that baseline was the Docs page test querying a generic `Element` and then reading `.style`; `src/DocsEditor.test.tsx` now types the queried canvas as `HTMLElement`. The same Docs page-setup regression passes in the focused test.
+
+Two additional test-backed corrections are included in this pass:
+
+- Health Administration now routes Overview/Patients/Appointments/Encounters to clinical panels and Diagnostics/Inpatient/Pharmacy/Billing/Facilities/Assets/Privacy/Reports to the matching operations area. The mapping is centralized in `src/healthAdminWorkspaceTypes.ts` and tested for all 12 panel IDs.
+- `scripts/office-school-sms-postgres-check.mjs` now applies the committed `supabase/migrations/20261106214240_office_school_management.sql`, rather than a proposal snapshot, and the test title reflects that source.
+
+Fresh local verification after these changes: `pnpm test` passed (144 Vitest files, 1,230 tests, plus the configured Node/disposable database suites); `pnpm lint` completed with 0 errors and 176 warnings; `pnpm build` passed. Vite still warns about large chunks. The earlier GitHub Actions run [43354415027](https://github.com/Hilpolith/COCCE-OFFICE/actions/runs/43354415027) failed only at the TypeScript/Vite build after lint and tests passed; the local cause is fixed, but the post-change GitHub result must be checked after the task commit.
+
+### Release blockers still open
+
+- Accounting UI/read-RPC contract mismatch: the checked-in RPC does not implement all bootstrap fields/resources requested by `AccountingManagementWorkspace`. A disposable contract test and a reviewed forward migration or compatible client change are needed before claiming the module works against the deployed database.
+- NGO Security UI expects `storage_review_reference` that the current bootstrap SQL does not return. This needs an owner-reviewed SQL change and a regression test; it was not applied here.
+- Government records-management/connector expansion migrations remain marked review-only and are not verified in production.
+- No live Supabase, RLS/catalog, storage, or authenticated provider/model request was performed. Do not infer deployed security or functionality from local fixtures.
+- Dedicated HTML and Markdown workspaces remain outstanding; Docs source modes are not those workspaces. Docs/Sheets/Slides/PDF also retain the explicit format and feature limitations listed above.
+- This pass did not deploy to Vercel, change production data, apply or roll back SQL, or alter the `cocce-kyc` storage or wallet arrangements. Deployment and any SQL migration remain owner-controlled steps.
+
+This roadmap remains a verified capability boundary, not a declaration of full GenOffice parity or production readiness.

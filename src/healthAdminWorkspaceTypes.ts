@@ -36,6 +36,30 @@ export type HealthAdminPanelId =
   | "privacy"
   | "reports";
 
+export type HealthAdminOperationsArea = Exclude<
+  HealthAdminPanelId,
+  "overview" | "patients" | "appointments" | "encounters"
+>;
+export type HealthAdminPanelRoute =
+  | { kind: "clinical" }
+  | { kind: "operations"; area: HealthAdminOperationsArea };
+
+const operationsAreaByPanel: Partial<Record<HealthAdminPanelId, HealthAdminOperationsArea>> = {
+  diagnostics: "diagnostics",
+  inpatient: "inpatient",
+  pharmacy: "pharmacy",
+  billing: "billing",
+  facilities: "facilities",
+  assets: "assets",
+  privacy: "privacy",
+  reports: "reports",
+};
+
+export function healthAdminPanelRoute(panel: HealthAdminPanelId): HealthAdminPanelRoute {
+  const area = operationsAreaByPanel[panel];
+  return area ? { kind: "operations", area } : { kind: "clinical" };
+}
+
 export type HealthAdminIndexKind =
   | "facility_mrn"
   | "national_id"

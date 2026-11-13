@@ -696,7 +696,7 @@ describe('Docs page setup controls', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Page orientation' }), { target: { value: 'landscape' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Page margins' }), { target: { value: 'narrow' } });
 
-    const canvas = document.querySelector('.document-canvas')!;
+    const canvas = document.querySelector<HTMLElement>('.document-canvas')!;
     await waitFor(() => expect(canvas.getAttribute('data-page-size')).toBe('Letter'));
     expect(canvas.getAttribute('data-page-orientation')).toBe('landscape');
     expect(canvas.getAttribute('data-page-margins')).toBe('narrow');

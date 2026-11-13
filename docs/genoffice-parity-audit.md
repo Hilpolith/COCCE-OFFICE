@@ -98,3 +98,53 @@ Local PDF rendering, text-layer selection/search, local annotation sidecars, com
 ## Reference
 
 Public GenOffice benchmark: https://genoffice.ai/ and https://github.com/genspark-ai/genoffice/. This checklist is a capability benchmark only; no GenOffice source code or proprietary assets are copied.
+
+
+## Current-main evidence update — 13 November 2026
+
+### GenOffice references inspected
+
+- [GenOffice official site](https://genoffice.ai/) — product overview and available public interface imagery; imagery was inspected as evidence of the visible editor/workspace composition, not as proof that unseen controls work.
+- [GenOffice public GitHub repository and README](https://github.com/genspark-ai/genoffice/) — public feature descriptions used to compare native-format editing, document-aware/reviewable AI, and format/privacy caveats. Restricted source and proprietary assets were not copied or used.
+
+The public materials support a functional benchmark of native editing, reviewable AI, and honest compatibility/privacy disclosures. Public screenshots were inspected where available; no attributable, editor-specific official screenshot was verified for PDF or HTML, so this audit does not assert screenshot-level parity for those workspaces.
+
+### Editor and AI status on the audited tree
+
+The detailed capability and test boundaries remain in the [capability roadmap](./office-capability-roadmap.md). The current implementation is a substantial local-first suite, but not full GenOffice parity:
+
+| Area | Current implementation | Important verified boundary |
+|---|---|---|
+| Docs | Tiptap rich-text workspace, local recovery, bounded DOCX/Markdown exchange, comments, find/replace, image insertion, page setup and previewable local AI actions. | DOCX is a supported subset; stable pagination, tracked changes, complete fidelity and shared collaboration are not established. |
+| Sheets | Local multi-sheet workbooks, tested formula subset, range/clipboard/fill, local charts, and bounded CSV/XLSX exchange. | XLSX is deliberately limited to one visible sheet and 288 cells; broad formatting, pivots and Excel compatibility are absent. |
+| Slides | Editable local decks, notes, layouts, image support, undo, and bounded PPTX import/export. | No full master/layout system, shapes/charts/transitions/animation or complete PPTX fidelity. |
+| PDF | Local viewer/search, sidecar annotations, selected text marks, page operations and separately confirmed flattened annotated copies. | Not direct content editing, OCR, form editing or secure redaction. |
+| HTML | No separate HTML workspace was verified; Docs exposes a sanitized source mode. | The dedicated code/preview workspace and responsive preview controls in this checklist remain unimplemented. |
+| Markdown | Markdown source/preview is available through Docs. | No dedicated distraction-free Markdown workspace and full source-preserving editor were verified. |
+| AI | Separate workspace-scoped Chat and COCCE AI, persistent conversations, bounded authorized Teams context, consented selected Drive text files, and previewable Docs actions. | Not unrestricted workspace search: sector records and approved sector actions are not retrieved/executed; streaming and autonomous workflows are absent. A successful authenticated real-model response was not verified in this local run. |
+
+### Ten-sector code audit
+
+Each sector has a substantial specialist implementation and local tests, but repository code and synthetic test databases do not prove the production Supabase state. The current audit found these material boundaries:
+
+| Sector | Current code/test evidence | Limitation that prevents a completion claim |
+|---|---|---|
+| Government | Correspondence and records-management UI, RPC adapters, local SQL and Edge Function tests. | The broader records/connector SQL is still labeled review-only; no production application, provider credentials, dispatch, or archive integration was verified. |
+| School | Admissions, classes, attendance, grades, fees, timetable and role-scoped RPCs; disposable SQL suite. | Official integrations, fee payment and message delivery remain manual. The acceptance harness now loads the committed School migration, not a proposal copy. |
+| University | Role-scoped admissions, academic, finance, research and reporting workflows; disposable schema and UI tests. | TCU/HESLB and other external submission workflows remain manual; no live session was tested. |
+| Business | Server-backed CRM, sales, receivables, procurement, projects, compliance and private-contact workflows; SQL and component tests. | No live Supabase/RPC integration was tested; operational code is not proof of statutory ERP or payment/tax integrations. |
+| Accounting | Accounting RPC and SQL acceptance suites cover ledger controls, journals, reconciliation, evidence and reporting. | **Integration blocker:** the committed bootstrap/read RPC shape and supported resources do not match what `AccountingManagementWorkspace` requests and expects. The component tests mock that RPC contract; no live read path was verified. |
+| Manufacturing | Server-backed inventory, BOM, production, quality, maintenance, evidence and reporting workflows; local SQL/UI tests. | Evidence storage tests mock cloud calls; production storage and live authorization remain unverified. |
+| Healthcare | Clinical and operational panels, private-data gates, encryption and local authorization tests. | Fixed in this update: Diagnostics, Inpatient, Pharmacy and Billing now resolve to their matching operations panels; the 12-panel mapping has regression coverage. Production healthcare permissions and data remain unverified. |
+| NGO | Server-backed projects, grants, beneficiaries, budgets, evidence and protected-record workflows; local SQL/UI tests. | **Data-contract blocker:** the read/bootstrap result omits `storage_review_reference` expected by the Security UI, so an existing review reference is not restored after reload. Fix requires a reviewed forward SQL change; none was applied. |
+| Hospitality | Reservation/front-desk, guest privacy, operations, finance, food/stock and reporting workflows; local SQL/UI suites. | No live PMS/provider, payment settlement or production authorization test was performed. |
+| Institutional | Governance, people, finance, assets, compliance and reporting; local SQL/UI suites. | Filings and regulatory evidence are manual/reference-only; production routing and database state were not exercised. |
+
+All sector SQL suites described above use disposable local databases, and UI/API tests commonly mock Supabase. They validate checked-in logic and tested cases only; they do not prove hosted RLS, deployed grants/RPC bodies, migration history, tenant configuration, or real-user behavior. No Supabase query, migration application/rollback, production-data operation, or deployment was performed for this work.
+
+### Verification evidence for this update
+
+- `pnpm test`: passed; Vitest reports **144/144 test files and 1,230/1,230 tests**. The command also completed the configured Node and disposable PostgreSQL/PGlite security and sector suites with exit status 0, including the committed School migration check.
+- `pnpm lint`: completed with **0 errors and 176 warnings**. Warnings remain and are not represented as fixed.
+- `pnpm build`: TypeScript and Vite production build passed. The existing large-chunk advisory remains.
+- Focused regressions: Docs editor **22/22**; Health Administration workspace **14/14**, including the new exact route mapping for all 12 panel IDs.
