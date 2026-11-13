@@ -272,3 +272,9 @@
   @page docs-legal-portrait{size:Legal portrait;margin:0}
   @page docs-legal-landscape{size:Legal landscape;margin:0}
 }
+
+@media print{
+  .office-editor-page .document-canvas[data-page-margins="narrow"]{padding:12.7mm!important}
+  .office-editor-page .document-canvas[data-page-margins="normal"]{padding:25.4mm!important}
+  .office-editor-page .document-canvas[data-page-margins="wide"]{padding:38.1mm!important}
+}
