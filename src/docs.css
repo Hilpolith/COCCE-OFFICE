@@ -257,3 +257,18 @@
   .office-editor-page .document-canvas[data-page-margins="normal"]{--docs-print-margin:25.4mm}
   .office-editor-page .document-canvas[data-page-margins="wide"]{--docs-print-margin:38.1mm}
 }
+
+@media print{
+  .office-editor-page .document-canvas[data-page-size="A4"][data-page-orientation="portrait"]{page:docs-a4-portrait}
+  .office-editor-page .document-canvas[data-page-size="A4"][data-page-orientation="landscape"]{page:docs-a4-landscape}
+  .office-editor-page .document-canvas[data-page-size="Letter"][data-page-orientation="portrait"]{page:docs-letter-portrait}
+  .office-editor-page .document-canvas[data-page-size="Letter"][data-page-orientation="landscape"]{page:docs-letter-landscape}
+  .office-editor-page .document-canvas[data-page-size="Legal"][data-page-orientation="portrait"]{page:docs-legal-portrait}
+  .office-editor-page .document-canvas[data-page-size="Legal"][data-page-orientation="landscape"]{page:docs-legal-landscape}
+  @page docs-a4-portrait{size:A4 portrait;margin:0}
+  @page docs-a4-landscape{size:A4 landscape;margin:0}
+  @page docs-letter-portrait{size:Letter portrait;margin:0}
+  @page docs-letter-landscape{size:Letter landscape;margin:0}
+  @page docs-legal-portrait{size:Legal portrait;margin:0}
+  @page docs-legal-landscape{size:Legal landscape;margin:0}
+}
