@@ -231,3 +231,29 @@
 .office-ai-source-paused strong{color:var(--text);font-size:12px;letter-spacing:-.02em}
 .office-ai-source-paused p{margin:0;color:var(--muted);font-size:10px;line-height:1.65}
 @media(max-width:900px){.docs-source-mode .docs-workbench-layout{grid-template-columns:minmax(0,1fr)!important}}
+
+
+/* Local page setup presets: paper size and margins affect the editing canvas and print output, not document text. */
+.docs-page-setup-notice{max-width:900px;margin:0 auto 10px;color:var(--warning);font-size:9px;line-height:1.45}
+.office-editor-page .document-canvas[data-page-orientation="landscape"]{max-width:100%}
+.office-editor-page .document-canvas[data-page-margins="narrow"]{padding:48px!important}
+.office-editor-page .document-canvas[data-page-margins="wide"]{padding:144px!important}
+@media(max-width:760px){
+  .office-editor-page .document-canvas[data-page-margins="normal"]{padding:clamp(22px,7vw,96px)!important}
+  .office-editor-page .document-canvas[data-page-margins="narrow"]{padding:clamp(16px,4vw,48px)!important}
+  .office-editor-page .document-canvas[data-page-margins="wide"]{padding:clamp(24px,8vw,72px)!important}
+}
+@media print{
+  .office-editor-page .document-canvas{width:auto!important;min-height:0!important;margin:0!important;padding:var(--docs-print-margin,25.4mm)!important;border:0!important;border-radius:0!important;box-shadow:none!important;zoom:1!important;break-after:auto}
+  .office-editor-page .document-canvas[data-page-size="A4"]{page:docs-a4}
+  .office-editor-page .document-canvas[data-page-size="Letter"]{page:docs-letter}
+  .office-editor-page .document-canvas[data-page-size="Legal"]{page:docs-legal}
+  @page docs-a4{size:A4 portrait;margin:0}
+  @page docs-letter{size:Letter portrait;margin:0}
+  @page docs-legal{size:Legal portrait;margin:0}
+  .office-editor-page .document-canvas[data-page-orientation="landscape"]{page:docs-landscape}
+  @page docs-landscape{size:landscape;margin:0}
+  .office-editor-page .document-canvas[data-page-margins="narrow"]{--docs-print-margin:12.7mm}
+  .office-editor-page .document-canvas[data-page-margins="normal"]{--docs-print-margin:25.4mm}
+  .office-editor-page .document-canvas[data-page-margins="wide"]{--docs-print-margin:38.1mm}
+}
