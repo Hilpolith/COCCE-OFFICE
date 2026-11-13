@@ -686,3 +686,28 @@ describe('Docs HTML and Markdown source modes', () => {
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ richText: expect.stringContaining('<h1>Safe heading</h1>') }));
   });
 });
+
+describe('Docs page setup controls', () => {
+  it('updates the page canvas and restores scoped paper settings after reopening', async () => {
+    const { switchDocument } = renderEditor();
+    const pageSize = await screen.findByRole('combobox', { name: 'Page size' });
+    fireEvent.change(pageSize, { target: { value: 'Letter' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Page orientation' }), { target: { value: 'landscape' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Page margins' }), { target: { value: 'narrow' } });
+
+    const canvas = document.querySelector('.document-canvas')!;
+    await waitFor(() => expect(canvas).toHaveAttribute('data-page-size', 'Letter'));
+    expect(canvas).toHaveAttribute('data-page-orientation', 'landscape');
+    expect(canvas).toHaveAttribute('data-page-margins', 'narrow');
+    expect(canvas.style.width).toBe('min(100%, 1056px)');
+    expect(canvas.style.minHeight).toBe('816px');
+
+    const otherWorkspace = { ...syntheticDocument, workspaceId: 'workspace-b' };
+    switchDocument(otherWorkspace);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Page size' })).toHaveValue('A4'));
+    switchDocument(syntheticDocument);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Page size' })).toHaveValue('Letter'));
+    expect(screen.getByRole('combobox', { name: 'Page orientation' })).toHaveValue('landscape');
+    expect(screen.getByRole('combobox', { name: 'Page margins' })).toHaveValue('narrow');
+  });
+});
