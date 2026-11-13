@@ -30,6 +30,8 @@ import OfficeAiWriter from './OfficeAiWriter';
 import { OfficeWorkbenchLayout } from './OfficeWorkbench';
 import DocsCloudPanel from './DocsCloudPanel';
 import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
+import { DEFAULT_DOCS_PAGE_SETUP, docsPageDimensions, docsPageSetupScope, readDocsPageSetup, writeDocsPageSetup } from './lib/docsPageSetup';
+import type { DocsPageSetup } from './lib/docsPageSetup';
 import './docs.css';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
@@ -306,6 +308,23 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const [sourceText, setSourceText] = useState('');
   const [sourceNotice, setSourceNotice] = useState('');
   const [pageZoom, setPageZoom] = useState('100%');
+  const pageSetupScope = docsPageSetupScope(document.workspaceId, document.id);
+  const [pageSetupState, setPageSetupState] = useState(() => ({ scope: pageSetupScope, value: readDocsPageSetup(window.localStorage, pageSetupScope) }));
+  const [pageSetupNotice, setPageSetupNotice] = useState('');
+  const pageSetup = pageSetupState.scope === pageSetupScope ? pageSetupState.value : DEFAULT_DOCS_PAGE_SETUP;
+  const pageDimensions = docsPageDimensions(pageSetup);
+  useEffect(() => {
+    setPageSetupState({ scope: pageSetupScope, value: readDocsPageSetup(window.localStorage, pageSetupScope) });
+    setPageSetupNotice('');
+  }, [pageSetupScope]);
+  useEffect(() => {
+    if (pageSetupState.scope !== pageSetupScope) return;
+    setPageSetupNotice(writeDocsPageSetup(window.localStorage, pageSetupScope, pageSetupState.value)
+      ? '' : 'Page setup could not be saved in this browser. Your document text is unchanged.');
+  }, [pageSetupScope, pageSetupState]);
+  const updatePageSetup = (patch: Partial<DocsPageSetup>) => {
+    setPageSetupState((current) => ({ scope: pageSetupScope, value: { ...(current.scope === pageSetupScope ? current.value : DEFAULT_DOCS_PAGE_SETUP), ...patch } }));
+  };
   const cloudEnabled = import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true' && Boolean(onRestoreCloudCopy);
   const [tableNotice, setTableNotice] = useState('');
   const tableGuard = useMemo(() => createDocsTableGuard(setTableNotice), []);
@@ -944,6 +963,9 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </span>
       {activeRibbonTab === 'view' && <span className="docs-format-group docs-view-controls" aria-label="View controls">
         <label className="docs-format-select"><span>Zoom</span><select aria-label="Document zoom" value={pageZoom} onChange={(event) => setPageZoom(event.target.value)}><option>75%</option><option>90%</option><option>100%</option><option>110%</option><option>125%</option></select></label>
+        <label className="docs-format-select"><span>Paper</span><select aria-label="Page size" value={pageSetup.size} onChange={(event) => updatePageSetup({ size: event.target.value as DocsPageSetup['size'] })}><option>A4</option><option>Letter</option><option>Legal</option></select></label>
+        <label className="docs-format-select"><span>Orientation</span><select aria-label="Page orientation" value={pageSetup.orientation} onChange={(event) => updatePageSetup({ orientation: event.target.value as DocsPageSetup['orientation'] })}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+        <label className="docs-format-select"><span>Margins</span><select aria-label="Page margins" value={pageSetup.margins} onChange={(event) => updatePageSetup({ margins: event.target.value as DocsPageSetup['margins'] })}><option value="normal">Normal</option><option value="narrow">Narrow</option><option value="wide">Wide</option></select></label>
         <FormattingButton label="Print document" icon={<FileText size={16} />} onClick={() => window.print()} />
         <FormattingButton label="Edit HTML source" icon={<Code size={16} />} disabled={!editor} onClick={() => openSourceMode('html')} />
         <FormattingButton label="Edit Markdown source" icon={<FileText size={16} />} disabled={!editor} onClick={() => openSourceMode('markdown')} />
@@ -1043,12 +1065,13 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       {reviewComments.length >= MAX_DOCS_REVIEW_COMMENTS_PER_DOCUMENT && <p className="docs-review-limit">This document has reached the {MAX_DOCS_REVIEW_COMMENTS_PER_DOCUMENT}-comment local limit.</p>}
     </section>
 
-    <article className="document-canvas glass-card" style={{ zoom: pageZoom }}>
+    <article className={`document-canvas glass-card docs-page-${pageSetup.size.toLowerCase()} docs-page-${pageSetup.orientation}`} data-page-size={pageSetup.size} data-page-orientation={pageSetup.orientation} data-page-margins={pageSetup.margins} style={{ zoom: pageZoom, width: `min(100%, ${pageDimensions.width}px)`, minHeight: `${pageDimensions.height}px`, padding: `${pageDimensions.margin}px` }}>
       <input className="document-title-input" value={document.title} onChange={(event) => {
         if (editor) saveEditor(editor, { title: event.target.value });
         else onPatch({ title: event.target.value });
       }} aria-label="Document title" placeholder="Untitled document" />
-      <div className="document-meta"><span><FileText size={13} /> Local rich-text draft</span><span>Edited {friendlyDate(document.updatedAt)}</span></div>
+      <div className="document-meta"><span><FileText size={13} /> Local rich-text draft · {pageSetup.size} {pageSetup.orientation}</span><span>Edited {friendlyDate(document.updatedAt)}</span></div>
+      {pageSetupNotice && <p className="docs-page-setup-notice" role="status">{pageSetupNotice}</p>}
       {sourceMode && <section className="docs-source-editor" aria-label={sourceMode === 'html' ? 'HTML source editor' : 'Markdown source editor'}>
         <div className="docs-source-heading"><div><span className="eyebrow">{sourceMode === 'html' ? 'HTML SOURCE' : 'MARKDOWN SOURCE'}</span><strong>{sourceMode === 'html' ? 'Edit document markup' : 'Edit Markdown'}</strong><small>Changes remain a local preview until you apply them. Unsafe HTML and remote image links are removed.</small></div><span className="docs-source-local"><LockKeyhole size={12} /> LOCAL</span></div>
         <div className="docs-source-mode-tabs" role="group" aria-label="Source format">
