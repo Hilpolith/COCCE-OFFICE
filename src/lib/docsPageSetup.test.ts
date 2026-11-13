@@ -37,6 +37,9 @@ describe('Docs page setup', () => {
     expect(readDocsPageSetup(storage, 'x')).toEqual(DEFAULT_DOCS_PAGE_SETUP);
     storage.setItem(DOCS_PAGE_SETUP_STORAGE_KEY, 'x'.repeat(250_001));
     expect(readDocsPageSetup(storage, 'x')).toEqual(DEFAULT_DOCS_PAGE_SETUP);
+    storage.setItem(DOCS_PAGE_SETUP_STORAGE_KEY, '{malformed');
+    expect(writeDocsPageSetup(storage, 'x', { size: 'Legal', orientation: 'landscape', margins: 'wide' })).toBe(true);
+    expect(readDocsPageSetup(storage, 'x')).toEqual({ size: 'Legal', orientation: 'landscape', margins: 'wide' });
   });
 
   it('rejects invalid writes and reports storage failures', () => {
