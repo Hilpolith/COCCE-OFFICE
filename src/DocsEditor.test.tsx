@@ -696,18 +696,18 @@ describe('Docs page setup controls', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Page margins' }), { target: { value: 'narrow' } });
 
     const canvas = document.querySelector('.document-canvas')!;
-    await waitFor(() => expect(canvas).toHaveAttribute('data-page-size', 'Letter'));
-    expect(canvas).toHaveAttribute('data-page-orientation', 'landscape');
-    expect(canvas).toHaveAttribute('data-page-margins', 'narrow');
+    await waitFor(() => expect(canvas.getAttribute('data-page-size')).toBe('Letter'));
+    expect(canvas.getAttribute('data-page-orientation')).toBe('landscape');
+    expect(canvas.getAttribute('data-page-margins')).toBe('narrow');
     expect(canvas.style.width).toBe('min(100%, 1056px)');
     expect(canvas.style.minHeight).toBe('816px');
 
     const otherWorkspace = { ...syntheticDocument, workspaceId: 'workspace-b' };
     switchDocument(otherWorkspace);
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Page size' })).toHaveValue('A4'));
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Page size' }) as HTMLSelectElement).value).toBe('A4'));
     switchDocument(syntheticDocument);
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Page size' })).toHaveValue('Letter'));
-    expect(screen.getByRole('combobox', { name: 'Page orientation' })).toHaveValue('landscape');
-    expect(screen.getByRole('combobox', { name: 'Page margins' })).toHaveValue('narrow');
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Page size' }) as HTMLSelectElement).value).toBe('Letter'));
+    expect((screen.getByRole('combobox', { name: 'Page orientation' }) as HTMLSelectElement).value).toBe('landscape');
+    expect((screen.getByRole('combobox', { name: 'Page margins' }) as HTMLSelectElement).value).toBe('narrow');
   });
 });
