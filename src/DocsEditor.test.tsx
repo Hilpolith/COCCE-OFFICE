@@ -690,6 +690,7 @@ describe('Docs HTML and Markdown source modes', () => {
 describe('Docs page setup controls', () => {
   it('updates the page canvas and restores scoped paper settings after reopening', async () => {
     const { switchDocument } = renderEditor();
+    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     const pageSize = await screen.findByRole('combobox', { name: 'Page size' });
     fireEvent.change(pageSize, { target: { value: 'Letter' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Page orientation' }), { target: { value: 'landscape' } });
