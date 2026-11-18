@@ -46,7 +46,7 @@ describe("AccountingManagementWorkspace", () => {
     render(<AccountingManagementWorkspace workspaceId="ws-1" />);
     await screen.findByText("COCCE Office");
     fireEvent.click(screen.getByRole("tab", { name: /Journal workflow/i }));
-    expect(screen.getByRole("button", { name: "Save draft and lines" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save draft and lines" }).hasAttribute("disabled")).toBe(true);
   });
   it("shows a safe error instead of empty metrics when bootstrap is malformed", async () => {
     const api = await import("./lib/officeAccountingManagement");

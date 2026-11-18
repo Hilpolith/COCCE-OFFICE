@@ -1,12 +1,14 @@
-import { FileSearch, FileSpreadsheet, FileText, LockKeyhole, Presentation } from 'lucide-react';
+import { Code, FileSearch, FileSpreadsheet, FileText, LockKeyhole, Presentation } from 'lucide-react';
 import './officeWorkbench.css';
 
-type EditorModule = 'docs' | 'sheets' | 'slides' | 'pdf' | 'vault';
+type EditorModule = 'docs' | 'sheets' | 'slides' | 'html' | 'markdown' | 'pdf' | 'vault';
 
 const modules = [
   { id: 'docs', label: 'Docs', icon: FileText },
   { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet },
   { id: 'slides', label: 'Slides', icon: Presentation },
+  { id: 'html', label: 'HTML', icon: Code },
+  { id: 'markdown', label: 'Markdown', icon: FileText },
   { id: 'pdf', label: 'PDF', icon: FileSearch },
   { id: 'vault', label: 'Vault', icon: LockKeyhole },
 ] as const;

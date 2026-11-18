@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 import {
   Activity, ArrowDownRight, ArrowUpRight, BookOpenText, BriefcaseBusiness, Building2,
-  Check, ChevronLeft, CircleHelp, CloudOff, Command,
+  Check, ChevronLeft, CircleHelp, CloudOff, Code, Command,
   FileSpreadsheet, FileText, FolderOpen, Grid2X2,
   LockKeyhole, Menu, MessageCircle, MessageSquareText, Plus, Search, UserRound,
   ShieldCheck, Sparkles, Sun, X,
@@ -38,11 +38,14 @@ import './officeNavigation.css';
 const DocumentEditor = lazy(() => import('./DocsEditor'));
 const PdfWorkspace = lazy(() => import('./PdfWorkspace'));
 const TeamWorkspace = lazy(() => import('./TeamWorkspace'));
+const SourceWorkspace = lazy(() => import('./SourceWorkspace'));
 
 const documentNav = [
   { id: 'docs', label: 'Docs', icon: FileText, detail: 'Local rich-text drafts' },
   { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, detail: 'Local formula engine' },
   { id: 'slides', label: 'Slides', icon: Grid2X2, detail: 'Presentation editor' },
+  { id: 'html', label: 'HTML', icon: Code, detail: 'Standalone HTML editor' },
+  { id: 'markdown', label: 'Markdown', icon: FileText, detail: 'Markdown editor and preview' },
   { id: 'pdf', label: 'PDF', icon: BookOpenText, detail: 'PDF tools' },
   { id: 'drive', label: 'Drive', icon: FolderOpen, detail: 'Files in this browser' },
   { id: 'vault', label: 'Vault', icon: LockKeyhole, detail: 'Protected files' },
@@ -54,8 +57,8 @@ const toolkitNav = [
   { id: 'team', label: 'Team & collaboration', icon: MessageCircle, detail: 'Local planner and separate Office Team' },
 ] as const;
 
-type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'pdf' | 'drive' | 'team' | 'chats' | 'ai-chat' | 'ai' | 'vault' | 'industry' | 'settings';
-const documentPageIds: readonly PageId[] = ['docs', 'sheets', 'slides', 'pdf', 'drive', 'vault'];
+type PageId = 'home' | 'docs' | 'sheets' | 'slides' | 'html' | 'markdown' | 'pdf' | 'drive' | 'team' | 'chats' | 'ai-chat' | 'ai' | 'vault' | 'industry' | 'settings';
+const documentPageIds: readonly PageId[] = ['docs', 'sheets', 'slides', 'html', 'markdown', 'pdf', 'drive', 'vault'];
 type DialogMode = 'workspace' | 'delete' | null;
 
 const themeOptions: { id: ThemeId; name: string; color: string }[] = [
@@ -220,7 +223,7 @@ function App() {
   }, [workspaceDocuments, query]);
   const selectedDocument = workspaceDocuments.find((document) => document.id === selectedDocumentId) ?? null;
   const lastEdited = [...workspaceDocuments].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.updatedAt;
-  const activeEditorModule = page === 'docs' || page === 'sheets' || page === 'slides' || page === 'pdf' || page === 'vault' ? page : null;
+  const activeEditorModule = page === 'docs' || page === 'sheets' || page === 'slides' || page === 'html' || page === 'markdown' || page === 'pdf' || page === 'vault' ? page : null;
 
   const goTo = (nextPage: PageId) => {
     setPage(nextPage);
@@ -466,6 +469,7 @@ function App() {
           {page === 'docs' && (selectedDocument
             ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onExportDocx={exportDocumentDocx} onDelete={deleteDocument} onRestoreCloudCopy={restoreCloudDocument} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} /></Suspense>
             : <DocumentsPage documents={visibleDocuments} query={query} onCreate={createDocument} onOpen={openDocument} onImportDocx={importDocumentDocx} onImportText={importDocumentText} />)}
+          {(page === 'html' || page === 'markdown') && <Suspense fallback={<div className="page" role="status">Opening source editor…</div>}><SourceWorkspace format={page === 'html' ? 'html' : 'markdown'} workspaceId={activeWorkspace?.id ?? null} /></Suspense>}
           {page === 'drive' && <DriveWorkspace workspaceId={activeWorkspace?.id ?? null} officeWorkspaceId={serverWorkspace?.workspaceId ?? null} documents={visibleDocuments} query={query} onOpenDocument={openDocument} onCreateDocument={createDocument} />}
           {page === 'pdf' && <Suspense fallback={<div className="page" role="status">Opening local PDF tools…</div>}><PdfWorkspace workspaceId={activeWorkspace?.id ?? null} /></Suspense>}
           {page === 'sheets' && <SheetsWorkspace state={state} onState={persist} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} />}
@@ -479,7 +483,7 @@ function App() {
           {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
-        <footer className="app-footer"><span><ShieldCheck size={13} /> Docs/Sheets/Slides offer manual cloud copies only (no auto-sync); Drive/PDF/Vault stay browser-local. Linked industry suites use role-gated team records. Bunny file transfers are not yet verified.</span><span>COCCE OFFICE · INDUSTRY WORKSPACES</span></footer>
+        <footer className="app-footer"><span><ShieldCheck size={13} /> Docs/Sheets/Slides use manual cloud copies where enabled; HTML/Markdown source drafts and Drive/PDF/Vault stay browser-local. Linked industry suites use role-gated team records. Bunny file transfers are not yet verified.</span><span>COCCE OFFICE · INDUSTRY WORKSPACES</span></footer>
       </section>
 
       {feedback && <div className="toast" role={/could not save|not saved|preserved/i.test(feedback) ? 'alert' : 'status'}><Check size={16} />{feedback}</div>}
