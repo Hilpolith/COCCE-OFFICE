@@ -29,10 +29,12 @@ function safeFileName(value: string, extension: string): string {
 export default function SourceWorkspace({
   format,
   workspaceId,
+  cloudWorkspaceId = null,
   onGoToTeam = () => undefined,
 }: {
   format: SourceDocumentFormat;
   workspaceId: string | null;
+  cloudWorkspaceId?: string | null;
   onGoToTeam?: () => void;
 }) {
   const [documents, setDocuments] = useState<SourceWorkspaceDocument[]>([]);
@@ -198,13 +200,13 @@ export default function SourceWorkspace({
         <button type="button" className="button-secondary small-button" onClick={() => create()}><Plus size={14} /> New</button>
         <button type="button" className="button-secondary small-button" onClick={() => importRef.current?.click()}><Upload size={14} /> Import</button>
         <button type="button" className="button-secondary small-button" onClick={save} disabled={!activeId || !dirty}><Save size={14} /> Save</button>
-        {workspaceId && <button type="button" className="button-secondary small-button" aria-expanded={cloudOpen} onClick={() => setCloudOpen((open) => !open)}>Cloud copies</button>}
+        {cloudWorkspaceId && <button type="button" className="button-secondary small-button" aria-expanded={cloudOpen} onClick={() => setCloudOpen((open) => !open)}>Cloud copies</button>}
         <button type="button" className="button-primary small-button" onClick={exportFile} disabled={!activeId}><Download size={14} /> Export {extension}</button>
         <input ref={importRef} type="file" accept={format === "html" ? ".html,.htm,text/html" : ".md,.markdown,text/markdown,text/plain"} hidden onChange={(event) => void importFile(event)} />
       </div>
     </header>
 
-    {cloudOpen && workspaceId && <SourceCloudPanel format={format} workspaceId={workspaceId} documentId={activeId} title={title} source={source} hasUnsavedChanges={dirty} onRestore={(snapshot) => create(snapshot.title, snapshot.source)} onGoToTeam={onGoToTeam} />}
+    {cloudOpen && cloudWorkspaceId && <SourceCloudPanel format={format} workspaceId={cloudWorkspaceId} documentId={activeId} title={title} source={source} hasUnsavedChanges={dirty} onRestore={(snapshot) => create(snapshot.title, snapshot.source)} onGoToTeam={onGoToTeam} />}
 
     <div className="source-workspace-grid">
       <aside className="source-files-panel glass-card">

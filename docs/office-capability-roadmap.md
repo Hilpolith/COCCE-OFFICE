@@ -542,7 +542,7 @@ This roadmap remains a verified capability boundary, not a declaration of full G
 - Added a workspace/document-scoped local change baseline, bounded text comparison, safe diff rendering, and whole-document accept/reject controls.
 - Accept advances the baseline; reject restores the verified, sanitized baseline and saves it through the existing local document path.
 - This is whole-document text comparison, not per-author inline tracked-change marks or native DOCX tracked-change round-trip. The baseline stays in the browser and is not part of cloud copies.
-- Current implementation commit is awaiting CI validation.
+- The whole-document baseline/compare/accept/reject implementation passed full GitHub Actions validation on commit a3b679ea40b1f6985c684541137a3387c40b145c (Oxlint, unit/integration/sector tests and production TypeScript/Vite build).
 
 ### Remaining gaps and explicit limits
 
@@ -552,3 +552,11 @@ This roadmap remains a verified capability boundary, not a declaration of full G
 - PDF: OCR for scanned pages, direct text replacement, image-object editing, form filling/signing, redaction review and format conversion. Current PDF page operations/annotations remain separate browser-local copies or sidecars.
 - AI: actual per-record retrieval is still intentionally narrow. It currently provides role-filtered bootstrap summaries and non-personal academic catalogue metadata, not unrestricted access to every sector record. Government correspondence is excluded. Approved write actions remain limited to the existing generic task proposal/approval workflow.
 - Real authenticated AI request, end-to-end source cloud test with a signed-in workspace member, and Vercel production deployment have not been performed here.
+
+
+### Source cloud safety follow-up
+
+- Source cloud access now receives only the active server-side Office workspace UUID; the browser-local workspace identifier is never sent to the cloud API as a substitute.
+- Upload confirmation rechecks that the source has not changed while the dialog is open. If it changes after a server reservation, the pending record is retained and no bytes are uploaded; the user must resolve the reservation before retrying.
+- Restore rechecks local edits after download and refuses to overwrite or replace an in-progress local draft.
+- These source-cloud follow-ups are in the next main commit and require their own CI run.

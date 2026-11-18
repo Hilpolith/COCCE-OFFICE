@@ -149,6 +149,9 @@ export default function SourceCloudPanel({
       if (!await confirm('Create a new private cloud copy of "' + draft.title + '" in this Office workspace?\n\nThis uploads the source file to the private cocce-kyc Bunny storage location in Frankfurt. Workspace members with Drive access can access it. This is a versioned copy, not background sync or live co-editing. The local original is never overwritten.')) {
         setNotice('Cloud copy cancelled. No upload reservation was created.'); return;
       }
+      if (!current() || sourceRef.current.title !== draft.title || sourceRef.current.source !== draft.source || sourceRef.current.hasUnsavedChanges) {
+        throw new Error('The source draft changed while confirmation was open. No upload reservation was created; save and retry.');
+      }
       const intent: PendingCloudCopy = {
         actorId, workspaceId: workspaceId!, documentId: draft.documentId,
         idempotencyKey: crypto.randomUUID(), displayName: safeSourceCloudFilename(draft.title, format),
@@ -167,6 +170,9 @@ export default function SourceCloudPanel({
       if (grant.status !== 'finalized') {
         const tracked = { ...intent, uploadSessionId: grant.uploadSessionId, fileId: grant.fileId, expiresAt: grant.expiresAt };
         savePendingCloudCopy(window.localStorage, tracked); setPending([tracked]);
+        if (sourceRef.current.title !== draft.title || sourceRef.current.source !== draft.source || sourceRef.current.hasUnsavedChanges) {
+          throw new Error('The source draft changed after reservation. No bytes were uploaded; check the pending upload before retrying.');
+        }
         await api.upload(grant, bytes);
         if (!current()) return;
         await api.finalize(grant.uploadSessionId);
@@ -216,10 +222,10 @@ export default function SourceCloudPanel({
       const bytes = await api.download(file, SOURCE_CLOUD_MAX_BYTES);
       if (!current()) return;
       const snapshot = parseSourceCloudSnapshot(bytes, format);
-      if (!sourceRef.current.hasUnsavedChanges && current()) {
-        if (!onRestore(snapshot)) throw new Error('The source cloud copy was verified, but the new local draft could not be saved. Existing drafts are unchanged.');
-        setNotice('Cloud copy verified and restored as a new local draft.');
-      }
+      if (!current()) return;
+      if (sourceRef.current.hasUnsavedChanges) throw new Error('Local edits started while the cloud copy was downloading. The downloaded copy was not restored.');
+      if (!onRestore(snapshot)) throw new Error('The source cloud copy was verified, but the new local draft could not be saved. Existing drafts are unchanged.');
+      setNotice('Cloud copy verified and restored as a new local draft.');
     });
   }
 
