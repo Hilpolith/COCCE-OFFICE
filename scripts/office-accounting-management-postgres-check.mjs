@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const migration = await readFile(new URL('../supabase/migrations/20261107160000_office_accounting_management.sql', import.meta.url), 'utf8');
 const rlsMigration = await readFile(new URL('../supabase/migrations/20261107175000_office_accounting_rls.sql', import.meta.url), 'utf8');
+const readContractMigration = await readFile(new URL('../supabase/migrations/20261118090000_office_accounting_read_contract.sql', import.meta.url), 'utf8');
 const ids = { owner:'11111111-1111-4111-8111-111111111111', accountant:'22222222-2222-4222-8222-222222222222', reviewer:'33333333-3333-4333-8333-333333333333', outsider:'44444444-4444-4444-8444-444444444444', suspended:'55555555-5555-4555-8555-555555555555', workspace:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', otherWorkspace:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', client:'cccccccc-cccc-4ccc-8ccc-cccccccccccc' };
 const client2='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 let db;
@@ -20,13 +21,14 @@ before(async()=>{
  await db.exec('GRANT SELECT ON TABLE public.office_workspaces TO authenticated,service_role; GRANT EXECUTE ON FUNCTION office_private.is_admin(uuid) TO authenticated;');
  await db.exec(migration);
  await db.exec(rlsMigration);
+ await db.exec(readContractMigration);
  await q('INSERT INTO auth.users VALUES($1),($2),($3),($4),($5)',Object.values(ids).slice(0,5));
  await q('INSERT INTO public.office_workspaces VALUES($1),($2)',[ids.workspace,ids.otherWorkspace]);
  await q("INSERT INTO public.office_memberships VALUES($1,$2,'owner','active'),($1,$3,'member','active'),($1,$4,'member','active'),($1,$5,'member','suspended'),($2,$2,'owner','active')",[ids.workspace,ids.owner,ids.accountant,ids.reviewer,ids.suspended]);
  await q("INSERT INTO public.office_industry_spaces VALUES($1,'accounting')",[ids.workspace]);
  await q("INSERT INTO public.office_accounting_staff_roles(workspace_id,user_id,accounting_role,assigned_by) VALUES($1,$2,'accountant',$3),($1,$4,'reviewer',$3)",[ids.workspace,ids.accountant,ids.owner,ids.reviewer]);
  await cmd('save_accounting_settings',{base_currency_code:'TZS',fiscal_year_start_month:1,idempotency_key:'aaaaaaaa-0000-4000-8000-000000000001'});
- await q('INSERT INTO public.office_accounting_clients(client_id,workspace_id,client_code,legal_name_public,display_name,status,country_code,currency_code) VALUES($1,$2,\'C-1\',\'Synthetic Client\',\'Client\',\'active\',\'TZ\',\'TZS\')',[ids.client,ids.workspace]);
+ await q('INSERT INTO public.office_accounting_clients(client_id,workspace_id,client_code,legal_name_public,display_name,status,country_code,currency_code) VALUES($1,$2,\'C-1\',\'Synthetic Client\',\'Client\',\'active\',\'TZ\',\'TZS\'),($3,$2,\'C-2\',\'Unassigned Synthetic Client\',\'Unassigned Client\',\'active\',\'TZ\',\'TZS\')',[ids.client,ids.workspace,client2]);
  await q('INSERT INTO public.office_accounting_staff_assignments(workspace_id,client_id,user_id,assigned_by) VALUES($1,$2,$3,$4),($1,$2,$5,$4)',[ids.workspace,ids.client,ids.accountant,ids.owner,ids.reviewer]);
 });
 after(()=>db?.close());
@@ -168,4 +170,42 @@ test('journal line responses distinguish parent versions and refresh exact draft
  assert.equal(deleted.parent_version,second.parent_version+1);
  header=(await q('SELECT version,total_debit,total_credit FROM public.office_accounting_journals WHERE journal_id=$1 LIMIT 1',[j.journal_id]))[0];
  assert.equal(header.version,deleted.parent_version); assert.equal(Number(header.total_debit),7.13); assert.equal(Number(header.total_credit),0);
+});
+
+
+test('read RPC bootstrap matches the complete UI contract and resource reads stay within assigned clients',async()=>{
+ const boot=await read('bootstrap',{},ids.accountant);
+ assert.equal(boot.role,'accountant');
+ for(const key of ['clients','engagements','chart','periods','journals_prepare','journals_submit','journals_review','journals_post','journals_reverse','bank_reconcile','reports','evidence','findings','obligations','staff_assign','period_reopen','audit','private_records']) assert.equal(typeof boot.capabilities[key],'boolean',key);
+ for(const key of ['clients_count','active_engagements_count','draft_journals_count','awaiting_review_count','posted_journals_count','unreconciled_statement_lines_count','open_findings_count','due_obligations_count']) assert.equal(Number.isSafeInteger(boot.summary[key]),true,key);
+ assert.equal(boot.summary.clients_count,1);
+ assert.equal(boot.capabilities.journals_prepare,true);
+ assert.equal(boot.capabilities.journals_post,false);
+ assert.deepEqual(boot.key_config,{configured:false});
+ const visible=await read('clients',{},ids.accountant);
+ assert.equal(visible.total_count,1);
+ assert.equal(visible.rows[0].client_id,ids.client);
+ await fails(()=>read('clients',{client_id:client2},ids.accountant),'42501');
+ await fails(()=>read('audit',{},ids.accountant),'42501');
+ const adminBoot=await read('bootstrap',{},ids.owner);
+ assert.equal(adminBoot.role,'accounting_admin');
+ assert.equal(adminBoot.capabilities.journals_post,true);
+ assert.equal(adminBoot.summary.clients_count,2);
+});
+
+test('every UI resource has a bounded, workspace-scoped read contract',async()=>{
+ const resources=['clients','staff_assignments','engagements','chart_accounts','reporting_periods','journals','journal_lines','postings','reversals','bank_accounts','bank_statements','bank_statement_lines','evidence_references','findings','obligations','audit'];
+ for(const resource of resources){
+  const result=await read(resource,{},ids.owner,25,0);
+  assert.equal(Array.isArray(result.rows),true,resource);
+  assert.equal(Number.isSafeInteger(result.total_count),true,resource);
+  assert.equal(result.limit,25,resource);
+  assert.equal(result.offset,0,resource);
+  assert.equal(typeof result.has_more,'boolean',resource);
+ }
+ const report=await read('trial_balance',{client_id:ids.client,as_of:'2026-12-31'},ids.accountant,25,0);
+ assert.equal(Array.isArray(report.rows),true);
+ assert.equal(report.report,'internal_trial_balance');
+ const privateRecord=await read('client_private',{client_id:ids.client},ids.accountant);
+ assert.deepEqual(privateRecord,{});
 });
