@@ -6,7 +6,7 @@ const MAX_ITEMS_TOTAL = 100;
 const MAX_CONTEXT_CHARS = 12_000;
 const INDUSTRIES = new Set([
   "government", "school", "university", "business", "accounting",
-  "manufacturing", "healthcare-admin", "ngo", "hospitality", "church",
+  "manufacturing", "healthcare-admin", "ngo", "hospitality", "institutions", "church",
 ]);
 
 type RpcClient = {
@@ -105,4 +105,104 @@ export function formatSectorWorkItems(items: SectorWorkItem[]): string {
     item.dueDate ? "Due: " + item.dueDate : "",
     item.updatedAt ? "Updated: " + item.updatedAt : "",
   ].filter(Boolean).join(" · ")).join("\n").slice(0, MAX_CONTEXT_CHARS);
+}
+
+
+type SectorSummary = {
+  workspaceName: string;
+  industry: string;
+  role: string;
+  counts: Record<string, number>;
+  records: Array<{ kind: string; name: string; code: string; status: string }>;
+  state: string;
+};
+
+const SUMMARY_RPCS: Record<string, { name: string; args: (workspaceId: string) => Record<string, unknown> }> = {
+  school: { name: "office_school_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20 }) },
+  university: { name: "office_university_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
+  business: { name: "office_business_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
+  accounting: { name: "office_accounting_read", args: (id) => ({ w: id, resource: "bootstrap", f: {}, requested_limit: 20, requested_offset: 0 }) },
+  manufacturing: { name: "office_manufacturing_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
+  "healthcare-admin": { name: "office_health_admin_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0, p_purpose_code: "aggregate_reporting" }) },
+  ngo: { name: "office_ngo_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
+  hospitality: { name: "office_hospitality_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
+  institutions: { name: "office_institutions_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
+};
+
+function safeSummaryValue(value: unknown): string {
+  return safeText(value, 80);
+}
+
+function parseSectorSummary(raw: unknown, workspaceName: string, industry: string): SectorSummary {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("An industry summary returned an invalid response.");
+  }
+  const data = raw as Record<string, unknown>;
+  const summary = data.summary && typeof data.summary === "object" && !Array.isArray(data.summary)
+    ? data.summary as Record<string, unknown> : {};
+  const counts: Record<string, number> = {};
+  for (const [key, value] of Object.entries(summary)) {
+    if (/^[a-z][a-z0-9_]{0,55}_count$/.test(key) && !/(?:private|secret|patient|student|beneficiar|safeguard|staff|user|person|member|payroll|salary|medical|clinical)/i.test(key) && typeof value === "number"
+      && Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000_000) {
+      counts[key] = value;
+    }
+  }
+  const records: SectorSummary["records"] = [];
+  for (const key of ["terms", "programmes", "courses"]) {
+    const items = data[key];
+    if (!Array.isArray(items)) continue;
+    for (const item of items.slice(0, 12)) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const row = item as Record<string, unknown>;
+      const name = safeSummaryValue(row.name ?? row.label);
+      const code = safeSummaryValue(row.code);
+      const status = safeSummaryValue(row.status);
+      if (name || code) records.push({ kind: key.slice(0, -1), name, code, status });
+    }
+  }
+  const role = safeSummaryValue(data.role);
+  const state = safeSummaryValue(typeof data.storage_review_state === "string" ? data.storage_review_state : data.initialized === true ? "initialized" : "");
+  return { workspaceName, industry, role, counts, records: records.slice(0, 24), state };
+}
+
+/**
+ * Fetches a bounded, role-filtered bootstrap from each supported sector's own
+ * authenticated read RPC. It deliberately strips settings, key material,
+ * people, beneficiaries, patients, financial payloads and arbitrary columns.
+ */
+export async function loadSectorWorkspaceSummaries(
+  client: RpcClient,
+  enabledWorkspaces: Array<Record<string, unknown>>,
+): Promise<SectorSummary[]> {
+  const selected = enabledWorkspaces.slice(0, MAX_WORKSPACES);
+  const summaries = await Promise.all(selected.map(async (workspace): Promise<SectorSummary[]> => {
+    const workspaceId = String(workspace.workspace_id ?? "");
+    if (!isUuid(workspaceId)) return [];
+    const profile = await client.rpc("office_industry_get_space", { p_workspace_id: workspaceId });
+    if (profile.error) {
+      if ((profile.error as { code?: string }).code === "P0002") return [];
+      throw new Error("An authorised industry workspace profile could not be read.");
+    }
+    const profileRows = Array.isArray(profile.data) ? profile.data : profile.data ? [profile.data] : [];
+    const industry = safeText((profileRows[0] as Record<string, unknown> | undefined)?.industry_id, 40);
+    const contract = SUMMARY_RPCS[industry];
+    if (!contract) return [];
+    const result = await client.rpc(contract.name, contract.args(workspaceId));
+    if (result.error) throw new Error("An authorised sector summary could not be read.");
+    return [parseSectorSummary(result.data, safeText(workspace.name, 80) || "Office workspace", industry)];
+  }));
+  return summaries.flat().slice(0, MAX_WORKSPACES);
+}
+
+export function formatSectorWorkspaceSummaries(summaries: SectorSummary[]): string {
+  return summaries.map((summary) => {
+    const lines = [
+      summary.workspaceName + " · " + summary.industry,
+      summary.role ? "Member role: " + summary.role : "",
+      summary.state ? "Workspace state: " + summary.state : "",
+      ...Object.entries(summary.counts).map(([key, value]) => key.replaceAll("_", " ") + ": " + value),
+      ...summary.records.map((record) => [record.kind, record.name, record.code, record.status].filter(Boolean).join(" · ")),
+    ].filter(Boolean);
+    return lines.join("\\n");
+  }).join("\\n\\n").slice(0, MAX_CONTEXT_CHARS);
 }
