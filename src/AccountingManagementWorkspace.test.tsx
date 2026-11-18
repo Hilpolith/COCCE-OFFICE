@@ -32,12 +32,21 @@ describe("AccountingManagementWorkspace", () => {
     expect(await screen.findByText(/No rows for the selected report/i)).toBeTruthy();
   });
   it("does not show restricted actions", async () => {
-    const restricted = { ...boot, role: "accountant" as const, capabilities: { ...caps, journals_post: false, journals_prepare: false } };
+    const restricted = { ...boot, role: "accountant" as const, capabilities: { ...caps, journals_post: false, journals_prepare: false, journals_review: false } };
     const api = await import("./lib/officeAccountingManagement");
     vi.mocked(api.officeAccountingManagementApi.read).mockImplementation(async (_client, _ws, resource) => resource === "bootstrap" ? restricted as any : emptyPage);
     render(<AccountingManagementWorkspace workspaceId="ws-1" />);
     await screen.findByText("COCCE Office");
     expect(screen.queryByRole("tab", { name: /Journal workflow/i })).toBeNull();
+  });
+  it("shows the journal review workflow to reviewers without enabling journal preparation", async () => {
+    const reviewer = { ...boot, role: "reviewer" as const, capabilities: { ...caps, clients: false, chart: false, periods: false, journals_prepare: false, journals_submit: false, journals_review: true, journals_post: true, journals_reverse: false, bank_reconcile: true, evidence: false, findings: false, obligations: false, staff_assign: false, period_reopen: false, private_records: false } };
+    const api = await import("./lib/officeAccountingManagement");
+    vi.mocked(api.officeAccountingManagementApi.read).mockImplementation(async (_client, _ws, resource) => resource === "bootstrap" ? reviewer as any : emptyPage);
+    render(<AccountingManagementWorkspace workspaceId="ws-1" />);
+    await screen.findByText("COCCE Office");
+    fireEvent.click(screen.getByRole("tab", { name: /Journal workflow/i }));
+    expect(screen.getByRole("button", { name: "Save draft and lines" })).toBeDisabled();
   });
   it("shows a safe error instead of empty metrics when bootstrap is malformed", async () => {
     const api = await import("./lib/officeAccountingManagement");

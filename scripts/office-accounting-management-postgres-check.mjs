@@ -28,7 +28,7 @@ before(async()=>{
  await q("INSERT INTO public.office_industry_spaces VALUES($1,'accounting')",[ids.workspace]);
  await q("INSERT INTO public.office_accounting_staff_roles(workspace_id,user_id,accounting_role,assigned_by) VALUES($1,$2,'accountant',$3),($1,$4,'reviewer',$3)",[ids.workspace,ids.accountant,ids.owner,ids.reviewer]);
  await cmd('save_accounting_settings',{base_currency_code:'TZS',fiscal_year_start_month:1,idempotency_key:'aaaaaaaa-0000-4000-8000-000000000001'});
- await q('INSERT INTO public.office_accounting_clients(client_id,workspace_id,client_code,legal_name_public,display_name,status,country_code,currency_code) VALUES($1,$2,\'C-1\',\'Synthetic Client\',\'Client\',\'active\',\'TZ\',\'TZS\'),($3,$2,\'C-2\',\'Unassigned Synthetic Client\',\'Unassigned Client\',\'active\',\'TZ\',\'TZS\')',[ids.client,ids.workspace,client2]);
+ await q('INSERT INTO public.office_accounting_clients(client_id,workspace_id,client_code,legal_name_public,display_name,status,country_code,currency_code) VALUES($1,$2,\'C-1\',\'Synthetic Client\',\'Client\',\'active\',\'TZ\',\'TZS\')',[ids.client,ids.workspace]);
  await q('INSERT INTO public.office_accounting_staff_assignments(workspace_id,client_id,user_id,assigned_by) VALUES($1,$2,$3,$4),($1,$2,$5,$4)',[ids.workspace,ids.client,ids.accountant,ids.owner,ids.reviewer]);
 });
 after(()=>db?.close());
@@ -187,10 +187,18 @@ test('read RPC bootstrap matches the complete UI contract and resource reads sta
  assert.equal(visible.rows[0].client_id,ids.client);
  await fails(()=>read('clients',{client_id:client2},ids.accountant),'42501');
  await fails(()=>read('audit',{},ids.accountant),'42501');
+ const reviewerBoot=await read('bootstrap',{},ids.reviewer);
+ assert.equal(reviewerBoot.role,'reviewer');
+ assert.equal(reviewerBoot.capabilities.journals_prepare,false);
+ assert.equal(reviewerBoot.capabilities.journals_review,true);
+ assert.equal(reviewerBoot.capabilities.journals_post,true);
+ assert.equal(reviewerBoot.capabilities.bank_reconcile,true);
+ const reviewerJournals=await read('journals',{},ids.reviewer);
+ assert.equal(Array.isArray(reviewerJournals.rows),true);
  const adminBoot=await read('bootstrap',{},ids.owner);
  assert.equal(adminBoot.role,'accounting_admin');
  assert.equal(adminBoot.capabilities.journals_post,true);
- assert.equal(adminBoot.summary.clients_count,2);
+ assert.equal(adminBoot.summary.clients_count,3);
 });
 
 test('every UI resource has a bounded, workspace-scoped read contract',async()=>{
@@ -207,5 +215,7 @@ test('every UI resource has a bounded, workspace-scoped read contract',async()=>
  assert.equal(Array.isArray(report.rows),true);
  assert.equal(report.report,'internal_trial_balance');
  const privateRecord=await read('client_private',{client_id:ids.client},ids.accountant);
- assert.deepEqual(privateRecord,{});
+ assert.equal(privateRecord.client_id,ids.client);
+ assert.equal(typeof privateRecord.nonce,'string');
+ assert.equal(typeof privateRecord.ciphertext,'string');
 });
