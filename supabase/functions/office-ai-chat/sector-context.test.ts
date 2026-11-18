@@ -99,6 +99,46 @@ describe("authenticated sector bootstrap context", () => {
     expect(formatted).not.toContain("example.com");
   });
 
+  it("includes safe class and subject catalogue records from the school bootstrap", async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ industry_id: "school" }], error: null })
+      .mockResolvedValueOnce({ data: {
+        role: "registrar",
+        classes: [{ class_label: "Form One A", level_label: "Form One", status: "active", capacity: 45 }],
+        subjects: [{ subject_label: "Mathematics", subject_code: "MATH", status: "active" }],
+        students: [{ student_code: "S001", email: "private@example.com" }],
+      }, error: null });
+    const summaries = await loadSectorWorkspaceSummaries({ rpc }, [workspace]);
+    expect(summaries[0]?.records).toEqual([
+      { kind: "class", name: "Form One A", code: "", status: "active" },
+      { kind: "subject", name: "Mathematics", code: "MATH", status: "active" },
+    ]);
+    expect(formatSectorWorkspaceSummaries(summaries)).not.toContain("S001");
+    expect(formatSectorWorkspaceSummaries(summaries)).not.toContain("private@example.com");
+  });
+
+  it("uses the exact hospitality bootstrap pagination contract", async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ industry_id: "hospitality" }], error: null })
+      .mockResolvedValueOnce({ data: { role: "manager", summary: { properties: 2, rooms: 18, open_maintenance: 3, revenue: 900000 }, settings: { private_data_enabled: true } }, error: null });
+    const summaries = await loadSectorWorkspaceSummaries({ rpc }, [workspace]);
+    expect(rpc).toHaveBeenNthCalledWith(2, "office_hospitality_read", {
+      p_workspace_id: workspace.workspace_id, p_resource: "bootstrap", p_filter: {}, p_limit: 1, p_offset: 0,
+    });
+    expect(summaries[0]?.counts).toEqual({ properties: 2, rooms: 18, open_maintenance: 3 });
+  });
+
+  it("routes the database's church industry id to the Institutions read RPC", async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ industry_id: "church" }], error: null })
+      .mockResolvedValueOnce({ data: { role: "admin", summary: { facilities: 4 } }, error: null });
+    const summaries = await loadSectorWorkspaceSummaries({ rpc }, [workspace]);
+    expect(rpc).toHaveBeenNthCalledWith(2, "office_institutions_read", {
+      p_workspace_id: workspace.workspace_id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0,
+    });
+    expect(summaries[0]?.industry).toBe("church");
+  });
+
   it("fails closed if a sector read RPC denies the authenticated member", async () => {
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: [{ industry_id: "ngo" }], error: null })

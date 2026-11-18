@@ -560,3 +560,11 @@ This roadmap remains a verified capability boundary, not a declaration of full G
 - Upload confirmation rechecks that the source has not changed while the dialog is open. If it changes after a server reservation, the pending record is retained and no bytes are uploaded; the user must resolve the reservation before retrying.
 - Restore rechecks local edits after download and refuses to overwrite or replace an in-progress local draft.
 - These source-cloud follow-ups are in the next main commit and require their own CI run.
+
+
+## 2026-11-18 — Additional source revisions and AI contract hardening
+
+- The server-workspace-only source cloud scoping and confirmation/download race guards passed full GitHub Actions validation on commit dc6c83ba60fcdbd33026b8758ad41eaa071c5f20.
+- HTML/Markdown source cloud now also supports explicit creation of a new immutable revision of an existing cloud file using the server's current revision ID as an optimistic concurrency guard. The existing pending-upload journal covers interrupted revision reservations and finalization.
+- Source cloud remains manual; the panel restores the latest revision only and does not yet browse or restore historical revisions. Renaming a cloud file is not supported through this panel.
+- AI sector summary contracts now match the live Hospitality bootstrap's strict page-size-one requirement and map the database's church industry identifier to the Institutions read RPC. The safe bootstrap parser now includes non-personal School class/subject labels and allows bounded numeric operational summary keys while excluding personal, clinical, payroll and financial values. These fixes are pending CI and redeployment.

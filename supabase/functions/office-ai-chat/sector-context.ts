@@ -125,8 +125,9 @@ const SUMMARY_RPCS: Record<string, { name: string; args: (workspaceId: string) =
   manufacturing: { name: "office_manufacturing_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
   "healthcare-admin": { name: "office_health_admin_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0, p_purpose_code: "aggregate_reporting" }) },
   ngo: { name: "office_ngo_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
-  hospitality: { name: "office_hospitality_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
+  hospitality: { name: "office_hospitality_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 1, p_offset: 0 }) },
   institutions: { name: "office_institutions_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
+  church: { name: "office_institutions_read", args: (id) => ({ p_workspace_id: id, p_resource: "bootstrap", p_filter: {}, p_limit: 20, p_offset: 0 }) },
 };
 
 function safeSummaryValue(value: unknown): string {
@@ -142,22 +143,22 @@ function parseSectorSummary(raw: unknown, workspaceName: string, industry: strin
     ? data.summary as Record<string, unknown> : {};
   const counts: Record<string, number> = {};
   for (const [key, value] of Object.entries(summary)) {
-    if (/^[a-z][a-z0-9_]{0,55}_count$/.test(key) && !/(?:private|secret|patient|student|beneficiar|safeguard|staff|user|person|member|payroll|salary|medical|clinical)/i.test(key) && typeof value === "number"
+    if (/^[a-z][a-z0-9_]{0,55}$/.test(key) && !/(?:private|secret|patient|student|beneficiar|safeguard|staff|user|person|member|payroll|salary|medical|clinical|amount|balance|revenue|expense|cost|payment|fee|tax|invoice|claim|billing|income|profit|debit|credit|bank)/i.test(key) && typeof value === "number"
       && Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000_000) {
       counts[key] = value;
     }
   }
   const records: SectorSummary["records"] = [];
-  for (const key of ["terms", "programmes", "courses"]) {
+  for (const key of ["terms", "programmes", "courses", "classes", "subjects"]) {
     const items = data[key];
     if (!Array.isArray(items)) continue;
     for (const item of items.slice(0, 12)) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
       const row = item as Record<string, unknown>;
-      const name = safeSummaryValue(row.name ?? row.label);
-      const code = safeSummaryValue(row.code);
+      const name = safeSummaryValue(row.name ?? row.label ?? row.class_label ?? row.subject_label);
+      const code = safeSummaryValue(row.code ?? row.subject_code);
       const status = safeSummaryValue(row.status);
-      if (name || code) records.push({ kind: key.slice(0, -1), name, code, status });
+      if (name || code) records.push({ kind: ({ terms: "term", programmes: "programme", courses: "course", classes: "class", subjects: "subject" } as const)[key as "terms" | "programmes" | "courses" | "classes" | "subjects"], name, code, status });
     }
   }
   const role = safeSummaryValue(data.role);
