@@ -102,6 +102,19 @@ async function createLocalReviewComment(body: string) {
 }
 
 describe('Docs local table authoring', () => {
+  it('tracks document changes from a local baseline and accepts the current version', async () => {
+    renderEditor();
+    fireEvent.click(screen.getByRole('button', { name: 'Start tracking from current version' }));
+    const editor = screen.getByRole('textbox', { name: 'Document content' });
+    selectEditorText(editor, 'Before');
+    pastePlainText(editor, 'After');
+    await waitFor(() => expect(screen.getByText(/Changes detected since the baseline/)).toBeTruthy());
+    expect(screen.getByText('Before', { exact: true })).toBeTruthy();
+    expect(screen.getByText('After', { exact: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }));
+    await waitFor(() => expect(screen.getByText('No unaccepted changes')).toBeTruthy());
+  });
+
   it('inserts an explicit page break that survives safe saving for print layout', async () => {
     const { onPatch } = renderEditor();
     fireEvent.click(await screen.findByRole('tab', { name: 'Insert' }));

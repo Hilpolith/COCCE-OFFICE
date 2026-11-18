@@ -510,3 +510,45 @@ Fresh local verification after these changes: `pnpm test` passed (144 Vitest fil
 - This pass did not deploy to Vercel, change production data, apply or roll back SQL, or alter the `cocce-kyc` storage or wallet arrangements. Deployment and any SQL migration remain owner-controlled steps.
 
 This roadmap remains a verified capability boundary, not a declaration of full GenOffice parity or production readiness.
+
+
+## 2026-11-18 — Production read contracts, sector AI summaries, source cloud and document review
+
+### Production Supabase changes applied
+
+- Applied office_accounting_read_contract_20261118 to the connected COCCE Supabase project. Verified the function is SECURITY DEFINER, executable by authenticated, and not executable by anon.
+- Applied office_ngo_storage_review_reference_20261118 to the same project. Verified the updated office_ngo_read function has the same authenticated-only execution boundary.
+- These are additive COCCE Office RPC changes. No wallet tables, wallet RPCs, balances, or transactions were changed.
+- Supabase security advisor still reports two pre-existing public commerce tables (orders, order_items) with policies but RLS disabled. They were deliberately not modified because they are outside the Office work and may affect the Super App shop.
+
+### AI sector context
+
+- office-ai-chat version 26 is deployed with JWT verification enabled.
+- When the user explicitly enables sector context, the function now calls each supported sector's existing authenticated read RPC for a bounded bootstrap summary, alongside the existing membership-checked work queue.
+- Summary serialization allows aggregate count values after excluding sensitive categories and only a short list of non-personal university catalogue fields (term/programme/course names, codes and statuses). It excludes arbitrary settings, key material, private records, people, student/patient/beneficiary/staff/user identifiers and financial payloads.
+- AI CI passed before deployment. A real signed-in user's authenticated live-model request was not available in this session; the function deployment is verified, but the live model response is not certified.
+- Government uses its existing bounded work queue only in this pass; no correspondence content is exposed to AI. Unsupported/unknown sector profiles are skipped rather than queried through guessed tables.
+
+### HTML and Markdown cloud copies
+
+- Added a shared Source Cloud panel for HTML and Markdown. It uses the existing private office-cloud-files API, selected workspace membership, private Bunny storage, signed upload grants, SHA-256 verification, upload finalization and the pending-upload recovery journal.
+- Cloud restore downloads and verifies the file, validates a strict versioned snapshot and restores as a new local draft without overwriting the original.
+- The pending journal accepts the new source snapshot format with a bounded size.
+- This is explicit, manual, versioned cloud-copy/restore. It is not continuous background sync, concurrent editing, or conflict-free collaboration. A full automatic sync protocol remains a separate feature.
+- Source cloud changes passed the full GitHub Actions validation on commit 56fe7e6b4f11911959b64b2d1a519987bbb268a9 (Oxlint, all unit/integration/sector tests and production build).
+
+### Docs change review
+
+- Added a workspace/document-scoped local change baseline, bounded text comparison, safe diff rendering, and whole-document accept/reject controls.
+- Accept advances the baseline; reject restores the verified, sanitized baseline and saves it through the existing local document path.
+- This is whole-document text comparison, not per-author inline tracked-change marks or native DOCX tracked-change round-trip. The baseline stays in the browser and is not part of cloud copies.
+- Current implementation commit is awaiting CI validation.
+
+### Remaining gaps and explicit limits
+
+- Docs: native per-edit tracked changes with individual accept/reject, version history/compare across server revisions, cloud synchronization of review comments/baselines, automatic pagination, headers/footers/page numbering, and full DOCX fidelity.
+- Sheets: full formatting model (fonts, fills, borders, number/date formats), column/row sizing, freeze panes, conditional formatting, data validation, named ranges, pivots/slicers, formula compatibility and high-fidelity multi-sheet XLSX.
+- Slides: master slides/layouts, richer shapes/charts, smart guides, alignment/distribution, full image crop/position controls, transitions/animations and fidelity beyond the supported subset.
+- PDF: OCR for scanned pages, direct text replacement, image-object editing, form filling/signing, redaction review and format conversion. Current PDF page operations/annotations remain separate browser-local copies or sidecars.
+- AI: actual per-record retrieval is still intentionally narrow. It currently provides role-filtered bootstrap summaries and non-personal academic catalogue metadata, not unrestricted access to every sector record. Government correspondence is excluded. Approved write actions remain limited to the existing generic task proposal/approval workflow.
+- Real authenticated AI request, end-to-end source cloud test with a signed-in workspace member, and Vercel production deployment have not been performed here.

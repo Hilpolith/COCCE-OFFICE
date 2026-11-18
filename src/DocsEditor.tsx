@@ -24,6 +24,8 @@ import {
   saveDocsReviewComment,
 } from './lib/docsReviewComments';
 import type { DocsReviewComment } from './lib/docsReviewComments';
+import { createDocsTextDiff, readDocsChangeBaseline, saveDocsChangeBaseline } from './lib/docsChangeTracking';
+import type { DocsChangeBaseline } from './lib/docsChangeTracking';
 import { findDocsTextMatches, MAX_DOCS_FIND_MATCHES, MAX_DOCS_FIND_QUERY_CHARS, MAX_DOCS_FIND_REPLACEMENT_CHARS, replaceDocsTextMatches } from './lib/docsFindReplace';
 import type { DocsTextMatch } from './lib/docsFindReplace';
 import OfficeAiWriter from './OfficeAiWriter';
@@ -355,6 +357,13 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const [commentDraft, setCommentDraft] = useState<DocsReviewCommentDraft | null>(null);
   const [reviewCommentNotice, setReviewCommentNotice] = useState(initialReviewData.notice);
   const [reviewCommentError, setReviewCommentError] = useState(Boolean(initialReviewData.notice));
+  const [changeTrackingBaseline, setChangeTrackingBaseline] = useState<DocsChangeBaseline | null>(() => {
+    try { return readDocsChangeBaseline(window.localStorage, document.workspaceId, document.id); }
+    catch { return null; }
+  });
+  const [changeTrackingNotice, setChangeTrackingNotice] = useState('');
+  const [changeTrackingOpen, setChangeTrackingOpen] = useState(false);
+  const [changeTrackingRevision, setChangeTrackingRevision] = useState(0);
   const reviewCommentExtension = useMemo(() => createDocsReviewCommentExtension(), []);
   const [initialHtml] = useState(() => initialDocumentHtml(document.content, document.richText));
   const [insertRows, setInsertRows] = useState('3');
@@ -406,6 +415,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       if (transaction.docChanged) {
         setFindDocumentRevision((revision) => revision + 1);
         setFindMatchIndex(0);
+        setChangeTrackingRevision((revision) => revision + 1);
       }
       if (!transaction.docChanged || suppressCommentAnchorPersistence.current) return;
       const pluginState = docsReviewCommentPluginKey.getState(activeEditor.state);
@@ -431,6 +441,98 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       }
     },
   });
+
+  useEffect(() => {
+    try {
+      setChangeTrackingBaseline(readDocsChangeBaseline(window.localStorage, document.workspaceId, document.id));
+      setChangeTrackingNotice('');
+      setChangeTrackingOpen(false);
+    } catch (error) {
+      setChangeTrackingBaseline(null);
+      setChangeTrackingNotice(error instanceof Error ? error.message : 'Saved change tracking could not be read.');
+    }
+  }, [document.id, document.workspaceId]);
+
+  const trackedCurrentHtml = useMemo(
+    () => sanitizeRichTextHtml(editor?.getHTML() ?? initialHtml),
+    [editor, initialHtml, changeTrackingRevision],
+  );
+  const trackedCurrentText = useMemo(
+    () => richTextToPlainText(trackedCurrentHtml),
+    [trackedCurrentHtml],
+  );
+  const trackedDiffState = useMemo(() => {
+    if (!changeTrackingBaseline
+      || changeTrackingBaseline.workspaceId !== document.workspaceId
+      || changeTrackingBaseline.documentId !== document.id) return { diff: null, error: '' };
+    try { return { diff: createDocsTextDiff(changeTrackingBaseline.text, trackedCurrentText), error: '' }; }
+    catch (error) { return { diff: null, error: error instanceof Error ? error.message : 'The document is too large to compare.' }; }
+  }, [changeTrackingBaseline, document.id, document.workspaceId, trackedCurrentText]);
+  const trackedDiff = trackedDiffState.diff;
+
+  const persistChangeTrackingBaseline = (html: string, text: string, reset = false) => {
+    if (text.length > 500_000 || html.length > 1_000_000) {
+      setChangeTrackingNotice('Change tracking is limited to 500,000 text characters and 1 MB of safe document markup.');
+      return false;
+    }
+    const now = new Date().toISOString();
+    const next: DocsChangeBaseline = {
+      workspaceId: document.workspaceId,
+      documentId: document.id,
+      html,
+      text,
+      startedAt: reset ? now : changeTrackingBaseline?.startedAt ?? now,
+      updatedAt: now,
+    };
+    try {
+      saveDocsChangeBaseline(window.localStorage, next);
+      setChangeTrackingBaseline(next);
+      setChangeTrackingNotice('');
+      return true;
+    } catch (error) {
+      setChangeTrackingNotice(error instanceof Error ? error.message : 'The change-tracking baseline could not be saved.');
+      return false;
+    }
+  };
+
+  const startChangeTracking = () => {
+    if (!editor) return;
+    const html = sanitizeRichTextHtml(editor.getHTML());
+    const text = richTextToPlainText(html);
+    if (persistChangeTrackingBaseline(html, text, true)) {
+      setChangeTrackingOpen(true);
+      setChangeTrackingNotice('Tracking started from the current saved document. Later edits are compared with this baseline.');
+    }
+  };
+
+  const acceptTrackedChanges = () => {
+    if (!editor) return;
+    const html = sanitizeRichTextHtml(editor.getHTML());
+    const text = richTextToPlainText(html);
+    if (persistChangeTrackingBaseline(html, text)) {
+      setChangeTrackingOpen(false);
+      setChangeTrackingNotice('All current document changes were accepted into the new baseline.');
+    }
+  };
+
+  const rejectTrackedChanges = async () => {
+    if (!editor || !changeTrackingBaseline || !trackedDiff?.changed) return;
+    const approved = await confirm('Reject all changes since tracking started and restore the saved baseline? This replaces the current document content and is undoable only if the editor history still contains the prior edits.');
+    if (!approved) return;
+    const safeBaseline = sanitizeRichTextHtmlWithWarnings(changeTrackingBaseline.html);
+    if (changeTrackingBaseline.text !== richTextToPlainText(safeBaseline.html)) {
+      setChangeTrackingNotice('The saved baseline failed its content-integrity check. The current document was not changed.');
+      return;
+    }
+    editor.commands.setContent(safeBaseline.html, { emitUpdate: false });
+    if (!saveEditor(editor)) {
+      setChangeTrackingNotice('The baseline was restored in the editor, but local document storage did not confirm the save. Retry save before leaving.');
+      return;
+    }
+    setChangeTrackingRevision((revision) => revision + 1);
+    setChangeTrackingNotice('All changes since the baseline were rejected.');
+    setChangeTrackingOpen(false);
+  };
 
   const findResult = useMemo(() => {
     const sourceDoc = editor?.state.doc ?? null;
@@ -978,6 +1080,12 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Add comment to selected text" icon={<MessageSquarePlus size={16} />}
           disabled={!editorState.hasTextSelection || reviewComments.length >= MAX_DOCS_REVIEW_COMMENTS_PER_DOCUMENT}
           onClick={beginReviewComment} />
+        <button type="button" className="docs-review-secondary" disabled={!editor} onClick={startChangeTracking}>
+          {changeTrackingBaseline ? 'Reset tracking baseline' : 'Start tracking changes'}
+        </button>
+        {changeTrackingBaseline && <button type="button" className="docs-review-secondary" disabled={!trackedDiff?.changed} onClick={() => setChangeTrackingOpen((open) => !open)}>
+          {changeTrackingOpen ? 'Hide comparison' : 'Compare changes'}
+        </button>}
       </span>
       {activeRibbonTab === 'view' && <span className="docs-format-group docs-view-controls" aria-label="View controls">
         <label className="docs-format-select"><span>Zoom</span><select aria-label="Document zoom" value={pageZoom} onChange={(event) => setPageZoom(event.target.value)}><option>75%</option><option>90%</option><option>100%</option><option>110%</option><option>125%</option></select></label>
@@ -1044,6 +1152,31 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       </p>
       <p className="docs-find-note">Search is local and excludes review-comment notes. Matches do not cross inline-formatting, paragraph, or table-cell boundaries. Limits: {MAX_DOCS_FIND_QUERY_CHARS}-character query, {MAX_DOCS_FIND_REPLACEMENT_CHARS.toLocaleString()}-character replacement, {MAX_DOCS_FIND_MATCHES.toLocaleString()} matches, and 200,000 document text characters.</p>
     </section>}
+
+    <section className="docs-change-tracking-panel glass-card" aria-label="Document change tracking">
+      <div className="docs-review-heading">
+        <div><span className="eyebrow">CHANGE TRACKING</span><h2>Compare &amp; review edits</h2>
+          <small>{changeTrackingBaseline ? (trackedDiff?.changed ? 'Changes detected since the baseline' : 'No unaccepted changes') : 'Not tracking yet'}</small></div>
+        <span className="local-only-chip"><LockKeyhole size={13} /> This device only</span>
+      </div>
+      <p className="docs-review-privacy">This local review session compares the current document with a saved baseline. It shows one bounded text-change hunk; it is not Word-compatible per-author tracked-change markup and is not included in cloud copies.</p>
+      {!changeTrackingBaseline
+        ? <button type="button" className="docs-review-primary" disabled={!editor} onClick={startChangeTracking}>Start tracking from current version</button>
+        : <>
+          <div className="docs-change-actions">
+            <button type="button" className="docs-review-secondary" disabled={!trackedDiff?.changed} onClick={acceptTrackedChanges}>Accept all changes</button>
+            <button type="button" className="docs-review-delete" disabled={!trackedDiff?.changed} onClick={() => { void rejectTrackedChanges(); }}>Reject all changes</button>
+            <button type="button" className="docs-review-secondary" onClick={() => setChangeTrackingOpen((open) => !open)}>{changeTrackingOpen ? 'Hide comparison' : 'Show comparison'}</button>
+          </div>
+          {trackedDiff?.changed && <p className="docs-change-summary">{trackedDiff.removed.length.toLocaleString()} characters removed · {trackedDiff.inserted.length.toLocaleString()} characters inserted since {new Date(changeTrackingBaseline.startedAt).toLocaleString()}.</p>}
+          {trackedDiff && !trackedDiff.changed && <p className="docs-review-empty">The current document matches the accepted baseline.</p>}
+          {changeTrackingOpen && trackedDiff?.changed && <div className="docs-change-diff">
+            <div><strong>Removed from baseline</strong><pre>{trackedDiff.removed || 'No text removed.'}</pre></div>
+            <div><strong>Added in current version</strong><pre>{trackedDiff.inserted || 'No text inserted.'}</pre></div>
+          </div>}
+        </>}
+      {(changeTrackingNotice || trackedDiffState.error) && <p className="docs-review-notice" role="status">{changeTrackingNotice || trackedDiffState.error}</p>}
+    </section>
 
     <section className="docs-review-panel glass-card" aria-label="Local document review comments">
       <div className="docs-review-heading">
