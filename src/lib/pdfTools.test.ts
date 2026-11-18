@@ -5,7 +5,7 @@ import {
   assertPdfMergeInputLimits, assertPdfPageCopyInputSize, assertPdfPageCopyOutputSize,
   assertPdfPageOperationPageCount, extractPdfPages, MAX_PDF_MERGE_INPUTS,
   MAX_PDF_MERGE_TOTAL_INPUT_BYTES, MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles,
-  insertImageOnPdfPage, MAX_PDF_INSERT_IMAGE_BYTES, insertPdfPagesAt, parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
+  insertImageOnPdfPage, MAX_PDF_INSERT_IMAGE_BYTES, addTextOverlayToPdfPage, MAX_PDF_TEXT_OVERLAY_CHARS, insertPdfPagesAt, parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
 } from './pdfTools';
 
 async function makePdf(pageWidths: number[]): Promise<Uint8Array> {
@@ -78,6 +78,22 @@ describe('local PDF operations', () => {
     await expect(insertImageOnPdfPage(source, 1, image, 'image/svg+xml')).rejects.toThrow('PNG and JPEG');
     await expect(insertImageOnPdfPage(source, 1, new Uint8Array(MAX_PDF_INSERT_IMAGE_BYTES + 1), 'image/png')).rejects.toThrow('no larger than');
     await expect(insertImageOnPdfPage(source, 3, image, 'image/png')).rejects.toThrow('between 1 and 2');
+  });
+
+  it('adds bounded positioned text as new page content without mutating the source PDF', async () => {
+    const source = await makePdf([300, 400]);
+    const before = source.slice();
+    const output = await addTextOverlayToPdfPage(source, 2, 'COCCE Office draft', 24, 36, 16);
+    const parsed = await PDFDocument.load(output);
+    expect(parsed.getPageCount()).toBe(2);
+    expect(parsed.getPage(1).getWidth()).toBe(400);
+    expect(output.byteLength).toBeGreaterThan(source.byteLength);
+    expect(source).toEqual(before);
+    await expect(addTextOverlayToPdfPage(source, 3, 'Text', 10, 10)).rejects.toThrow('between 1 and 2');
+    await expect(addTextOverlayToPdfPage(source, 1, '   ', 10, 10)).rejects.toThrow(/Enter text/);
+    await expect(addTextOverlayToPdfPage(source, 1, 'x'.repeat(MAX_PDF_TEXT_OVERLAY_CHARS + 1), 10, 10)).rejects.toThrow(/2,000 characters/);
+    await expect(addTextOverlayToPdfPage(source, 1, 'Text', -1, 10)).rejects.toThrow(/position must fit/);
+    await expect(addTextOverlayToPdfPage(source, 1, 'Text', 10, 10, 5)).rejects.toThrow(/6 and 72/);
   });
 
   it('removes one page into a new copy and refuses to remove the final page', async () => {

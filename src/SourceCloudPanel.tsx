@@ -203,7 +203,7 @@ export default function SourceCloudPanel({
       }
       savePendingCloudCopy(window.localStorage, intent);
       setPending([intent]);
-      let sync;
+      let sync: Awaited<ReturnType<Api['getSyncState']>>;
       try { sync = await api.getSyncState(file.fileId); }
       catch (cause) {
         removePendingCloudCopy(window.localStorage, actorId, intent.idempotencyKey);
@@ -220,7 +220,7 @@ export default function SourceCloudPanel({
         setPending(listPendingCloudCopies(window.localStorage, actorId, workspaceId!));
         throw new Error('The source changed while checking the cloud revision. No revision was reserved.');
       }
-      let grant;
+      let grant: Awaited<ReturnType<Api['beginRevision']>>;
       try { grant = await api.beginRevision(workspaceId!, file.fileId, sync.currentRevisionId, bytes, intent.idempotencyKey); }
       catch (cause) {
         const status = (cause as { status?: number })?.status ?? (cause as { httpStatus?: number })?.httpStatus;

@@ -83,7 +83,7 @@ describe('Sheets workspace keyboard navigation', () => {
   });
 
   it('applies safe formatting to every cell in the selected range', () => {
-    const onState = vi.fn(() => true);
+    const onState = vi.fn((next: PreviewState) => { void next; return true; });
     openGrid(onState);
     fireEvent.click(cell('B2'), { shiftKey: true });
     fireEvent.click(screen.getByRole('button', { name: 'Bold selected cells' }));

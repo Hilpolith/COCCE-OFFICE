@@ -1,4 +1,4 @@
-import { PDFDocument, degrees } from 'pdf-lib';
+import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { MAX_LOCAL_FILE_BYTES } from './driveStore';
 
 export const MAX_PDF_PAGE_OPERATION_PAGES = 500;
@@ -152,6 +152,46 @@ export async function insertImageOnPdfPage(
     width: fitted.width,
     height: fitted.height,
   });
+  return saveBoundedPageCopy(document);
+}
+
+export const MAX_PDF_TEXT_OVERLAY_CHARS = 2_000;
+
+/** Adds editable-looking text as new PDF page content; it does not replace or redact existing text. */
+export async function addTextOverlayToPdfPage(
+  source: Uint8Array,
+  pageNumber: number,
+  text: string,
+  x: number,
+  y: number,
+  fontSize = 12,
+): Promise<Uint8Array> {
+  const document = await loadPageCopySource(source);
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > document.getPageCount()) {
+    throw new Error(`Page number must be between 1 and ${document.getPageCount()}.`);
+  }
+  if (typeof text !== 'string' || !text.trim() || text.length > MAX_PDF_TEXT_OVERLAY_CHARS
+    || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text)) {
+    throw new Error(`Enter text up to ${MAX_PDF_TEXT_OVERLAY_CHARS} characters without control characters.`);
+  }
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(fontSize)
+    || fontSize < 6 || fontSize > 72) {
+    throw new Error('Text position must be finite and font size must be between 6 and 72 points.');
+  }
+  const page = document.getPage(pageNumber - 1);
+  const size = page.getSize();
+  if (x < 0 || y < 0 || x >= size.width - 4 || y >= size.height - fontSize) {
+    throw new Error('Text position must fit within the selected PDF page. Coordinates use points from the bottom-left corner.');
+  }
+  try {
+    const font = await document.embedFont(StandardFonts.Helvetica);
+    page.drawText(text, {
+      x, y, size: fontSize, font, color: rgb(0.08, 0.09, 0.12),
+      maxWidth: size.width - x - 12, lineHeight: fontSize * 1.25,
+    });
+  } catch {
+    throw new Error('The text could not be embedded with the supported PDF font. Use standard Latin text and try again.');
+  }
   return saveBoundedPageCopy(document);
 }
 

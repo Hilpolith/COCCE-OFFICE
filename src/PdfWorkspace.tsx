@@ -31,7 +31,7 @@ import { createPdfAnnotatedCopy, fingerprintPdfBytes } from './lib/pdfAnnotatedC
 import {
   assertPdfMergeInputLimits, extractPdfPages, MAX_PDF_MERGE_INPUTS, MAX_PDF_MERGE_TOTAL_INPUT_BYTES,
   MAX_PDF_PAGE_OPERATION_PAGES, mergePdfFiles, parsePageRange, removePdfPage, reorderPdfPages, rotatePdfPage,
-  insertImageOnPdfPage, MAX_PDF_INSERT_IMAGE_BYTES, insertPdfPagesAt,
+  insertImageOnPdfPage, MAX_PDF_INSERT_IMAGE_BYTES, addTextOverlayToPdfPage, MAX_PDF_TEXT_OVERLAY_CHARS, insertPdfPagesAt,
 } from './lib/pdfTools';
 import './pdf.css';
 
@@ -105,6 +105,10 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
   const [selectionState, setSelectionState] = useState<{ scope: string; page: number; value: PdfCapturedSelection } | null>(null);
   const [commentEditorOpen, setCommentEditorOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
+  const [textOverlayDraft, setTextOverlayDraft] = useState('');
+  const [textOverlayX, setTextOverlayX] = useState('36');
+  const [textOverlayY, setTextOverlayY] = useState('36');
+  const [textOverlayFontSize, setTextOverlayFontSize] = useState('12');
   const [activeAnnotationId, setActiveAnnotationId] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const annotationBundleInputRef = useRef<HTMLInputElement>(null);
@@ -641,6 +645,29 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
     finally { setBusy(false); }
   };
 
+  const exportTextOverlay = async () => {
+    const file = selectedFile;
+    if (!file || !textOverlayDraft.trim()) { setError('Enter text before creating a PDF copy.'); return; }
+    const page = currentPage;
+    const fingerprint = sourceFingerprint;
+    const text = textOverlayDraft;
+    const x = Number(textOverlayX);
+    const y = Number(textOverlayY);
+    const fontSize = Number(textOverlayFontSize);
+    if (text.length > MAX_PDF_TEXT_OVERLAY_CHARS) { setError(`Text is limited to ${MAX_PDF_TEXT_OVERLAY_CHARS} characters.`); return; }
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(fontSize)) { setError('Enter valid numeric text coordinates and font size.'); return; }
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const approved = await confirmLocalPdfPageCopy(`Add this text as new page content on page ${page} of “${file.name}” in a separate PDF copy? This does not replace existing text, remove underlying text, or securely redact information. Coordinates are PDF points from the bottom-left corner.`);
+      if (!approved) return;
+      const snapshot = await readVerifiedPdfSnapshot(file, fingerprint);
+      const output = await addTextOverlayToPdfPage(snapshot.bytes, page, text, x, y, fontSize);
+      await assertPdfSnapshotStillCurrent(snapshot);
+      await savePdfCopy(outputName(file.name, `page-${page}-text`), output, `Added a text overlay to page ${page} in a separate local PDF copy. The original PDF and its annotation sidecar were not changed.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not add text to the PDF copy.'); }
+    finally { setBusy(false); }
+  };
+
   const exportRemoveCurrentPage = async () => {
     const file = selectedFile;
     const document = pdfDocument;
@@ -973,7 +1000,8 @@ export default function PdfWorkspace({ workspaceId, repository = localDriveRepos
                 <div className="pdf-tool-card pdf-annotated-copy-card"><div><strong>Flatten local marks into a separate copy</strong><small>This writes verified highlights, underlines, and strike-throughs into page content. They will not be editable PDF annotation objects; comments and note text are excluded.</small><small className="pdf-annotated-copy-status" role="status">{annotatedCopyStatus}</small></div><button className="button-secondary" onClick={() => void exportAnnotatedCopy()} disabled={annotatedCopyDisabled}>{busy ? 'Working…' : 'Create annotated copy'}</button><small className="pdf-annotated-copy-warning">This browser-only operation does not change the source. It may not preserve digital signatures or advanced form behavior.</small></div>
                 <div className="pdf-tool-card"><div><strong>Rotate current page</strong><small>Apply a 90° rotation to page {currentPage} in a saved copy.</small></div><button className="button-tertiary" onClick={exportRotatedPage} disabled={pageCopyDisabled}><RotateCw size={14} /> Rotate copy</button></div>
                 <div className="pdf-tool-card"><div><strong>Remove current page</strong><small>Create a separate copy without page {currentPage}. The last remaining page cannot be removed.</small></div><button className="button-tertiary" onClick={exportRemoveCurrentPage} disabled={pageCopyDisabled || !pdfDocument || pdfDocument.numPages <= 1}><Trash2 size={14} /> Remove page</button></div>
-                <div className="pdf-tool-card"><div><strong>Insert an image</strong><small>Center a PNG or JPEG image on page {currentPage}. Images are limited to {formatBytes(MAX_PDF_INSERT_IMAGE_BYTES)}.</small></div><button className="button-tertiary" onClick={() => imageInputRef.current?.click()} disabled={pageCopyDisabled}><FileImage size={14} /> Insert image</button></div>
+                <div className="pdf-tool-card pdf-tool-range"><div><strong>Add text overlay</strong><small>Add new text to page {currentPage} in a separate PDF copy. This is an overlay, not editing/replacing existing text and not secure redaction. Text is limited to {MAX_PDF_TEXT_OVERLAY_CHARS} characters.</small></div><div className="pdf-tool-controls pdf-text-overlay-controls"><textarea aria-label="Text to add to PDF" rows={2} maxLength={MAX_PDF_TEXT_OVERLAY_CHARS} value={textOverlayDraft} onChange={(event) => setTextOverlayDraft(event.target.value)} placeholder="Enter text to place on the page" disabled={busy} /><label>X <input aria-label="PDF text X coordinate" type="number" min="0" step="1" value={textOverlayX} onChange={(event) => setTextOverlayX(event.target.value)} disabled={busy} /></label><label>Y <input aria-label="PDF text Y coordinate" type="number" min="0" step="1" value={textOverlayY} onChange={(event) => setTextOverlayY(event.target.value)} disabled={busy} /></label><label>Size <input aria-label="PDF text font size" type="number" min="6" max="72" step="1" value={textOverlayFontSize} onChange={(event) => setTextOverlayFontSize(event.target.value)} disabled={busy} /></label><button className="button-tertiary" onClick={() => void exportTextOverlay()} disabled={pageCopyDisabled || !textOverlayDraft.trim()}><FileText size={14} /> Add text copy</button></div></div>
+<div className="pdf-tool-card"><div><strong>Insert an image</strong><small>Center a PNG or JPEG image on page {currentPage}. Images are limited to {formatBytes(MAX_PDF_INSERT_IMAGE_BYTES)}.</small></div><button className="button-tertiary" onClick={() => imageInputRef.current?.click()} disabled={pageCopyDisabled}><FileImage size={14} /> Insert image</button></div>
                 <div className="pdf-tool-card"><div><strong>Insert pages from another PDF</strong><small>Add every page from a local PDF before page {currentPage}. The source file stays unchanged.</small></div><button className="button-tertiary" onClick={() => insertPdfInputRef.current?.click()} disabled={pageCopyDisabled}><FilePlus2 size={14} /> Insert PDF pages</button></div>
                 <div className="pdf-tool-card pdf-tool-range"><div><strong>Extract pages</strong><small>Enter individual page numbers or inclusive ranges, such as 1-3,5.</small></div><div className="pdf-tool-controls"><input aria-label="Pages to extract" value={pageRange} onChange={(event) => setPageRange(event.target.value)} /><button className="button-tertiary" onClick={exportExtract} disabled={pageCopyDisabled}>Extract copy</button></div></div>
                 <div className="pdf-tool-card pdf-tool-range"><div><strong>Reorder pages</strong><small>Move the current page in the order list, then save the reordered copy.</small></div><div className="pdf-tool-controls"><button className="button-tertiary" onClick={() => movePageInOrder(-1)} disabled={busy || pageOrder.indexOf(currentPage) <= 0}>Move earlier</button><button className="button-tertiary" onClick={() => movePageInOrder(1)} disabled={busy || pageOrder.indexOf(currentPage) < 0 || pageOrder.indexOf(currentPage) >= pageOrder.length - 1}>Move later</button><button className="button-secondary" onClick={() => void exportReordered()} disabled={pageCopyDisabled || pageOrder.length < 2}>Save order</button></div></div>

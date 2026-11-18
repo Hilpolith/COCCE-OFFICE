@@ -577,3 +577,12 @@ This roadmap remains a verified capability boundary, not a declaration of full G
 - Current XLSX import/export still does not preserve styles; conditional formatting, row/column sizing, freeze panes, data validation, pivots/slicers, named ranges and broader formula compatibility remain outstanding.
 - HTML/Markdown source cloud adds explicit immutable revision updates using the expected current revision ID to prevent overwriting a newer cloud revision. The panel restores the latest revision only; historical revision browsing and restore are not yet implemented.
 - AI sector context now uses the exact Hospitality bootstrap limit, maps the live church industry identifier to the Institutions RPC, and includes safe class/subject catalogue labels for School. Sensitive people, clinical, payroll and financial data remain excluded. This code increment is awaiting validation and a version-27 deployment.
+
+
+## 2026-11-18 — Follow-up feature batch
+
+- Sheets: per-cell and selected-range bold/italic, text/fill colors, and General/Number/TZS currency/Percent display formatting are persisted locally and in cloud snapshots. Snapshot envelope version 3 preserves styles and continues to read version 1 and 2. Raw values/formulas remain unchanged. XLSX styling import/export is still unsupported.
+- PDF: added a bounded text-overlay operation with page selection, bottom-left point coordinates, font-size limits, control-character validation, a separate-copy workflow, and explicit warnings that it does not replace existing text or securely redact content. The original PDF and annotation sidecar remain unchanged.
+- Source cloud: existing files can now receive immutable new revisions using an expected-current-revision guard; interrupted reservations are tracked and recoverable. The panel only restores the latest version; history browsing/restore is still missing.
+- AI: live RPC argument fixes and the church-to-Institutions mapping are included in this batch, along with safe school class/subject metadata. Full per-record AI access and approved sector-specific writes remain outstanding.
+- This batch is not yet CI-certified. The previous run failed only at TypeScript compilation in the new Sheets UI test because the mocked callback was inferred with no parameters; the callback type has been corrected before the next validation run.
