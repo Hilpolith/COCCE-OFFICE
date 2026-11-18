@@ -104,7 +104,7 @@ async function createLocalReviewComment(body: string) {
 describe('Docs local table authoring', () => {
   it('inserts an explicit page break that survives safe saving for print layout', async () => {
     const { onPatch } = renderEditor();
-    fireEvent.click(await screen.findByRole('button', { name: 'Insert' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Insert' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Insert page break' }));
     const content = screen.getByRole('textbox', { name: 'Document content' });
     await waitFor(() => expect(content.querySelector('hr[data-page-break="true"]')).toBeTruthy());
