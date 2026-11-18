@@ -11,8 +11,6 @@
   padding: 18px 20px;
   border: 1px solid var(--border);
   background: linear-gradient(135deg, color-mix(in srgb, var(--surface) 80%, transparent), color-mix(in srgb, var(--accent) 7%, transparent));
-  backdrop-filter: blur(28px) saturate(155%);
-  -webkit-backdrop-filter: blur(28px) saturate(155%);
   border-radius: 22px;
 }
 .source-workspace-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -55,8 +53,6 @@
   border-radius: 21px;
   background: linear-gradient(155deg, color-mix(in srgb, var(--surface) 82%, transparent), color-mix(in srgb, var(--surface-2, var(--surface)) 54%, transparent));
   box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 18px 46px rgba(0,0,0,.07);
-  backdrop-filter: blur(24px) saturate(145%);
-  -webkit-backdrop-filter: blur(24px) saturate(145%);
 }
 .source-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 35px; margin-bottom: 13px; }
 .source-panel-heading h2 { margin: 3px 0 0; font-size: 14px; letter-spacing: -.015em; }

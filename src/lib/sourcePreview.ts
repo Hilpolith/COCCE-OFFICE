@@ -8,7 +8,7 @@ export function escapePreviewHtml(value: string): string {
 
 function safeLink(value: string): string | null {
   const trimmed = value.trim();
-  return /^(https?:\/\/|mailto:)/i.test(trimmed) && !/[\u0000-\u001f]/.test(trimmed)
+  return /^(https?:\/\/|mailto:)/i.test(trimmed) && !/\s/.test(trimmed)
     ? trimmed.replace(/"/g, "%22")
     : null;
 }

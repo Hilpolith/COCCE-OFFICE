@@ -7,7 +7,6 @@ describe("dedicated HTML and Markdown workspaces", () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.restoreAllMocks();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
   afterEach(() => cleanup());
 
