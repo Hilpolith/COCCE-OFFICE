@@ -3,7 +3,7 @@ import { ACCOUNTING_ACTIONS, ACCOUNTING_RESOURCES, accountingRecordsContext, isA
 import type { AccountingRpcClient } from './officeAccountingManagement';
 const workspace = 'acct-team-001';
 function makeClient(data: unknown = {ok:true}): AccountingRpcClient { return {rpc: vi.fn(async () => ({data,error:null}))}; }
-const capabilities = Object.fromEntries(['clients','engagements','chart','periods','journals_prepare','journals_submit','journals_review','journals_post','journals_reverse','bank_reconcile','reports','evidence','findings','obligations','staff_assign','period_reopen','audit','private_records'].map((key) => [key,false]));
+const capabilities = Object.fromEntries(['clients','engagements','chart','periods','journals_prepare','journals_submit','journals_review','journals_post','journals_reverse','bank_reconcile','bank_account_manage','reports','evidence','findings','obligations','staff_assign','period_reopen','audit','private_records'].map((key) => [key,false]));
 const summary = Object.fromEntries(['clients_count','active_engagements_count','draft_journals_count','awaiting_review_count','posted_journals_count','unreconciled_statement_lines_count','open_findings_count','due_obligations_count'].map((key) => [key,0]));
 
 describe('Accounting API contract', () => {

@@ -62,10 +62,11 @@ BEGIN
       'journals_post', accounting_role IN ('accounting_admin','engagement_manager','reviewer'),
       'journals_reverse', accounting_role IN ('accounting_admin','engagement_manager'),
       'bank_reconcile', accounting_role IN ('accounting_admin','engagement_manager','accountant','reviewer'),
+      'bank_account_manage', accounting_role IN ('accounting_admin','engagement_manager','accountant'),
       'reports', accounting_role IN ('accounting_admin','engagement_manager','accountant','reviewer','accounting_viewer'),
-      'evidence', accounting_role IN ('accounting_admin','engagement_manager','accountant'),
-      'findings', accounting_role IN ('accounting_admin','engagement_manager','accountant'),
-      'obligations', accounting_role IN ('accounting_admin','engagement_manager','accountant'),
+      'evidence', accounting_role IN ('accounting_admin','engagement_manager','accountant','reviewer','client_coordinator'),
+      'findings', accounting_role IN ('accounting_admin','engagement_manager','accountant','reviewer'),
+      'obligations', accounting_role IN ('accounting_admin','engagement_manager','accountant','client_coordinator'),
       'staff_assign', accounting_role = 'accounting_admin',
       'period_reopen', accounting_role IN ('accounting_admin','engagement_manager'),
       'audit', accounting_role IN ('accounting_admin','reviewer','accounting_viewer'),
@@ -275,9 +276,9 @@ BEGIN
     WHEN 'journal_lines' THEN ARRAY['accounting_admin','engagement_manager','accountant','reviewer','accounting_viewer']
     WHEN 'postings' THEN ARRAY['accounting_admin','accountant','reviewer','accounting_viewer']
     WHEN 'reversals' THEN ARRAY['accounting_admin','accountant','reviewer','accounting_viewer']
-    WHEN 'bank_accounts' THEN ARRAY['accounting_admin','accountant','accounting_viewer']
-    WHEN 'bank_statements' THEN ARRAY['accounting_admin','accountant','accounting_viewer']
-    WHEN 'bank_statement_lines' THEN ARRAY['accounting_admin','accountant','accounting_viewer']
+    WHEN 'bank_accounts' THEN ARRAY['accounting_admin','engagement_manager','accountant','reviewer','accounting_viewer']
+    WHEN 'bank_statements' THEN ARRAY['accounting_admin','engagement_manager','accountant','reviewer','accounting_viewer']
+    WHEN 'bank_statement_lines' THEN ARRAY['accounting_admin','engagement_manager','accountant','reviewer','accounting_viewer']
     WHEN 'evidence_references' THEN ARRAY['accounting_admin','engagement_manager','accountant','reviewer','client_coordinator','accounting_viewer']
     WHEN 'findings' THEN ARRAY['accounting_admin','engagement_manager','accountant','reviewer','client_coordinator','accounting_viewer']
     WHEN 'obligations' THEN ARRAY['accounting_admin','engagement_manager','accountant','reviewer','client_coordinator','accounting_viewer']

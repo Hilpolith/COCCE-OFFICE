@@ -7,7 +7,7 @@ vi.mock("./FrostedConfirm", () => ({ useFrostedConfirm: () => vi.fn(async () => 
 
 const rpc = vi.fn();
 const client = { auth: { getUser: vi.fn(), onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })) }, rpc };
-const caps = Object.fromEntries(["clients","engagements","chart","periods","journals_prepare","journals_submit","journals_review","journals_post","journals_reverse","bank_reconcile","reports","evidence","findings","obligations","staff_assign","period_reopen","audit","private_records"].map((key) => [key, true]));
+const caps = Object.fromEntries(["clients","engagements","chart","periods","journals_prepare","journals_submit","journals_review","journals_post","journals_reverse","bank_reconcile","bank_account_manage","reports","evidence","findings","obligations","staff_assign","period_reopen","audit","private_records"].map((key) => [key, true]));
 const boot = { role: "accountant" as const, capabilities: caps, settings: { base_currency_code: "TZS" }, key_config: { configured: false }, summary: { clients_count: 0, active_engagements_count: 0, draft_journals_count: 0, awaiting_review_count: 0, posted_journals_count: 0, unreconciled_statement_lines_count: 0, open_findings_count: 0, due_obligations_count: 0 } };
 const emptyPage = { rows: [], total_count: 0, offset: 0, limit: 100, has_more: false };
 let apiCommand: any; let apiRead: any;
@@ -40,7 +40,7 @@ describe("AccountingManagementWorkspace", () => {
     expect(screen.queryByRole("tab", { name: /Journal workflow/i })).toBeNull();
   });
   it("shows the journal review workflow to reviewers without enabling journal preparation", async () => {
-    const reviewer = { ...boot, role: "reviewer" as const, capabilities: { ...caps, clients: false, chart: false, periods: false, journals_prepare: false, journals_submit: false, journals_review: true, journals_post: true, journals_reverse: false, bank_reconcile: true, evidence: false, findings: false, obligations: false, staff_assign: false, period_reopen: false, private_records: false } };
+    const reviewer = { ...boot, role: "reviewer" as const, capabilities: { ...caps, clients: false, chart: false, periods: false, journals_prepare: false, journals_submit: false, journals_review: true, journals_post: true, journals_reverse: false, bank_reconcile: true, bank_account_manage: false, evidence: false, findings: false, obligations: false, staff_assign: false, period_reopen: false, private_records: false } };
     const api = await import("./lib/officeAccountingManagement");
     vi.mocked(api.officeAccountingManagementApi.read).mockImplementation(async (_client, _ws, resource) => resource === "bootstrap" ? reviewer as any : emptyPage);
     render(<AccountingManagementWorkspace workspaceId="ws-1" />);

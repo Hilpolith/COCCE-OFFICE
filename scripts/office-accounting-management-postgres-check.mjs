@@ -176,7 +176,7 @@ test('journal line responses distinguish parent versions and refresh exact draft
 test('read RPC bootstrap matches the complete UI contract and resource reads stay within assigned clients',async()=>{
  const boot=await read('bootstrap',{},ids.accountant);
  assert.equal(boot.role,'accountant');
- for(const key of ['clients','engagements','chart','periods','journals_prepare','journals_submit','journals_review','journals_post','journals_reverse','bank_reconcile','reports','evidence','findings','obligations','staff_assign','period_reopen','audit','private_records']) assert.equal(typeof boot.capabilities[key],'boolean',key);
+ for(const key of ['clients','engagements','chart','periods','journals_prepare','journals_submit','journals_review','journals_post','journals_reverse','bank_reconcile','bank_account_manage','reports','evidence','findings','obligations','staff_assign','period_reopen','audit','private_records']) assert.equal(typeof boot.capabilities[key],'boolean',key);
  for(const key of ['clients_count','active_engagements_count','draft_journals_count','awaiting_review_count','posted_journals_count','unreconciled_statement_lines_count','open_findings_count','due_obligations_count']) assert.equal(Number.isSafeInteger(boot.summary[key]),true,key);
  assert.equal(boot.summary.clients_count,1);
  assert.equal(boot.capabilities.journals_prepare,true);
@@ -193,6 +193,11 @@ test('read RPC bootstrap matches the complete UI contract and resource reads sta
  assert.equal(reviewerBoot.capabilities.journals_review,true);
  assert.equal(reviewerBoot.capabilities.journals_post,true);
  assert.equal(reviewerBoot.capabilities.bank_reconcile,true);
+ assert.equal(reviewerBoot.capabilities.bank_account_manage,false);
+ assert.equal(reviewerBoot.capabilities.evidence,true);
+ assert.equal(reviewerBoot.capabilities.findings,true);
+ assert.equal(reviewerBoot.capabilities.obligations,false);
+ for(const resource of ['bank_accounts','bank_statements','bank_statement_lines']) assert.equal(Array.isArray((await read(resource,{},ids.reviewer)).rows),true,resource);
  const reviewerJournals=await read('journals',{},ids.reviewer);
  assert.equal(Array.isArray(reviewerJournals.rows),true);
  const adminBoot=await read('bootstrap',{},ids.owner);

@@ -5,7 +5,7 @@ export type AccountingRole = 'accounting_admin' | 'engagement_manager' | 'accoun
 export interface AccountingCapabilities extends Record<string, boolean> {
   clients: boolean; engagements: boolean; chart: boolean; periods: boolean;
   journals_prepare: boolean; journals_submit: boolean; journals_review: boolean;
-  journals_post: boolean; journals_reverse: boolean; bank_reconcile: boolean;
+  journals_post: boolean; journals_reverse: boolean; bank_reconcile: boolean; bank_account_manage: boolean;
   reports: boolean; evidence: boolean; findings: boolean; obligations: boolean;
   staff_assign: boolean; period_reopen: boolean; audit: boolean; private_records: boolean;
 }
@@ -69,7 +69,7 @@ export function isAccountingReadPage<T extends AccountingRecord = AccountingReco
 export function isAccountingBootstrap(value: unknown): value is AccountingBootstrap {
   if (!isObject(value) || !isObject(value.capabilities) || !isObject(value.summary) || !isObject(value.key_config)) return false;
   const roles: AccountingRole[] = ['accounting_admin','engagement_manager','accountant','reviewer','client_coordinator','accounting_viewer','unassigned'];
-  const capNames: (keyof AccountingCapabilities)[] = ['clients','engagements','chart','periods','journals_prepare','journals_submit','journals_review','journals_post','journals_reverse','bank_reconcile','reports','evidence','findings','obligations','staff_assign','period_reopen','audit','private_records'];
+  const capNames: (keyof AccountingCapabilities)[] = ['clients','engagements','chart','periods','journals_prepare','journals_submit','journals_review','journals_post','journals_reverse','bank_reconcile','bank_account_manage','reports','evidence','findings','obligations','staff_assign','period_reopen','audit','private_records'];
   const caps = value.capabilities as Record<string, unknown>;
   const counts = value.summary as Record<string, unknown>;
   if (!roles.includes(value.role as AccountingRole) || capNames.some((key) => typeof caps[key] !== 'boolean')) return false;
