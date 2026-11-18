@@ -34,6 +34,12 @@ describe('local Docs content conversion and safety', () => {
     expect(sanitizeRichTextHtml('<p onclick="bad()">Hi <b style="color:red">safe</b><img src="x" onerror="bad()"></p><script>bad()</script>'))
       .toBe('<p>Hi <strong>safe</strong></p>');
   });
+  it('preserves explicit page-break markers safely and exports them as Markdown separators', () => {
+    const safe = sanitizeRichTextHtml('<p>Before</p><hr data-page-break="true" class="attacker" onclick="bad()"><hr><p>After</p>');
+    expect(safe).toBe('<p>Before</p><hr data-page-break="true" class="docs-page-break"><hr><p>After</p>');
+    expect(richTextToMarkdown(safe)).toBe('Before\n\n---\n\n---\n\nAfter');
+  });
+
   it('preserves bounded embedded PNG, JPEG and WebP images without unsafe attributes or remote fetches', () => {
     const png = 'data:image/png;base64,iVBORw0KGgo=';
     const safe = sanitizeRichTextHtml(`<p>Before</p><img src="${png}" alt="Chart" width="640" onerror="alert(1)"><img src="https://tracker.example/pixel.png"><img src="data:image/svg+xml;base64,PHN2Zz4="></img>`);

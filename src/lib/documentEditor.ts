@@ -151,7 +151,7 @@ function serializeSafeNode(node: Node, state: SanitizationState): string {
   }
   if (sourceTag === 'TABLE') return serializeSafeTable(element, state);
   const children = Array.from(element.childNodes, (child) => serializeSafeNode(child, state)).join('');
-  if (sourceTag === 'HR') return '<hr>';
+  if (sourceTag === 'HR') return element.getAttribute('data-page-break') === 'true' ? '<hr data-page-break="true" class="docs-page-break">' : '<hr>';
   if (sourceTag === 'A') {
     const href = safeDocsHref(element.getAttribute('href') ?? '');
     return href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${children}</a>` : children;
@@ -331,6 +331,7 @@ function markdownBlock(node: Node): string {
   if (node.nodeType !== Node.ELEMENT_NODE) return '';
   const element = node as HTMLElement;
   const tag = element.tagName;
+  if (tag === 'HR') return '---';
   if (tag === 'UL' || tag === 'OL') return markdownList(element);
   if (tag === 'TABLE') return markdownTable(element);
   if (tag === 'BLOCKQUOTE') {

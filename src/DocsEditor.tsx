@@ -73,6 +73,23 @@ const DocsImage = TiptapNode.create({
   },
 });
 
+const DocsPageBreak = TiptapNode.create({
+  name: 'docsPageBreak',
+  priority: 1000,
+  group: 'block',
+  atom: true,
+  selectable: true,
+  parseHTML() {
+    return [{ tag: 'hr[data-page-break="true"]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['hr', mergeAttributes(HTMLAttributes, {
+      'data-page-break': 'true',
+      class: 'docs-page-break',
+    })];
+  },
+});
+
 async function prepareDocsImage(file: File): Promise<string> {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
     throw new Error('Choose a PNG, JPEG or WebP image.');
@@ -368,7 +385,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const editor = useEditor({
     extensions: [StarterKit.configure({
       heading: { levels: [1, 2, 3] }, link: false, underline: false,
-    }), Underline, DocsImage, TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } }), DocsTextStyle, DocsHighlight, DocsLink, DocsTextAlign, reviewCommentExtension, tableGuard],
+    }), Underline, DocsImage, DocsPageBreak, TableKit.configure({ table: { resizable: false, renderWrapper: true, allowTableNodeSelection: false } }), DocsTextStyle, DocsHighlight, DocsLink, DocsTextAlign, reviewCommentExtension, tableGuard],
     content: initialHtml,
     editorProps: {
       attributes: { class: 'rich-text-editor', role: 'textbox', 'aria-label': 'Document content', 'aria-multiline': 'true', spellcheck: 'true' },
@@ -954,6 +971,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Insert image" icon={<ImagePlus size={16}/>} disabled={!editor} onClick={() => imageInputRef.current?.click()} />
         {editorState.imageActive && <label className="docs-format-select"><span>Image width</span><select aria-label="Image width" value={String(editorState.imageWidth ?? 'auto')} onChange={(event) => editor?.chain().focus().updateAttributes('docsImage', { width: event.target.value === 'auto' ? null : Number(event.target.value) }).run()}><option value="auto">Auto</option><option value="320">Small</option><option value="640">Medium</option><option value="960">Large</option><option value="1280">Full</option></select></label>}
         <FormattingButton label="Horizontal rule" icon={<Minus size={16}/>} onClick={() => editor?.chain().focus().setHorizontalRule().run()} />
+        <FormattingButton label="Insert page break" icon={<FileText size={16}/>} onClick={() => editor?.chain().focus().insertContent({ type: 'docsPageBreak' }).run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
       <span className="docs-format-group" aria-label="Review comments" hidden={activeRibbonTab !== 'review' && activeRibbonTab !== 'home'}>

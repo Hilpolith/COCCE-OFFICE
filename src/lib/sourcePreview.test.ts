@@ -17,6 +17,14 @@ describe("source editor previews", () => {
     expect(html).toContain("<blockquote>");
   });
 
+  it("renders Markdown tables and horizontal rules", () => {
+    const html = markdownToPreviewHtml("| Name | Total |\n| --- | ---: |\n| COCCE | **12** |\n\n---");
+    expect(html).toContain("<table>");
+    expect(html).toContain("<th>Name</th>");
+    expect(html).toContain("<td><strong>12</strong></td>");
+    expect(html).toContain("<hr>");
+  });
+
   it("rejects unsafe link protocols while retaining safe HTTPS links", () => {
     const html = markdownToPreviewHtml("[safe](https://example.com) [bad](javascript:alert(1))");
     expect(html).toContain('href="https://example.com"');

@@ -185,7 +185,7 @@ export default function SourceWorkspace({
     <header className="source-workspace-header glass-card">
       <div className="source-workspace-brand">
         <span className="source-workspace-icon">{format === "html" ? <Code size={20} /> : <FileText size={20} />}</span>
-        <div><span className="eyebrow">COCCE OFFICE · LOCAL EDITOR</span><h1>{label}</h1><p>{format === "html" ? "Build standalone pages with a live, isolated preview." : "Write clean Markdown with a live rendered preview."}</p></div>
+        <div><span className="eyebrow">COCCE OFFICE · LOCAL EDITOR</span><h1>{label}</h1><p>{format === "html" ? "Build standalone pages with a live preview; script execution is disabled for safety." : "Write clean Markdown with a live rendered preview."}</p></div>
       </div>
       <div className="source-workspace-actions">
         <span className="source-local-status"><FolderOpen size={13} /> {workspaceId ? "This workspace · this browser" : "Personal space · this browser"}</span>
@@ -217,7 +217,7 @@ export default function SourceWorkspace({
       </section>
 
       <section className="source-preview-panel glass-card">
-        <div className="source-panel-heading"><div><span className="eyebrow">LIVE PREVIEW</span><h2>Preview</h2></div><span className="source-preview-badge">Isolated</span></div>
+        <div className="source-panel-heading"><div><span className="eyebrow">LIVE PREVIEW</span><h2>Preview</h2></div><span className="source-preview-badge">Scripts disabled</span></div>
         {activeId ? <iframe title={(format === "html" ? "HTML" : "Markdown") + " preview"} sandbox="" srcDoc={preview} /> : <div className="source-empty"><FileCode2 size={22} /><strong>Preview appears here</strong><p>Create or select a file to see the rendered result.</p></div>}
       </section>
     </div>

@@ -278,3 +278,39 @@
   .office-editor-page .document-canvas[data-page-margins="normal"]{padding:25.4mm!important}
   .office-editor-page .document-canvas[data-page-margins="wide"]{padding:38.1mm!important}
 }
+
+
+.docs-page-break {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 0;
+  margin: 34px 0 28px;
+  overflow: visible;
+  border: 0;
+  border-top: 1px dashed var(--border-strong);
+}
+.docs-page-break::after {
+  content: "PAGE BREAK";
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  padding: 2px 9px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--glass-reading);
+  font: 600 8px/1.3 var(--font-ui, system-ui, sans-serif);
+  letter-spacing: .12em;
+}
+@media print {
+  .docs-page-break {
+    height: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    break-before: page;
+    page-break-before: always;
+  }
+  .docs-page-break::after { display: none !important; }
+}

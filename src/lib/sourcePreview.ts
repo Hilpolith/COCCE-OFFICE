@@ -46,7 +46,8 @@ export function markdownToPreviewHtml(markdown: string): string {
     code = null;
   };
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
     if (code) {
       if (/^\s*\x60\x60\x60/.test(line)) flushCode();
       else code.push(line);
@@ -61,6 +62,27 @@ export function markdownToPreviewHtml(markdown: string): string {
     if (!line.trim()) {
       flushParagraph();
       flushList();
+      continue;
+    }
+    if (/^\s*(?:---+|\*\*\*|___+)\s*$/.test(line)) {
+      flushParagraph();
+      flushList();
+      output.push("<hr>");
+      continue;
+    }
+    const tableSeparator = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[index + 1] ?? "");
+    if (line.trim().startsWith("|") && tableSeparator) {
+      flushParagraph();
+      flushList();
+      const cells = (value: string) => value.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+      const header = cells(line);
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length && lines[index]!.trim().startsWith("|")) rows.push(cells(lines[index++]!));
+      index -= 1;
+      const headerHtml = "<thead><tr>" + header.map((cell) => "<th>" + inlineMarkdown(cell) + "</th>").join("") + "</tr></thead>";
+      const bodyHtml = rows.length ? "<tbody>" + rows.map((row) => "<tr>" + Array.from({ length: header.length }, (_, cell) => "<td>" + inlineMarkdown(row[cell] ?? "") + "</td>").join("") + "</tr>").join("") + "</tbody>" : "";
+      output.push("<table>" + headerHtml + bodyHtml + "</table>");
       continue;
     }
     const heading = /^(#{1,6})\s+(.+)$/.exec(line);

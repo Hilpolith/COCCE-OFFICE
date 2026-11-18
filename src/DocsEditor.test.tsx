@@ -102,6 +102,17 @@ async function createLocalReviewComment(body: string) {
 }
 
 describe('Docs local table authoring', () => {
+  it('inserts an explicit page break that survives safe saving for print layout', async () => {
+    const { onPatch } = renderEditor();
+    fireEvent.click(await screen.findByRole('button', { name: 'Insert' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Insert page break' }));
+    const content = screen.getByRole('textbox', { name: 'Document content' });
+    await waitFor(() => expect(content.querySelector('hr[data-page-break="true"]')).toBeTruthy());
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({
+      richText: expect.stringContaining('<hr data-page-break="true" class="docs-page-break">'),
+    }));
+  });
+
   it('inserts an editable table and applies row and column controls to the selected cell', async () => {
     const { onPatch } = renderEditor();
     const content = screen.getByRole('textbox', { name: 'Document content' });
