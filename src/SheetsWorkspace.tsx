@@ -7,16 +7,16 @@ import {
 } from 'lucide-react';
 import {
   addWorkbook, addWorksheet, addWorksheetChart, removeWorksheetChart, selectWorksheet, updateWorkbook,
-  updateWorksheetCell, updateWorksheetCells,
+  updateWorksheetCell, updateWorksheetCellStyles, updateWorksheetCells,
 } from './lib/localStore';
-import type { OfficeSheetChart, OfficeSheetChartType, OfficeWorkbook, PreviewState } from './lib/localStore';
+import type { OfficeCellNumberFormat, OfficeCellStyle, OfficeSheetChart, OfficeSheetChartType, OfficeWorkbook, PreviewState } from './lib/localStore';
 import {
   canRedoSheetsHistory, canUndoSheetsHistory, createSheetsHistory,
   recordSheetsHistory, redoSheetsHistory, sameWorksheetCells, undoSheetsHistory,
 } from './lib/spreadsheetHistory';
 import type { SheetsHistory } from './lib/spreadsheetHistory';
 import {
-  cellAddress, csvRowsToCells, displayCellValue, fillFormula, fillNumericSeries,
+  cellAddress, csvRowsToCells, displayCellValue, fillFormula, fillNumericSeries, formatSheetDisplayValue,
   isCsvFileSizeAllowed, isFormulaTextWithinLimit, isSupportedFormulaWithinVisibleGrid, MAX_CSV_FILE_BYTES,
   MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS,
   MAX_SHEETS_FORMULA_CHARS, MAX_SHEETS_FORMULA_FILL_CELLS,
@@ -314,6 +314,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
     };
   }, [selectedRange.startRow, selectedRange.endRow, selectedRange.startColumn, selectedRange.endColumn, displayedCells]);
   const rawValue = worksheet.cells[selectedAddress] ?? '';
+  const selectedStyle = worksheet.cellStyles?.[selectedAddress] ?? {};
   const historyKey = `${workbook.id}/${worksheet.id}`;
   const history = historyByWorksheet[historyKey] ?? EMPTY_SHEETS_HISTORY;
   const canUndo = canUndoSheetsHistory(history, worksheet.cells);
@@ -324,6 +325,16 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
     setPersistenceError(!saved);
     if (!saved) setMessage('Changes were not saved; the last saved copy was kept.');
     return saved;
+  };
+  const applyCellStyle = (patch: Partial<OfficeCellStyle>) => {
+    const addresses: string[] = [];
+    for (let row = selectedRange.startRow; row <= selectedRange.endRow; row += 1) {
+      for (let column = selectedRange.startColumn; column <= selectedRange.endColumn; column += 1) {
+        addresses.push(cellAddress(row, column));
+      }
+    }
+    if (addresses.length > 288) { setMessage('Cell formatting is limited to the visible 288-cell grid.'); return; }
+    saveState(updateWorksheetCellStyles(state, workbook.id, worksheet.id, addresses, patch));
   };
   const createChartFromSelection = () => {
     if (selectedRange.endRow - selectedRange.startRow < 1 || selectedRange.endColumn - selectedRange.startColumn < 1) {
@@ -639,6 +650,15 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         <span className="formula-equals">fx</span>
         <input className="formula-input" value={rawValue} onChange={(event) => updateCell(selectedAddress, event.target.value)} onKeyDown={formulaKeyDown} aria-label={`Formula or value for ${selectedAddress}`} placeholder='Try =COUNTIF(A1:A10,">5")' title={`Local formulas are limited to ${MAX_SHEETS_FORMULA_CHARS} characters. Supported functions include SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, PRODUCT, ABS, ROUND, ROUNDUP, ROUNDDOWN, IF, IFERROR, AND, OR, NOT, CONCAT, LEN, LEFT, RIGHT, MID, UPPER, LOWER, TRIM, COUNTIF, SUMIF and AVERAGEIF. COUNTIF, SUMIF and AVERAGEIF support exact or relational criteria; relational comparisons require matching value types, not-equal counts unlike types as different, and wildcards are unsupported.`} />
       </div>
+      <div className="sheet-range-tools sheet-format-tools" role="toolbar" aria-label="Cell formatting">
+        <button type="button" className="sheet-format-toggle" aria-label="Bold selected cells" aria-pressed={Boolean(selectedStyle.bold)} onClick={() => applyCellStyle({ bold: !selectedStyle.bold })}><strong>B</strong></button>
+        <button type="button" className="sheet-format-toggle" aria-label="Italic selected cells" aria-pressed={Boolean(selectedStyle.italic)} onClick={() => applyCellStyle({ italic: !selectedStyle.italic })}><em>I</em></button>
+        <label>Text color <input type="color" aria-label="Cell text color" value={selectedStyle.fontColor ?? '#20242b'} onChange={(event) => applyCellStyle({ fontColor: event.target.value })} /></label>
+        <label>Cell fill <input type="color" aria-label="Cell fill color" value={selectedStyle.fillColor ?? '#ffffff'} onChange={(event) => applyCellStyle({ fillColor: event.target.value })} /></label>
+        <label>Number format <select aria-label="Cell number format" value={selectedStyle.numberFormat ?? 'general'} onChange={(event) => applyCellStyle({ numberFormat: event.target.value as OfficeCellNumberFormat })}><option value="general">General</option><option value="number">Number</option><option value="currency">TZS currency</option><option value="percent">Percent</option></select></label>
+        <button type="button" className="button-secondary" onClick={() => applyCellStyle({ bold: undefined, italic: undefined, fontColor: undefined, fillColor: undefined, numberFormat: undefined })}>Clear formatting</button>
+        <span>Applies to the selected cell or range. Local formatting is preserved in browser drafts and cloud copies; the current XLSX subset does not export styles.</span>
+      </div>
       <div className="sheet-range-tools sheet-history-tools" role="toolbar" aria-label="Spreadsheet undo and redo">
         <button type="button" className="button-secondary" aria-label="Undo spreadsheet cell edit" title="Undo last saved cell edit (Ctrl/Cmd+Z)" onClick={undoEdit} disabled={!canUndo}><Undo2 size={15} /> Undo</button>
         <button type="button" className="button-secondary" aria-label="Redo spreadsheet cell edit" title="Redo last undone cell edit (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)" onClick={redoEdit} disabled={!canRedo}><Redo2 size={15} /> Redo</button>
@@ -695,18 +715,20 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
               const isInRange = row >= selectedRange.startRow && row <= selectedRange.endRow
                 && columnIndex + 1 >= selectedRange.startColumn && columnIndex + 1 <= selectedRange.endColumn;
               const value = displayedCells[address] ?? '';
+              const cellStyle = worksheet.cellStyles?.[address] ?? {};
+              const shownValue = formatSheetDisplayValue(value, cellStyle.numberFormat ?? 'general');
               const isError = value.startsWith('#');
               return <td key={address} className={`${isSelected ? 'cell-selected' : ''} ${isInRange ? 'cell-range-selected' : ''} ${isError ? 'cell-error' : ''}`}>
                 {editingAddress === address
                   ? <input autoFocus className="cell-edit-input" value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={() => commitEdit(address, draft)} onKeyDown={(event) => handleEditKeyDown(event, address)} aria-label={`Edit cell ${address}`} />
-                  : <button ref={(element) => { cellRefs.current[address] = element; }} className="cell-display" onClick={(event) => { setSelectedAddress(address); if (!event.shiftKey) setRangeAnchor(address); setEditingAddress(null); }} onDoubleClick={() => beginEdit(address)} onKeyDown={(event) => cellKeyDown(event, address)} aria-label={`${address}${value ? `, ${value}` : ', blank'}${isSelected ? ', active cell' : isInRange ? ', selected range cell' : ''}`} title="Click to select; Shift+arrows extend a range. Double-click or press F2 to edit">{value}</button>}
+                  : <button ref={(element) => { cellRefs.current[address] = element; }} className="cell-display" onClick={(event) => { setSelectedAddress(address); if (!event.shiftKey) setRangeAnchor(address); setEditingAddress(null); }} onDoubleClick={() => beginEdit(address)} onKeyDown={(event) => cellKeyDown(event, address)} aria-label={`${address}${shownValue ? `, ${shownValue}` : ', blank'}${isSelected ? ', active cell' : isInRange ? ', selected range cell' : ''}`} title="Click to select; Shift+arrows extend a range. Double-click or press F2 to edit" style={{ fontWeight: cellStyle.bold ? 700 : undefined, fontStyle: cellStyle.italic ? 'italic' : undefined, color: cellStyle.fontColor, backgroundColor: cellStyle.fillColor }}>{shownValue}</button>}
               </td>;
             })}</tr>;
               })}</tbody>
             </table>
           </div>
           <div className="sheet-tabs-row"><div className="sheet-tabs" role="tablist" aria-label="Worksheets">{workbook.worksheets.map((item) => <button key={item.id} role="tab" aria-selected={item.id === worksheet.id} className={`sheet-tab ${item.id === worksheet.id ? 'sheet-tab-active' : ''}`} onClick={() => { if (!saveState(selectWorksheet(state, workbook.id, item.id))) return; setSelectedAddress('A1'); setRangeAnchor('A1'); setEditingAddress(null); }}>{item.name}</button>)}<button className="sheet-add-tab" aria-label="Add worksheet" title="Add worksheet" onClick={addNewWorksheet}><Plus size={15} /></button></div><span className="sheet-status" role="status" aria-live="polite">{message || 'Formulas: arithmetic · references/ranges · aggregates · conditional totals · text · rounding'}</span></div>
-      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Local formula text is capped at {MAX_SHEETS_FORMULA_CHARS} characters. Supported functions include SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, PRODUCT, ABS, ROUND, ROUNDUP, ROUNDDOWN, IF, IFERROR, AND, OR, NOT, CONCAT, LEN, LEFT, RIGHT, MID, UPPER, LOWER, TRIM, COUNTIF, SUMIF and AVERAGEIF. IFERROR, COUNTIF, SUMIF and AVERAGEIF support exact and relational criteria; relational comparisons require matching value types, not-equal criteria count unlike types as different, and wildcards are unsupported. Criteria are capped at 256 characters, formula ranges at 10,000 cells. Fill series uses two finite numeric seeds in one row or column and asks before overwriting; Fill formula translates relative A1 references and preserves `$` anchors, but refuses unsupported or out-of-grid references and asks before overwriting. Undo/redo is capped at 50 session steps per worksheet and restores saved cell-content edits, paste, and fill operations; workbook/sheet names, structure, and import/export actions are not included. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
+      <p className="sheet-editor-note"><LockKeyhole size={13} /> Shift+arrows or Shift-click extends a range; Ctrl/Cmd+C and Ctrl/Cmd+V copy or paste raw cell text locally, with formulas preserved. Local formula text is capped at {MAX_SHEETS_FORMULA_CHARS} characters. Supported functions include SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, PRODUCT, ABS, ROUND, ROUNDUP, ROUNDDOWN, IF, IFERROR, AND, OR, NOT, CONCAT, LEN, LEFT, RIGHT, MID, UPPER, LOWER, TRIM, COUNTIF, SUMIF and AVERAGEIF. IFERROR, COUNTIF, SUMIF and AVERAGEIF support exact and relational criteria; relational comparisons require matching value types, not-equal criteria count unlike types as different, and wildcards are unsupported. Criteria are capped at 256 characters, formula ranges at 10,000 cells. Fill series uses two finite numeric seeds in one row or column and asks before overwriting; Fill formula translates relative A1 references and preserves `$` anchors, but refuses unsupported or out-of-grid references and asks before overwriting. Cell bold/italic, text/fill colors, and General/Number/TZS currency/Percent display formats apply to the selected cell or range and persist in local/cloud snapshots; XLSX style round-trip is not yet supported. Undo/redo is capped at 50 session steps per worksheet and restores saved cell-content edits, paste, and fill operations; formatting, workbook/sheet names, structure, and import/export actions are not included. XLSX import/export is a local single-sheet subset for the visible 12 × 24 grid; unsupported Excel structures and formulas are refused, while formatting, dates, charts, and macros are not preserved. Clipboard stays local and is capped at {MAX_SHEETS_CLIPBOARD_CHARS.toLocaleString()} characters total and {MAX_SHEETS_CLIPBOARD_CELL_CHARS.toLocaleString()} per cell.</p>
       </OfficeWorkbenchLayout>
     </div>
     );

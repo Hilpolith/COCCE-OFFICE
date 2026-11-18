@@ -82,6 +82,20 @@ describe('Sheets workspace keyboard navigation', () => {
     expect(screen.getByRole('button', { name: 'Cloud copies' })).toBeTruthy();
   });
 
+  it('applies safe formatting to every cell in the selected range', () => {
+    const onState = vi.fn(() => true);
+    openGrid(onState);
+    fireEvent.click(cell('B2'), { shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Bold selected cells' }));
+    const next = onState.mock.calls.at(-1)?.[0] as PreviewState;
+    expect(next.workbooks[0]?.worksheets[0]?.cellStyles).toEqual({
+      A1: { bold: true }, B1: { bold: true }, A2: { bold: true }, B2: { bold: true },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Cell number format' }), { target: { value: 'currency' } });
+    const formatted = onState.mock.calls.at(-1)?.[0] as PreviewState;
+    expect(formatted.workbooks[0]?.worksheets[0]?.cellStyles?.B2).toEqual({ numberFormat: 'currency' });
+  });
+
   it('moves with arrows, Tab, reverse Tab, Enter, and reverse Enter', () => {
     openGrid();
     const a1 = cell('A1');

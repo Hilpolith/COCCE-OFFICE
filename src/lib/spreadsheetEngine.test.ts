@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { cellAddress, columnLabel, csvRowsToCells, displayCellValue, evaluateCellValue, isCsvFileSizeAllowed, isFormulaTextWithinLimit, isSupportedFormulaWithinVisibleGrid, MAX_CSV_FILE_BYTES, MAX_SHEETS_CRITERIA_CHARS, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, MAX_SHEETS_FORMULA_CHARS, parseCsv, parseTsv, parseTsvMatrix, serializeCsv, serializeTsvRange } from './spreadsheetEngine';
+import { formatSheetDisplayValue, cellAddress, columnLabel, csvRowsToCells, displayCellValue, evaluateCellValue, isCsvFileSizeAllowed, isFormulaTextWithinLimit, isSupportedFormulaWithinVisibleGrid, MAX_CSV_FILE_BYTES, MAX_SHEETS_CRITERIA_CHARS, MAX_SHEETS_CLIPBOARD_CELL_CHARS, MAX_SHEETS_CLIPBOARD_CHARS, MAX_SHEETS_FORMULA_CHARS, parseCsv, parseTsv, parseTsvMatrix, serializeCsv, serializeTsvRange } from './spreadsheetEngine';
+
+describe('spreadsheet cell number formats', () => {
+  it('formats finite numeric values for display without changing the stored raw value', () => {
+    expect(formatSheetDisplayValue('1234.5', 'number')).toBe('1,234.5');
+    expect(formatSheetDisplayValue('0.125', 'percent')).toBe('12.5%');
+    expect(formatSheetDisplayValue('1234', 'currency')).toContain('1,234');
+    expect(formatSheetDisplayValue('=SUM(A1:A2)', 'currency')).toBe('=SUM(A1:A2)');
+    expect(formatSheetDisplayValue('#DIV/0!', 'number')).toBe('#DIV/0!');
+    expect(formatSheetDisplayValue('Text', 'currency')).toBe('Text');
+  });
+});
 
 describe('spreadsheet formula engine', () => {
   it('evaluates common numeric and text formulas within the supported local grid', () => {

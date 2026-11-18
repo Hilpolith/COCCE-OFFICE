@@ -31,10 +31,20 @@ export interface OfficeSheetChart {
   createdAt: string;
 }
 
+export type OfficeCellNumberFormat = 'general' | 'number' | 'currency' | 'percent';
+export interface OfficeCellStyle {
+  bold?: boolean;
+  italic?: boolean;
+  fontColor?: string;
+  fillColor?: string;
+  numberFormat?: OfficeCellNumberFormat;
+}
+
 export interface OfficeWorksheet {
   id: string;
   name: string;
   cells: Record<string, string>;
+  cellStyles?: Record<string, OfficeCellStyle>;
   charts?: OfficeSheetChart[];
 }
 
@@ -118,7 +128,17 @@ function isWorksheet(value: unknown): value is OfficeWorksheet {
   if (typeof candidate.id !== 'string' || typeof candidate.name !== 'string' || !candidate.cells || typeof candidate.cells !== 'object' || Array.isArray(candidate.cells)) return false;
   const cellsValid = Object.entries(candidate.cells).every(([key, cell]) => /^[A-Z]{1,3}[1-9]\d*$/.test(key) && typeof cell === 'string');
   const charts = (candidate as OfficeWorksheet).charts;
-  return cellsValid && (charts === undefined || (Array.isArray(charts) && charts.length <= 20 && charts.every((chart) =>
+  const cellStyles = (candidate as OfficeWorksheet).cellStyles;
+  const stylesValid = cellStyles === undefined || (!!cellStyles && typeof cellStyles === 'object' && !Array.isArray(cellStyles)
+    && Object.keys(cellStyles).length <= 288 && Object.entries(cellStyles).every(([address, style]) =>
+      /^[A-L](?:[1-9]|1\\d|2[0-4])$/.test(address) && !!style && typeof style === 'object' && !Array.isArray(style)
+      && Object.keys(style).every((key) => ['bold','italic','fontColor','fillColor','numberFormat'].includes(key))
+      && (style.bold === undefined || typeof style.bold === 'boolean')
+      && (style.italic === undefined || typeof style.italic === 'boolean')
+      && (style.fontColor === undefined || (typeof style.fontColor === 'string' && /^#[0-9a-f]{6}$/i.test(style.fontColor)))
+      && (style.fillColor === undefined || (typeof style.fillColor === 'string' && /^#[0-9a-f]{6}$/i.test(style.fillColor)))
+      && (style.numberFormat === undefined || ['general','number','currency','percent'].includes(style.numberFormat))));
+  return cellsValid && stylesValid && (charts === undefined || (Array.isArray(charts) && charts.length <= 20 && charts.every((chart) =>
     !!chart && typeof chart.id === 'string' && typeof chart.title === 'string' && chart.title.length > 0 && chart.title.length <= 80
     && (chart.type === 'bar' || chart.type === 'line')
     && isValidSheetChartRange(chart.range)
@@ -375,6 +395,48 @@ export function updateWorksheetCell(
   if (value === '') delete cells[address];
   else cells[address] = value;
   return updateWorksheetCells(state, workbookId, worksheetId, cells, now);
+}
+
+export function updateWorksheetCellStyles(
+  state: PreviewState,
+  workbookId: string,
+  worksheetId: string,
+  addresses: string[],
+  patch: Partial<OfficeCellStyle>,
+  now = new Date(),
+): PreviewState {
+  const workbook = state.workbooks.find((item) => item.id === workbookId);
+  const worksheet = workbook?.worksheets.find((item) => item.id === worksheetId);
+  if (!workbook || !worksheet || !Array.isArray(addresses) || addresses.length < 1 || addresses.length > 288
+    || addresses.some((address) => !/^[A-L](?:[1-9]|1\\d|2[0-4])$/.test(address))) return state;
+  for (const [key, value] of Object.entries(patch)) {
+    if (!['bold','italic','fontColor','fillColor','numberFormat'].includes(key)) return state;
+    if (value === undefined || value === '') continue;
+    if ((key === 'bold' || key === 'italic') && typeof value !== 'boolean') return state;
+    if ((key === 'fontColor' || key === 'fillColor') && (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value))) return state;
+    if (key === 'numberFormat' && !['general','number','currency','percent'].includes(String(value))) return state;
+  }
+  const styles = { ...(worksheet.cellStyles ?? {}) };
+  for (const address of new Set(addresses)) {
+    const next = { ...(styles[address] ?? {}) } as Record<string, unknown>;
+    for (const [key, value] of Object.entries(patch)) {
+      if (!['bold','italic','fontColor','fillColor','numberFormat'].includes(key)) return state;
+      if (value === undefined || value === '') delete next[key];
+      else next[key] = value;
+    }
+    if (Object.keys(next).length) styles[address] = next as OfficeCellStyle;
+    else delete styles[address];
+  }
+  return {
+    ...state,
+    workbooks: state.workbooks.map((item) => item.id !== workbookId ? item : {
+      ...item,
+      updatedAt: now.toISOString(),
+      worksheets: item.worksheets.map((sheet) => sheet.id === worksheetId
+        ? { ...sheet, cellStyles: Object.keys(styles).length ? styles : undefined }
+        : sheet),
+    }),
+  };
 }
 
 export function addWorksheet(state: PreviewState, workbookId: string, now = new Date()): { state: PreviewState; worksheet: OfficeWorksheet | null } {

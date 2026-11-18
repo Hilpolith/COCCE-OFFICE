@@ -2,6 +2,7 @@ import {
   addWorkbook,
   addWorksheet,
   updateWorkbook,
+  type OfficeCellStyle,
   type OfficeSheetChart,
   type OfficeWorkbook,
   type PreviewState,
@@ -19,7 +20,7 @@ export const SHEETS_CLOUD_MAX_CELL_CHARS = 16_384;
 export const SHEETS_CLOUD_MAX_TITLE_CHARS = 200;
 export const SHEETS_CLOUD_MAX_SHEET_NAME_CHARS = 31;
 const FORMAT = 'cocce-office-sheets-copy' as const;
-const VERSION = 2 as const;
+const VERSION = 3 as const;
 const ENVELOPE_KEYS = [
   'format',
   'version',
@@ -30,12 +31,16 @@ const ENVELOPE_KEYS = [
 const DATA_KEYS = ['title', 'activeWorksheetIndex', 'worksheets'] as const;
 const SHEET_KEYS_V1 = ['name', 'cells'] as const;
 const SHEET_KEYS_V2 = ['name', 'cells', 'charts'] as const;
+const SHEET_KEYS_V3 = ['name', 'cells', 'cellStyles'] as const;
+const SHEET_KEYS_V3_WITH_CHARTS = ['name', 'cells', 'charts', 'cellStyles'] as const;
+const CELL_STYLE_KEYS = ['bold', 'italic', 'fontColor', 'fillColor', 'numberFormat'] as const;
 const CHART_KEYS = ['id', 'title', 'type', 'range', 'createdAt'] as const;
 
 export type SheetsCloudWorksheet = {
   name: string;
   cells: Record<string, string>;
   charts?: OfficeSheetChart[];
+  cellStyles?: Record<string, OfficeCellStyle>;
 };
 export type SheetsCloudSnapshot = {
   title: string;
@@ -130,7 +135,7 @@ function validateSnapshotData(value: unknown): SheetsCloudSnapshot {
   let totalChars = 0;
   const worksheets = value.worksheets.map((entry) => {
     if (!isRecord(entry)
-      || (!exactKeys(entry, SHEET_KEYS_V1) && !exactKeys(entry, SHEET_KEYS_V2))
+      || (!exactKeys(entry, SHEET_KEYS_V1) && !exactKeys(entry, SHEET_KEYS_V2) && !exactKeys(entry, SHEET_KEYS_V3) && !exactKeys(entry, SHEET_KEYS_V3_WITH_CHARTS))
       || !isRecord(entry.cells))
       fail('a worksheet contains unknown or missing fields');
     const name = validateSheetName(entry.name);
@@ -152,6 +157,40 @@ function validateSnapshotData(value: unknown): SheetsCloudSnapshot {
         return { id, title, type: chart.type, range, createdAt };
       });
     }
+    let cellStyles: Record<string, OfficeCellStyle> | undefined;
+    if (entry.cellStyles !== undefined) {
+      if (!isRecord(entry.cellStyles) || Object.keys(entry.cellStyles).length > SHEET_VISIBLE_ROWS * SHEET_VISIBLE_COLUMNS)
+        fail('a worksheet contains invalid cell style metadata');
+      cellStyles = {};
+      for (const [address, rawStyle] of Object.entries(entry.cellStyles)) {
+        validateCellAddress(address);
+        if (!isRecord(rawStyle) || Object.keys(rawStyle).length < 1
+          || Object.keys(rawStyle).some((key) => !CELL_STYLE_KEYS.includes(key as typeof CELL_STYLE_KEYS[number])))
+          fail('a cell style contains unsupported fields');
+        const style: OfficeCellStyle = {};
+        if (rawStyle.bold !== undefined) {
+          if (typeof rawStyle.bold !== 'boolean') fail('a cell bold style is invalid');
+          style.bold = rawStyle.bold;
+        }
+        if (rawStyle.italic !== undefined) {
+          if (typeof rawStyle.italic !== 'boolean') fail('a cell italic style is invalid');
+          style.italic = rawStyle.italic;
+        }
+        if (rawStyle.fontColor !== undefined) {
+          if (typeof rawStyle.fontColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(rawStyle.fontColor)) fail('a cell font color is invalid');
+          style.fontColor = rawStyle.fontColor.toLowerCase();
+        }
+        if (rawStyle.fillColor !== undefined) {
+          if (typeof rawStyle.fillColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(rawStyle.fillColor)) fail('a cell fill color is invalid');
+          style.fillColor = rawStyle.fillColor.toLowerCase();
+        }
+        if (rawStyle.numberFormat !== undefined) {
+          if (!['general', 'number', 'currency', 'percent'].includes(String(rawStyle.numberFormat))) fail('a cell number format is invalid');
+          style.numberFormat = rawStyle.numberFormat as OfficeCellStyle['numberFormat'];
+        }
+        cellStyles[address] = style;
+      }
+    }
     const cellEntries = Object.entries(entry.cells);
     if (cellEntries.length > SHEET_VISIBLE_ROWS * SHEET_VISIBLE_COLUMNS)
       fail('a worksheet contains more populated cells than the visible grid');
@@ -167,7 +206,7 @@ function validateSnapshotData(value: unknown): SheetsCloudSnapshot {
         fail(`workbook text exceeds ${SHEETS_CLOUD_MAX_TOTAL_CHARS.toLocaleString()} characters`);
       cells[address] = cell;
     }
-    return { name, cells, ...(charts === undefined ? {} : { charts }) };
+    return { name, cells, ...(charts === undefined ? {} : { charts }), ...(cellStyles === undefined ? {} : { cellStyles }) };
   });
 
   return {
@@ -200,7 +239,7 @@ function parseEnvelope(bytes: Uint8Array): SheetsCloudEnvelope {
   }
   if (!isRecord(parsed) || !exactKeys(parsed, ENVELOPE_KEYS))
     fail('file contains unknown or missing fields');
-  if (parsed.format !== FORMAT || (parsed.version !== 1 && parsed.version !== VERSION))
+  if (parsed.format !== FORMAT || (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== VERSION))
     fail('file uses an unsupported format or version');
   const snapshot = validateSnapshotData({
     title: parsed.title,
@@ -210,7 +249,7 @@ function parseEnvelope(bytes: Uint8Array): SheetsCloudEnvelope {
   return makeEnvelope(snapshot);
 }
 
-/** Serialize the entire supported local workbook model; no XLSX styling or external assets exist in this model. */
+/** Serialize bounded local cell values, charts and basic cell styles; XLSX styling fidelity remains separate. */
 export function createSheetsCloudSnapshot(workbook: OfficeWorkbook): Uint8Array {
   if (!workbook || !Array.isArray(workbook.worksheets)) fail('workbook is missing');
   const activeWorksheetIndex = workbook.worksheets.findIndex(
@@ -220,7 +259,7 @@ export function createSheetsCloudSnapshot(workbook: OfficeWorkbook): Uint8Array 
   const snapshot = validateSnapshotData({
     title: workbook.title,
     activeWorksheetIndex,
-    worksheets: workbook.worksheets.map(({ name, cells, charts }) => ({ name, cells, ...(charts === undefined ? {} : { charts }) })),
+    worksheets: workbook.worksheets.map(({ name, cells, charts, cellStyles }) => ({ name, cells, ...(charts === undefined ? {} : { charts }), ...(cellStyles === undefined ? {} : { cellStyles }) })),
   });
   const encoded = JSON.stringify(makeEnvelope(snapshot));
   const byteLength = utf8Length(encoded);
@@ -238,6 +277,7 @@ export function parseSheetsCloudSnapshot(bytes: Uint8Array): SheetsCloudSnapshot
       name: worksheet.name,
       cells: { ...worksheet.cells },
       ...(worksheet.charts === undefined ? {} : { charts: worksheet.charts.map((chart) => ({ ...chart })) }),
+      ...(worksheet.cellStyles === undefined ? {} : { cellStyles: Object.fromEntries(Object.entries(worksheet.cellStyles).map(([address, style]) => [address, { ...style }])) }),
     })),
   };
 }
@@ -288,6 +328,7 @@ export function restoreSheetsCloudCopy(
     name: worksheet.name,
     cells: { ...worksheet.cells },
     ...(worksheet.charts === undefined ? {} : { charts: worksheet.charts.map((chart) => ({ ...chart })) }),
+    ...(worksheet.cellStyles === undefined ? {} : { cellStyles: Object.fromEntries(Object.entries(worksheet.cellStyles).map(([address, style]) => [address, { ...style }])) }),
   }));
   next = updateWorkbook(next, created.id, {
     title,

@@ -3,6 +3,17 @@ export type FormulaResult = string | number | boolean | null | FormulaError;
 export const MAX_CSV_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_SHEETS_CRITERIA_CHARS = 256;
 export const MAX_SHEETS_FORMULA_CHARS = 512;
+export type SheetNumberFormat = 'general' | 'number' | 'currency' | 'percent';
+
+export function formatSheetDisplayValue(value: string, format: SheetNumberFormat = 'general'): string {
+  if (format === 'general' || !value || value.startsWith('#')) return value;
+  const numeric = Number(value.replace(/,/g, '').trim());
+  if (!Number.isFinite(numeric)) return value;
+  if (format === 'number') return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(numeric);
+  if (format === 'currency') return new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 2 }).format(numeric);
+  return new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 2 }).format(numeric);
+}
+
 export function isFormulaCellValue(value: string): boolean {
   return value.startsWith('=');
 }

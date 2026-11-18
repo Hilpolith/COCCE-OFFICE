@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_STATE, STORAGE_KEY, addDocument, addWorkbook, addWorksheet, addWorksheetChart, addWorkspace,
   readPreviewState, removeDocument, removeWorksheetChart, selectWorksheet, selectWorkspace, updateDocument,
-  updateWorksheetCell, updateWorksheetCells, writePreviewState,
+  updateWorksheetCell, updateWorksheetCellStyles, updateWorksheetCells, writePreviewState,
 } from './localStore';
 import type { StorageReader, StorageWriter } from './localStore';
 import { displayCellValue } from './spreadsheetEngine';
@@ -158,6 +158,24 @@ describe('local preview storage', () => {
     expect(selectWorksheet(edited, created.workbook.id, 'unknown')).toBe(edited);
     const other = addWorkbook(edited, 'Other', at);
     expect(other.state.workbooks.find((workbook) => workbook.id === other.workbook.id)?.worksheets[0].cells).toEqual({});
+  });
+
+  it('persists bounded cell styles and number formats without changing raw cell values', () => {
+    const created = addWorkbook(DEFAULT_STATE, 'Styled workbook', new Date('2026-11-01T10:00:00.000Z'));
+    const worksheetId = created.workbook.activeWorksheetId;
+    const cells = updateWorksheetCells(created.state, created.workbook.id, worksheetId, { A1: '1234.5', B1: '=A1*2' });
+    const styled = updateWorksheetCellStyles(cells, created.workbook.id, worksheetId, ['A1','B1'], {
+      bold: true, fontColor: '#123456', fillColor: '#f0f0f0', numberFormat: 'number',
+    });
+    expect(styled.workbooks[0].worksheets[0].cellStyles).toEqual({
+      A1: { bold: true, fontColor: '#123456', fillColor: '#f0f0f0', numberFormat: 'number' },
+      B1: { bold: true, fontColor: '#123456', fillColor: '#f0f0f0', numberFormat: 'number' },
+    });
+    expect(styled.workbooks[0].worksheets[0].cells).toEqual({ A1: '1234.5', B1: '=A1*2' });
+    const { storage } = memoryStorage();
+    writePreviewState(storage, styled);
+    expect(readPreviewState(storage).workbooks[0].worksheets[0].cellStyles).toEqual(styled.workbooks[0].worksheets[0].cellStyles);
+    expect(updateWorksheetCellStyles(styled, created.workbook.id, worksheetId, ['A1'], { fillColor: 'url(evil)' })).toBe(styled);
   });
 
   it('keeps conditional formulas local and recalculates them after a storage reload', () => {

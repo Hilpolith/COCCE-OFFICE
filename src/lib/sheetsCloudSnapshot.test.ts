@@ -45,11 +45,37 @@ describe('bounded Sheets cloud snapshots', () => {
     });
     const envelope = JSON.parse(new TextDecoder().decode(bytes));
     expect(envelope.format).toBe('cocce-office-sheets-copy');
-    expect(envelope.version).toBe(2);
+    expect(envelope.version).toBe(3);
     expect(envelope).not.toHaveProperty('id');
     expect(envelope).not.toHaveProperty('workspaceId');
     expect(envelope).not.toHaveProperty('createdAt');
     expect(envelope).not.toHaveProperty('updatedAt');
+  });
+
+  it('round-trips bounded cell formatting in cloud snapshots and restores it with fresh worksheet IDs', () => {
+    const styled = {
+      ...original,
+      worksheets: [
+        { ...original.worksheets[0]!, cellStyles: {
+          A2: { bold: true, fontColor: '#123456', fillColor: '#f0f0f0', numberFormat: 'currency' as const },
+          B2: { italic: true, numberFormat: 'percent' as const },
+        } },
+        original.worksheets[1]!,
+      ],
+    };
+    const parsed = parseSheetsCloudSnapshot(createSheetsCloudSnapshot(styled));
+    expect(parsed.worksheets[0]?.cellStyles).toEqual(styled.worksheets[0]?.cellStyles);
+    const restored = restoreSheetsCloudCopy(state, parsed);
+    expect(restored.workbook.worksheets[0]?.cellStyles).toEqual(styled.worksheets[0]?.cellStyles);
+    const unsafe = { ...styled, activeWorksheetId: 'local-sheet-a', worksheets: [{ ...styled.worksheets[0]!, cellStyles: { A1: { fontColor: 'url(javascript:bad)' } } }] };
+    expect(() => createSheetsCloudSnapshot(unsafe)).toThrow(/font color is invalid/);
+  });
+
+  it('reads legacy version-2 cloud copies without cell formatting', () => {
+    const legacy = JSON.parse(new TextDecoder().decode(createSheetsCloudSnapshot(original)));
+    legacy.version = 2;
+    const parsed = parseSheetsCloudSnapshot(new TextEncoder().encode(JSON.stringify(legacy)));
+    expect(parsed.worksheets.every((worksheet) => worksheet.cellStyles === undefined)).toBe(true);
   });
 
   it('restores the verified snapshot as one new local workbook with fresh IDs and keeps the original byte-for-byte state', () => {

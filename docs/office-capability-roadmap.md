@@ -568,3 +568,12 @@ This roadmap remains a verified capability boundary, not a declaration of full G
 - HTML/Markdown source cloud now also supports explicit creation of a new immutable revision of an existing cloud file using the server's current revision ID as an optimistic concurrency guard. The existing pending-upload journal covers interrupted revision reservations and finalization.
 - Source cloud remains manual; the panel restores the latest revision only and does not yet browse or restore historical revisions. Renaming a cloud file is not supported through this panel.
 - AI sector summary contracts now match the live Hospitality bootstrap's strict page-size-one requirement and map the database's church industry identifier to the Institutions read RPC. The safe bootstrap parser now includes non-personal School class/subject labels and allows bounded numeric operational summary keys while excluding personal, clinical, payroll and financial values. These fixes are pending CI and redeployment.
+
+
+## 2026-11-18 — Basic spreadsheet formatting and source revision updates
+
+- Sheets now has bounded per-cell/range bold, italic, text color, fill color, and General/Number/TZS currency/Percent display formats. Raw cell values and formulas remain unchanged.
+- The formatting model is validated in local storage and round-trips through the private Sheets cloud-copy envelope (version 3), including backward reading of version 1 and 2 cloud copies.
+- Current XLSX import/export still does not preserve styles; conditional formatting, row/column sizing, freeze panes, data validation, pivots/slicers, named ranges and broader formula compatibility remain outstanding.
+- HTML/Markdown source cloud adds explicit immutable revision updates using the expected current revision ID to prevent overwriting a newer cloud revision. The panel restores the latest revision only; historical revision browsing and restore are not yet implemented.
+- AI sector context now uses the exact Hospitality bootstrap limit, maps the live church industry identifier to the Institutions RPC, and includes safe class/subject catalogue labels for School. Sensitive people, clinical, payroll and financial data remain excluded. This code increment is awaiting validation and a version-27 deployment.
