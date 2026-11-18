@@ -53,6 +53,13 @@ describe('cloud upload-intent recovery journal', () => {
     expect(listPendingCloudCopies(s, a, b)).toEqual([slidesCopy]);
     expect(() => savePendingCloudCopy(s, { ...slidesCopy, sizeBytes: 25 * 1024 * 1024 + 1 })).toThrow(/Invalid/);
   });
+  it('accepts HTML and Markdown source packages within the source-cloud safety bound', () => {
+    const s = store();
+    const sourceCopy = { ...copy, displayName: 'Landing.html.cocce-source.bin', sizeBytes: 5 * 1024 * 1024 };
+    savePendingCloudCopy(s, sourceCopy);
+    expect(listPendingCloudCopies(s, a, b)).toEqual([sourceCopy]);
+    expect(() => savePendingCloudCopy(s, { ...sourceCopy, sizeBytes: 25 * 1024 * 1024 + 1 })).toThrow(/Invalid/);
+  });
   it('adds server identifiers without replacing immutable intent metadata', () => {
     const s = store();
     savePendingCloudCopy(s, copy);

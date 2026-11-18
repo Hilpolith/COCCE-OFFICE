@@ -8,6 +8,7 @@ import {
 } from "./lib/sourceWorkspaceStore";
 import type { SourceDocumentFormat, SourceWorkspaceDocument } from "./lib/sourceWorkspaceStore";
 import { buildSandboxedHtmlPreview, markdownToPreviewHtml } from "./lib/sourcePreview";
+import SourceCloudPanel from "./SourceCloudPanel";
 import "./sourceWorkspace.css";
 
 function createId(): string {
@@ -28,9 +29,11 @@ function safeFileName(value: string, extension: string): string {
 export default function SourceWorkspace({
   format,
   workspaceId,
+  onGoToTeam = () => undefined,
 }: {
   format: SourceDocumentFormat;
   workspaceId: string | null;
+  onGoToTeam?: () => void;
 }) {
   const [documents, setDocuments] = useState<SourceWorkspaceDocument[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -39,6 +42,7 @@ export default function SourceWorkspace({
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [cloudOpen, setCloudOpen] = useState(false);
   const importRef = useRef<HTMLInputElement | null>(null);
   const extension = format === "html" ? ".html" : ".md";
   const label = format === "html" ? "HTML Studio" : "Markdown Studio";
@@ -98,7 +102,7 @@ export default function SourceWorkspace({
   }, [activeId, dirty, save, source, title]);
 
   const create = useCallback((nextTitle?: string, nextSource?: string) => {
-    if (dirty && !save()) return;
+    if (dirty && !save()) return false;
     const now = new Date().toISOString();
     const doc: SourceWorkspaceDocument = {
       id: createId(),
@@ -115,8 +119,10 @@ export default function SourceWorkspace({
       load(doc);
       setNotice("New local draft created");
       setError("");
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "A new draft could not be created.");
+      return false;
     }
   }, [dirty, format, load, save, workspaceId]);
 
@@ -192,10 +198,13 @@ export default function SourceWorkspace({
         <button type="button" className="button-secondary small-button" onClick={() => create()}><Plus size={14} /> New</button>
         <button type="button" className="button-secondary small-button" onClick={() => importRef.current?.click()}><Upload size={14} /> Import</button>
         <button type="button" className="button-secondary small-button" onClick={save} disabled={!activeId || !dirty}><Save size={14} /> Save</button>
+        {workspaceId && <button type="button" className="button-secondary small-button" aria-expanded={cloudOpen} onClick={() => setCloudOpen((open) => !open)}>Cloud copies</button>}
         <button type="button" className="button-primary small-button" onClick={exportFile} disabled={!activeId}><Download size={14} /> Export {extension}</button>
         <input ref={importRef} type="file" accept={format === "html" ? ".html,.htm,text/html" : ".md,.markdown,text/markdown,text/plain"} hidden onChange={(event) => void importFile(event)} />
       </div>
     </header>
+
+    {cloudOpen && workspaceId && <SourceCloudPanel format={format} workspaceId={workspaceId} documentId={activeId} title={title} source={source} hasUnsavedChanges={dirty} onRestore={(snapshot) => create(snapshot.title, snapshot.source)} onGoToTeam={onGoToTeam} />}
 
     <div className="source-workspace-grid">
       <aside className="source-files-panel glass-card">

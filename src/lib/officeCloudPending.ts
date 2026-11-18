@@ -38,8 +38,8 @@ const validDate = (value: unknown) =>
 function valid(value: unknown): value is PendingCloudCopy {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const r = value as Record<string, unknown>;
-  const slidesCopy = typeof r.displayName === 'string' && r.displayName.endsWith('.cocce-slides.bin');
-  const maxCopyBytes = slidesCopy ? 25 * 1024 * 1024 : 3 * 1024 * 1024;
+  const largeCopy = typeof r.displayName === 'string' && (r.displayName.endsWith('.cocce-slides.bin') || r.displayName.endsWith('.cocce-source.bin'));
+  const maxCopyBytes = largeCopy ? 25 * 1024 * 1024 : 3 * 1024 * 1024;
   return (
     Object.keys(r).every((key) => fields.has(key)) &&
     [r.actorId, r.workspaceId, r.idempotencyKey].every(
@@ -50,7 +50,7 @@ function valid(value: unknown): value is PendingCloudCopy {
     typeof r.displayName === 'string' &&
     (r.displayName.endsWith('.cocce-docs.json') ||
       r.displayName.endsWith('.cocce-sheets.json') ||
-      r.displayName.endsWith('.cocce-slides.bin')) &&
+      r.displayName.endsWith('.cocce-slides.bin') || r.displayName.endsWith('.cocce-source.bin')) &&
     r.displayName.length <= 255 &&
     !hasControlCharacters(r.displayName) && !/[\\/:<>"|?*]/.test(r.displayName) &&
     typeof r.sizeBytes === 'number' &&
