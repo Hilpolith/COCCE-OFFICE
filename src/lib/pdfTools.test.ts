@@ -91,7 +91,7 @@ describe('local PDF operations', () => {
     expect(source).toEqual(before);
     await expect(addTextOverlayToPdfPage(source, 3, 'Text', 10, 10)).rejects.toThrow('between 1 and 2');
     await expect(addTextOverlayToPdfPage(source, 1, '   ', 10, 10)).rejects.toThrow(/Enter text/);
-    await expect(addTextOverlayToPdfPage(source, 1, 'x'.repeat(MAX_PDF_TEXT_OVERLAY_CHARS + 1), 10, 10)).rejects.toThrow(/2,000 characters/);
+    await expect(addTextOverlayToPdfPage(source, 1, 'x'.repeat(MAX_PDF_TEXT_OVERLAY_CHARS + 1), 10, 10)).rejects.toThrow(/2000 characters/);
     await expect(addTextOverlayToPdfPage(source, 1, 'Text', -1, 10)).rejects.toThrow(/position must fit/);
     await expect(addTextOverlayToPdfPage(source, 1, 'Text', 10, 10, 5)).rejects.toThrow(/6 and 72/);
   });
