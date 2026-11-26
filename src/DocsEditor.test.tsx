@@ -116,7 +116,6 @@ describe('Docs outline navigation', () => {
       richText: '<h1>Overview</h1><h2>Scope</h2>',
     };
     renderEditor(documentWithHeadings);
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     fireEvent.click(screen.getByRole('button', { name: 'Document outline' }));
     const headingButton = await screen.findByRole('button', { name: /Scope/ });
     fireEvent.click(headingButton);
@@ -662,28 +661,17 @@ describe('Docs portable HTML and text exports', () => {
   });
 });
 
-describe('Docs tabbed ribbon', () => {
-  it('switches functional Home, Insert, Review and View groups and applies document zoom', async () => {
+describe('Docs unified command bar', () => {
+  it('keeps formatting, insert, review and view controls available together', async () => {
     renderEditor();
-    const home = screen.getByRole('tab', { name: 'Home' });
-    const insert = screen.getByRole('tab', { name: 'Insert' });
-    const review = screen.getByRole('tab', { name: 'Review' });
-    const view = screen.getByRole('tab', { name: 'View' });
-    expect(home.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('button', { name: 'Bold' })).toBeTruthy();
-
-    fireEvent.click(insert);
-    expect(insert.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('button', { name: 'Insert link' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull();
-
-    fireEvent.click(review);
-    expect(review.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('button', { name: 'Add comment to selected text' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Insert link' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Document outline' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Document zoom' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Page size' })).toBeTruthy();
+    expect(document.querySelector('.docs-format-toolbar')?.querySelector('.docs-table-toolbar')).toBeTruthy();
 
-    fireEvent.click(view);
-    expect(view.getAttribute('aria-selected')).toBe('true');
     fireEvent.change(screen.getByRole('combobox', { name: 'Document zoom' }), { target: { value: '125%' } });
     expect(document.querySelector('.document-canvas')?.getAttribute('style')).toContain('zoom: 125%');
   });
@@ -703,7 +691,6 @@ describe('Docs tabbed ribbon', () => {
 describe('Docs HTML and Markdown source modes', () => {
   it('edits Markdown locally, previews it, and applies it to the rich-text document only on approval', async () => {
     const { onPatch } = renderEditor();
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     const editMarkdown = await screen.findByRole('button', { name: 'Edit Markdown source' }) as HTMLButtonElement;
     await waitFor(() => expect(editMarkdown.disabled).toBe(false));
     fireEvent.click(editMarkdown);
@@ -720,7 +707,6 @@ describe('Docs HTML and Markdown source modes', () => {
 
   it('sanitizes HTML source before applying it and leaves the source untouched when discarded', async () => {
     const { onPatch } = renderEditor();
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     const editHtml = await screen.findByRole('button', { name: 'Edit HTML source' }) as HTMLButtonElement;
     await waitFor(() => expect(editHtml.disabled).toBe(false));
     fireEvent.click(editHtml);
@@ -744,7 +730,6 @@ describe('Docs HTML and Markdown source modes', () => {
 describe('Docs page setup controls', () => {
   it('updates the page canvas and restores scoped paper settings after reopening', async () => {
     const { switchDocument } = renderEditor();
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     const pageSize = await screen.findByRole('combobox', { name: 'Page size' });
     fireEvent.change(pageSize, { target: { value: 'Letter' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Page orientation' }), { target: { value: 'landscape' } });
