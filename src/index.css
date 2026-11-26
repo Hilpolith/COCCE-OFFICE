@@ -99,3 +99,5 @@
   .sheet-command-ribbon .sheet-format-tools>label{flex:0 0 auto}
   .sheet-command-ribbon .sheet-analysis-tools{flex:1 1 100%!important}
 }
+
+.sheet-command-ribbon .sheet-analysis-tools>span{display:inline}
