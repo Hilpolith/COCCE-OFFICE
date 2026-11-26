@@ -104,7 +104,6 @@ async function createLocalReviewComment(body: string) {
 describe('Docs outline navigation', () => {
   it('opens a document outline and shows its empty state for documents without headings', () => {
     renderEditor();
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     fireEvent.click(screen.getByRole('button', { name: 'Document outline' }));
     expect(screen.getByRole('navigation', { name: 'Document outline' })).toBeTruthy();
     expect(screen.getByText(/Add a Heading 1, Heading 2 or Heading 3/)).toBeTruthy();
@@ -135,7 +134,7 @@ describe('Docs local table authoring', () => {
 
   it('tracks document changes from a local baseline and accepts the current version', async () => {
     renderEditor();
-    fireEvent.click(screen.getByRole('button', { name: 'Start tracking from current version' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start tracking changes' }));
     const editor = screen.getByRole('textbox', { name: 'Document content' });
     selectEditorText(editor, 'Before');
     pastePlainText(editor, 'After');
@@ -148,7 +147,6 @@ describe('Docs local table authoring', () => {
 
   it('inserts an explicit page break that survives safe saving for print layout', async () => {
     const { onPatch } = renderEditor();
-    fireEvent.click(await screen.findByRole('tab', { name: 'Insert' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Insert page break' }));
     const content = screen.getByRole('textbox', { name: 'Document content' });
     await waitFor(() => expect(content.querySelector('hr[data-page-break="true"]')).toBeTruthy());
@@ -309,7 +307,7 @@ describe('Docs local table authoring', () => {
 });
 
 describe('Docs local review comments', () => {
-  it('survives Tiptap editor lifecycle replay without losing its local comment panel', async () => {
+  it('keeps the empty local comment panel out of the default editor surface', async () => {
     const props = {
       hasUnsavedChanges: false,
       onPatch: vi.fn(() => true),
@@ -321,7 +319,7 @@ describe('Docs local review comments', () => {
     };
     render(<StrictMode><DocsEditor document={syntheticDocument} {...props} /></StrictMode>);
     await screen.findByRole('textbox', { name: 'Document content' });
-    expect(screen.getByRole('region', { name: 'Local document review comments' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Local document review comments' })).toBeNull();
   });
 
   it('keeps comments isolated when switching between workspaces that reuse a document ID', async () => {
