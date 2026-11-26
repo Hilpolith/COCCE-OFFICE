@@ -10,7 +10,7 @@ export function extractDocsOutline(document: OutlineDocument): DocsOutlineEntry[
     if (node.type?.name !== 'heading') return;
     const rawLevel = node.attrs?.level;
     if (rawLevel !== 1 && rawLevel !== 2 && rawLevel !== 3) return;
-    const text = (node.textContent ?? '').replace(/\\s+/gu, ' ').trim().slice(0, MAX_HEADING_TEXT);
+    const text = (node.textContent ?? '').replace(/\s+/gu, ' ').trim().slice(0, MAX_HEADING_TEXT);
     if (!text) return;
     entries.push({ id: `${position}:${rawLevel}`, position, level: rawLevel, text });
   });

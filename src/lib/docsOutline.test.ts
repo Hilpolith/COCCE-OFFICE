@@ -6,7 +6,7 @@ describe('Docs document outline', () => {
     expect(extractDocsOutline(documentWith([{ type: 'paragraph', text: 'Ignored' }, { type: 'heading', level: 1, text: 'Overview' }, { type: 'heading', level: 2, text: 'Scope' }, { type: 'heading', level: 3, text: 'Details' }]))).toEqual([{ id: '10:1', position: 10, level: 1, text: 'Overview' }, { id: '20:2', position: 20, level: 2, text: 'Scope' }, { id: '30:3', position: 30, level: 3, text: 'Details' }]);
   });
   it('ignores unsupported levels and empty headings and normalizes whitespace', () => {
-    expect(extractDocsOutline(documentWith([{ type: 'heading', level: 4, text: 'Not supported' }, { type: 'heading', level: 2, text: '  A  heading\\n with spaces  ' }, { type: 'heading', level: 1, text: '  ' }])).map(x => x.text)).toEqual(['A heading with spaces']);
+    expect(extractDocsOutline(documentWith([{ type: 'heading', level: 4, text: 'Not supported' }, { type: 'heading', level: 2, text: '  A  heading\n with spaces  ' }, { type: 'heading', level: 1, text: '  ' }])).map(x => x.text)).toEqual(['A heading with spaces']);
   });
   it('caps long heading labels and the number of outline entries', () => {
     const entries = extractDocsOutline(documentWith(Array.from({ length: 205 }, (_, i) => ({ type: 'heading', level: 1, text: `Heading ${i} ` + 'x'.repeat(250) }))));
