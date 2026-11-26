@@ -101,6 +101,30 @@ async function createLocalReviewComment(body: string) {
   return content;
 }
 
+describe('Docs outline navigation', () => {
+  it('opens a document outline and shows its empty state for documents without headings', () => {
+    renderEditor();
+    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Document outline' }));
+    expect(screen.getByRole('navigation', { name: 'Document outline' })).toBeTruthy();
+    expect(screen.getByText(/Add a Heading 1, Heading 2 or Heading 3/)).toBeTruthy();
+  });
+
+  it('lists headings and navigates to a selected heading', async () => {
+    const documentWithHeadings: OfficeDocument = {
+      ...syntheticDocument,
+      content: 'Overview\\nScope',
+      richText: '<h1>Overview</h1><h2>Scope</h2>',
+    };
+    renderEditor(documentWithHeadings);
+    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Document outline' }));
+    const headingButton = await screen.findByRole('button', { name: /H2 Scope/ });
+    fireEvent.click(headingButton);
+    expect(screen.getByRole('navigation', { name: 'Document outline' })).toBeTruthy();
+  });
+});
+
 describe('Docs local table authoring', () => {
   it('shows the active document as an accessible file tab and reports local save status', async () => {
     renderEditor();

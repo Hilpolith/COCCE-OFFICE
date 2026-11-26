@@ -511,7 +511,9 @@ function pageTitle(page: PageId, editing: boolean, industryFocus: IndustryId | n
   if (page === 'chats') return officeText(language, 'chats');
   if (page === 'ai-chat') return officeText(language, 'aiChat');
   if (page === 'ai') return officeText(language, 'cocceAI');
-  return (['docs','sheets','slides','html','markdown','pdf','drive','vault'] as const).includes(page as 'docs'|'sheets'|'slides'|'html'|'markdown'|'pdf'|'drive'|'vault') ? officeText(language, page as 'docs'|'sheets'|'slides'|'html'|'markdown'|'pdf'|'drive'|'vault') : officeText(language, 'overview');
+  const documentItem = documentNav.find((item) => item.id === page);
+  if (documentItem) return officeText(language, documentItem.id);
+  return toolkitNav.find((item) => item.id === page)?.label ?? officeText(language, 'overview');
 }
 
 function Dashboard({
