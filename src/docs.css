@@ -319,3 +319,71 @@
   }
   .docs-page-break::after { display: none !important; }
 }
+
+
+/* Phase 2 — document-first workbench chrome. Keep the editing engine and save flow intact. */
+.office-editor-page .docs-editor-topbar{
+  min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:18px;
+  padding:9px 12px;border:1px solid var(--border);border-radius:17px;
+  background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 5%,var(--surface)),var(--surface));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 9px 26px rgba(0,0,0,.08);
+}
+.office-editor-page .docs-editor-topbar-leading{display:flex;align-items:center;gap:13px;min-width:0;flex:1}
+.office-editor-page .docs-editor-topbar .back-button{flex:none}
+.office-editor-page .docs-file-tab-strip{display:flex;align-items:center;min-width:0;max-width:min(52vw,460px);align-self:stretch}
+.office-editor-page .docs-file-tab{
+  display:flex;align-items:center;gap:9px;min-width:0;padding:0 14px;
+  border:1px solid color-mix(in srgb,var(--accent) 25%,var(--border));
+  border-bottom:2px solid var(--accent);border-radius:11px 11px 8px 8px;
+  background:color-mix(in srgb,var(--accent) 7%,var(--surface-soft));color:var(--text);
+  font-size:11px;font-weight:650;
+}
+.office-editor-page .docs-file-tab>svg{flex:none;color:var(--accent)}
+.office-editor-page .docs-file-tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.office-editor-page .docs-file-tab-format{flex:none;padding:3px 5px;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:8px;letter-spacing:.08em}
+.office-editor-page .docs-editor-topbar .editor-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
+.office-editor-page .docs-editor-topbar .autosave-label{white-space:nowrap}
+.office-editor-page .docs-ribbon-tabs{margin-top:14px}
+.office-editor-page .docs-ribbon-tabs [role=tab]{min-width:70px}
+.office-editor-page .docs-format-toolbar{border:1px solid var(--border);border-radius:0 0 14px 14px;background:linear-gradient(180deg,var(--surface),var(--surface-soft))}
+.office-editor-page .docs-format-toolbar [role=group],.office-editor-page .docs-format-toolbar .docs-format-group{align-items:center}
+.office-editor-page .document-canvas{transition:border-color .18s,box-shadow .18s}
+.office-editor-page .document-title-input{font-size:clamp(22px,3vw,31px);letter-spacing:-.035em}
+.office-editor-page .document-meta{font-size:10px}
+@media(max-width:1050px){
+  .office-editor-page .docs-editor-topbar{align-items:flex-start;flex-direction:column;gap:9px}
+  .office-editor-page .docs-editor-topbar-leading{width:100%}
+  .office-editor-page .docs-file-tab-strip{max-width:calc(100% - 130px);min-height:38px}
+  .office-editor-page .docs-editor-topbar .editor-actions{width:100%;justify-content:flex-start;flex-wrap:wrap}
+}
+@media(max-width:560px){
+  .office-editor-page .docs-editor-topbar{padding:9px;border-radius:14px}
+  .office-editor-page .docs-editor-topbar-leading{gap:8px}
+  .office-editor-page .docs-editor-topbar .back-button{font-size:10px}
+  .office-editor-page .docs-file-tab{padding:0 9px;gap:6px}
+  .office-editor-page .docs-file-tab-name{max-width:38vw}
+  .office-editor-page .docs-editor-topbar .editor-actions{gap:5px}
+}
+@media(prefers-reduced-motion:reduce){
+  .office-editor-page .document-canvas{transition:none}
+}
+
+
+/* Phase 3 — navigable structure for long documents. */
+.docs-outline-panel{max-width:980px;margin:12px auto 16px;padding:15px 17px;border:1px solid var(--border);border-radius:16px}
+.docs-outline-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.docs-outline-heading>div{display:grid;gap:4px}
+.docs-outline-heading strong{display:flex;align-items:center;gap:8px;color:var(--text);font-size:12px}
+.docs-outline-heading strong svg{color:var(--accent)}
+.docs-outline-heading span{color:var(--muted);font-size:10px}
+.docs-outline-empty{margin:14px 0 2px;color:var(--muted);font-size:11px;line-height:1.6}
+.docs-outline-list{display:grid;gap:3px;margin:12px 0 0;padding:0;list-style:none}
+.docs-outline-list li[data-level="2"]{padding-left:15px}
+.docs-outline-list li[data-level="3"]{padding-left:30px}
+.docs-outline-item{display:flex;align-items:center;gap:9px;width:100%;min-height:34px;padding:6px 9px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--text);text-align:left;font:inherit;font-size:11px;cursor:pointer}
+.docs-outline-item:hover{border-color:var(--border);background:var(--surface-soft)}
+.docs-outline-item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.docs-outline-item>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.docs-outline-level{flex:none;min-width:22px;color:var(--accent);font-size:9px;font-weight:800;letter-spacing:.04em}
+@media(max-width:560px){.docs-outline-panel{margin:9px 0 13px;padding:12px;border-radius:13px}.docs-outline-item{min-height:38px}}
+@media(prefers-reduced-motion:reduce){.docs-outline-item{transition:none}}

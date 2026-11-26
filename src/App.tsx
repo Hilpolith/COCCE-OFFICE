@@ -30,6 +30,8 @@ import OfficeWorkspaceSwitcher from './OfficeWorkspaceSwitcher';
 import OfficeEditorChrome from './OfficeEditorChrome';
 import { readSurfaceStyle, writeSurfaceStyle } from './lib/appearancePreferences';
 import type { SurfaceStyle } from './lib/appearancePreferences';
+import { OFFICE_LANGUAGE_OPTIONS, officeText, readOfficeLanguage, writeOfficeLanguage } from './lib/officeLocalization';
+import type { OfficeLanguage } from './lib/officeLocalization';
 import IndustrySuitesWorkspace from './IndustrySuitesWorkspace';
 import { getIndustryDefinition } from './lib/industryWorkspaces';
 import type { IndustryId, IndustryTeamSetup } from './lib/industryWorkspaces';
@@ -87,6 +89,7 @@ function App() {
   const [browserStorage] = useState(getBrowserStorage);
   const [state, setState] = useState<PreviewState>(() => readPreviewState(browserStorage));
   const [surfaceStyle, setSurfaceStyle] = useState<SurfaceStyle>(() => readSurfaceStyle(browserStorage));
+  const [language, setLanguage] = useState<OfficeLanguage>(() => readOfficeLanguage(browserStorage));
   const searchRef = useRef<HTMLInputElement>(null);
   const [unsavedDocuments, setUnsavedDocuments] = useState<Record<string, OfficeDocument>>({});
   const [page, setPage] = useState<PageId>('home');
@@ -174,6 +177,12 @@ function App() {
     window.addEventListener('keydown', focusSearch);
     return () => window.removeEventListener('keydown', focusSearch);
   }, []);
+
+  const chooseLanguage = (nextLanguage: OfficeLanguage) => {
+    try { writeOfficeLanguage(browserStorage, nextLanguage); setLanguage(nextLanguage); setFeedback(''); }
+    catch { setFeedback('Could not save the language preference. Your previous language and documents were kept.'); }
+  };
+  useEffect(() => { document.documentElement.lang = language; }, [language]);
 
   const chooseSurfaceStyle = (surface: SurfaceStyle) => {
     try {
@@ -451,7 +460,7 @@ function App() {
         <header className="topbar">
           <div className="topbar-left">
             <button className="icon-button mobile-menu-button" aria-label="Open navigation" onClick={() => setMobileMenuOpen(true)}><Menu size={19} /></button>
-            <div className="breadcrumb"><span>COCCE Office</span><ChevronLeft size={13} className="breadcrumb-sep" /><strong>{pageTitle(page, Boolean(selectedDocument), industryFocus)}</strong></div>
+            <div className="breadcrumb"><span>COCCE Office</span><ChevronLeft size={13} className="breadcrumb-sep" /><strong>{pageTitle(page, Boolean(selectedDocument), industryFocus, language)}</strong></div>
           </div>
           <div className="topbar-actions">
             <label className="search-box"><Search size={16} /><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this space" aria-keyshortcuts="Control+k Meta+k" aria-label={page === 'team' ? 'Search local planner items' : page === 'industry' ? 'Search local industry work' : page === 'drive' ? 'Search local files and documents' : 'Search local documents'} /><kbd><Command size={11} /> K</kbd></label>
@@ -464,7 +473,7 @@ function App() {
 
         {Object.keys(unsavedDocuments).length > 0 && <div className="unsaved-drafts-banner" role="alert"><ShieldCheck size={15} /><span>{Object.keys(unsavedDocuments).length} unsaved {Object.keys(unsavedDocuments).length === 1 ? 'draft is' : 'drafts are'} kept in this tab only. Reopen the draft and retry save or export Markdown or DOCX before closing this tab.</span></div>}
         <div className="content-scroll">
-          {activeEditorModule && <OfficeEditorChrome active={activeEditorModule} storageLabel={activeWorkspace ? 'Local Office space · this browser' : 'Personal space · this browser'} onNavigate={(module) => goTo(module)} />}
+          {activeEditorModule && <OfficeEditorChrome active={activeEditorModule} language={language} storageLabel={activeWorkspace ? officeText(language, 'localOfficeSpace') : officeText(language, 'personalSpace')} onNavigate={(module) => goTo(module)} />}
           {page === 'home' && <Dashboard greeting={clockLabel} activeWorkspace={activeWorkspace?.name ?? 'Personal space'} workspaceCount={state.workspaces.length} documentCount={workspaceDocuments.length} lastEdited={lastEdited} documents={visibleDocuments.slice(0, 5)} onCreateDocument={createDocument} onOpenDocument={openDocument} onCreateWorkspace={() => setDialog('workspace')} onNavigate={goTo} />}
           {page === 'docs' && (selectedDocument
             ? <Suspense fallback={<div className="page" role="status">Opening local editor…</div>}><DocumentEditor document={selectedDocument} hasUnsavedChanges={Boolean(unsavedDocuments[selectedDocument.id])} onPatch={patchDocument} onBack={() => setSelectedDocumentId(null)} onExport={exportDocument} onExportDocx={exportDocumentDocx} onDelete={deleteDocument} onRestoreCloudCopy={restoreCloudDocument} onGoToTeam={() => { setPage('team'); setMobileMenuOpen(false); setQuery(''); }} /></Suspense>
@@ -480,7 +489,7 @@ function App() {
           {page === 'chats' && <ChatsWorkspace />}
           {page === 'ai-chat' && <OfficeAiWorkspace mode="chat" initialWorkspaceId={serverWorkspace?.workspaceId} />}
           {page === 'ai' && <OfficeAiWorkspace mode="assistant" initialWorkspaceId={aiContext?.workspaceId ?? serverWorkspace?.workspaceId} initialPrompt={aiContext?.prompt} />}
-          {page === 'settings' && <SettingsPage state={state} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
+          {page === 'settings' && <SettingsPage state={state} language={language} onLanguage={chooseLanguage} surfaceStyle={surfaceStyle} onSurfaceStyle={chooseSurfaceStyle} onTheme={(theme) => persist({ ...state, theme, themeExplicitlySelected: true, accent: themeOptions.find((option) => option.id === theme)?.color ?? state.accent })} onAccent={(accent) => persist({ ...state, accent })} />}
         </div>
 
         <footer className="app-footer"><span><ShieldCheck size={13} /> Docs/Sheets/Slides use manual cloud copies where enabled; HTML/Markdown source drafts and Drive/PDF/Vault stay browser-local. Linked industry suites use role-gated team records. Bunny file transfers are not yet verified.</span><span>COCCE OFFICE · INDUSTRY WORKSPACES</span></footer>
@@ -494,15 +503,17 @@ function App() {
   );
 }
 
-function pageTitle(page: PageId, editing: boolean, industryFocus: IndustryId | null) {
-  if (page === 'docs' && editing) return 'Document editor';
-  if (page === 'home') return 'Overview';
-  if (page === 'settings') return 'Preferences';
-  if (page === 'industry') return industryFocus ? getIndustryDefinition(industryFocus).shortLabel : 'Office suites';
-  if (page === 'chats') return 'Chats';
-  if (page === 'ai-chat') return 'AI Chat';
-  if (page === 'ai') return 'COCCE AI';
-  return documentNav.find((item) => item.id === page)?.label ?? toolkitNav.find((item) => item.id === page)?.label ?? 'Overview';
+function pageTitle(page: PageId, editing: boolean, industryFocus: IndustryId | null, language: OfficeLanguage = 'en') {
+  if (page === 'docs' && editing) return officeText(language, 'documentEditor');
+  if (page === 'home') return officeText(language, 'overview');
+  if (page === 'settings') return officeText(language, 'preferences');
+  if (page === 'industry') return industryFocus ? getIndustryDefinition(industryFocus).shortLabel : officeText(language, 'officeSuites');
+  if (page === 'chats') return officeText(language, 'chats');
+  if (page === 'ai-chat') return officeText(language, 'aiChat');
+  if (page === 'ai') return officeText(language, 'cocceAI');
+  const documentItem = documentNav.find((item) => item.id === page);
+  if (documentItem) return officeText(language, documentItem.id);
+  return toolkitNav.find((item) => item.id === page)?.label ?? officeText(language, 'overview');
 }
 
 function Dashboard({
@@ -613,24 +624,25 @@ function DocumentsPage({ documents, query, onCreate, onOpen, onImportDocx, onImp
   </div>;
 }
 
-function SettingsPage({ state, surfaceStyle, onSurfaceStyle, onTheme, onAccent }: { state: PreviewState; surfaceStyle: SurfaceStyle; onSurfaceStyle: (surface: SurfaceStyle) => void; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
+function SettingsPage({ state, language, onLanguage, surfaceStyle, onSurfaceStyle, onTheme, onAccent }: { state: PreviewState; language: OfficeLanguage; onLanguage: (language: OfficeLanguage) => void; surfaceStyle: SurfaceStyle; onSurfaceStyle: (surface: SurfaceStyle) => void; onTheme: (theme: ThemeId) => void; onAccent: (accent: string) => void }) {
   return <div className="page subpage settings-page">
-    <div className="page-title-row"><div><span className="eyebrow">PREFERENCES</span><h1>Make it yours</h1><p className="page-lede">Theme and accent choices are saved in this browser.</p></div><span className="local-only-chip"><LockKeyhole size={13} /> Local settings</span></div>
+    <div className="page-title-row"><div><span className="eyebrow">PREFERENCES</span><h1>{officeText(language, 'preferencesTitle')}</h1><p className="page-lede">{officeText(language, 'preferencesLead')}</p></div><span className="local-only-chip"><LockKeyhole size={13} /> {officeText(language, 'localSettings')}</span></div>
+    <section className="settings-panel glass-card" aria-labelledby="language-heading"><div className="settings-heading"><div className="settings-icon"><span aria-hidden="true">文</span></div><div><h2 id="language-heading">{officeText(language, 'officeLanguage')}</h2><p>{officeText(language, 'languageHelp')}</p></div></div><label className="office-language-control"><span>{language === 'sw' ? 'Chagua lugha' : 'Choose language'}</span><select aria-label="Office language" value={language} onChange={(event) => onLanguage(event.target.value as OfficeLanguage)}>{OFFICE_LANGUAGE_OPTIONS.map((option) => <option key={option.code} value={option.code}>{option.nativeName}</option>)}</select></label></section>
     <section className="settings-panel glass-card" aria-labelledby="surface-heading">
-      <div className="settings-heading"><div className="settings-icon"><Grid2X2 size={19} /></div><div><h2 id="surface-heading">Surface appearance</h2><p>A softer workspace, with a clear alternative when you need it.</p></div></div>
+      <div className="settings-heading"><div className="settings-icon"><Grid2X2 size={19} /></div><div><h2 id="surface-heading">{officeText(language, 'surfaceAppearance')}</h2><p>{officeText(language, 'surfaceHelp')}</p></div></div>
       <div className="surface-options" role="group" aria-label="Surface appearance">
-        <button className="surface-option" aria-label="Frosted glass" aria-pressed={surfaceStyle === 'glass'} onClick={() => onSurfaceStyle('glass')}><span className="surface-preview surface-preview-glass" aria-hidden="true"><i /><i /></span><span><strong>Frosted glass</strong><small>Depth, blur and soft reflections</small></span>{surfaceStyle === 'glass' && <Check size={17} aria-hidden="true" />}</button>
-        <button className="surface-option" aria-label="Solid surfaces" aria-pressed={surfaceStyle === 'solid'} onClick={() => onSurfaceStyle('solid')}><span className="surface-preview surface-preview-solid" aria-hidden="true"><i /><i /></span><span><strong>Solid surfaces</strong><small>Opaque panels without backdrop blur</small></span>{surfaceStyle === 'solid' && <Check size={17} aria-hidden="true" />}</button>
+        <button className="surface-option" aria-label={officeText(language, 'frostedGlass')} aria-pressed={surfaceStyle === 'glass'} onClick={() => onSurfaceStyle('glass')}><span className="surface-preview surface-preview-glass" aria-hidden="true"><i /><i /></span><span><strong>{officeText(language, 'frostedGlass')}</strong><small>Depth, blur and soft reflections</small></span>{surfaceStyle === 'glass' && <Check size={17} aria-hidden="true" />}</button>
+        <button className="surface-option" aria-label={officeText(language, 'solidSurfaces')} aria-pressed={surfaceStyle === 'solid'} onClick={() => onSurfaceStyle('solid')}><span className="surface-preview surface-preview-solid" aria-hidden="true"><i /><i /></span><span><strong>{officeText(language, 'solidSurfaces')}</strong><small>Opaque panels without backdrop blur</small></span>{surfaceStyle === 'solid' && <Check size={17} aria-hidden="true" />}</button>
       </div>
       <p className="surface-help">Saved on this device only, separately from your documents. Supported system settings for reduced transparency or increased contrast take priority. Browsers without backdrop blur use solid panels. Document pages, slide content and printed output keep their own rendering.</p>
     </section>
     <section className="settings-panel glass-card">
-      <div className="settings-heading"><div className="settings-icon"><Sun size={19} /></div><div><h2>Liquid Glass themes</h2><p>Choose a surface style for this workspace.</p></div></div>
+      <div className="settings-heading"><div className="settings-icon"><Sun size={19} /></div><div><h2>{officeText(language, 'liquidGlassThemes')}</h2><p>{officeText(language, 'themeHelp')}</p></div></div>
       <div className="theme-grid">{themeOptions.map((theme) => <button key={theme.id} className={`theme-option theme-preview-${theme.id} ${state.theme === theme.id ? 'theme-selected' : ''}`} onClick={() => onTheme(theme.id)} aria-pressed={state.theme === theme.id}><span className="theme-swatch"><i style={{ background: theme.color }} /><i /><i /></span><span className="theme-name">{theme.name}</span>{state.theme === theme.id && <Check size={15} className="theme-check" />}</button>)}</div>
-      <div className="accent-picker"><div><strong>Accent color</strong><small>Applied to highlights and focus states.</small></div><label className="color-control"><input aria-label="Custom accent color" type="color" value={state.accent} onChange={(event) => onAccent(event.target.value)} /><span>{state.accent.toUpperCase()}</span></label></div>
+      <div className="accent-picker"><div><strong>{officeText(language, 'accentColor')}</strong><small>{officeText(language, 'accentHelp')}</small></div><label className="color-control"><input aria-label="Custom accent color" type="color" value={state.accent} onChange={(event) => onAccent(event.target.value)} /><span>{state.accent.toUpperCase()}</span></label></div>
     </section>
     <section className="settings-panel glass-card connection-panel">
-      <div className="settings-heading"><div className="settings-icon connection-icon"><Activity size={18} /></div><div><h2>Connection status</h2><p>Office Team collaboration is server-backed; most productivity tools remain browser-local.</p></div></div>
+      <div className="settings-heading"><div className="settings-icon connection-icon"><Activity size={18} /></div><div><h2>{officeText(language, 'connectionStatus')}</h2><p>{officeText(language, 'connectionHelp')}</p></div></div>
       <div className="connection-list"><ConnectionRow label="COCCE Auth" value="Existing accounts · Team only" /><ConnectionRow label="Office collaboration data" value="Office-specific backend" /><ConnectionRow label="Cloud file storage" value={import.meta.env.VITE_OFFICE_CLOUD_FILES_READY === 'true' ? (slidesCloudFilesEnabled(import.meta.env) ? 'Explicit copies · Docs, Sheets, and Slides' : 'Explicit copies · Docs and Sheets') : 'Not enabled in this environment'} /><ConnectionRow label="AI provider" value="OpenRouter free model · Docs only" /></div>
       <p className="connection-note">Office collaboration uses existing COCCE Auth and only Office-specific database objects. Docs AI sends selected excerpts or typed draft prompts after a user action; a full-document summary requires a separate confirmation and sends bounded plain text only. The fixed free Google AI Studio provider is listed as retaining prompts for 55 days with no training; no paid or alternate-provider fallback or background AI run occurs.</p>
     </section>

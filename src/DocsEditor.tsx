@@ -34,10 +34,11 @@ import DocsCloudPanel from './DocsCloudPanel';
 import type { DocsCloudSnapshot } from './lib/docsCloudSnapshot';
 import { DEFAULT_DOCS_PAGE_SETUP, docsPageDimensions, docsPageSetupScope, readDocsPageSetup, writeDocsPageSetup } from './lib/docsPageSetup';
 import type { DocsPageSetup } from './lib/docsPageSetup';
+import { extractDocsOutline } from './lib/docsOutline';
 import './docs.css';
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeftToLine, ArrowRightToLine, ArrowUpRight, Bold, Check, ChevronLeft, Columns3,
-  FileText, Heading1, Heading2, Heading3, Highlighter, Italic, Link2, List, ListOrdered, LockKeyhole, MessageSquarePlus, Code, Eraser, Minus, Palette, ImagePlus,
+  FileText, Heading1, Heading2, Heading3, Highlighter, Italic, Link2, List, ListOrdered, LockKeyhole, MessageSquarePlus, Code, Eraser, Minus, Palette, ImagePlus, ListTree,
   Pilcrow, Quote, Redo2, Replace, Rows3, Search, Strikethrough, Table2, Trash2, RotateCcw,
   Underline as UnderlineIcon, Undo2, X,
 } from 'lucide-react';
@@ -373,6 +374,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const [textColor, setTextColor] = useState('#202733');
   const [highlightColor, setHighlightColor] = useState('#fff2a8');
   const [findOpen, setFindOpen] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
   const [findQuery, setFindQuery] = useState('');
   const [findReplacement, setFindReplacement] = useState('');
   const [findCaseSensitive, setFindCaseSensitive] = useState(false);
@@ -643,6 +645,14 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       };
     },
   });
+
+  const documentOutline = useMemo(() => editor ? extractDocsOutline(editor.state.doc) : [], [editor, editorState]);
+
+  const navigateToOutlineHeading = (position: number) => {
+    if (!editor || editor.isDestroyed) return;
+    const safePosition = Math.min(position + 1, editor.state.doc.content.size);
+    editor.chain().focus().setTextSelection(safePosition).scrollIntoView().run();
+  };
 
   const normalizedSourceText = sourceText.trim();
   const documentWordCount = sourceMode
@@ -994,8 +1004,17 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
   return <div className={`page editor-page office-editor-page ${sourceMode ? "docs-source-mode" : ""}`.trim()}>
     <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Choose an image to insert" onChange={(event) => void insertImage(event)} />
-    <div className="editor-toolbar">
-      <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
+    <div className="editor-toolbar docs-editor-topbar">
+      <div className="docs-editor-topbar-leading">
+        <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
+        <div className="docs-file-tab-strip" role="tablist" aria-label="Open documents">
+          <div className="docs-file-tab" role="tab" aria-selected="true" aria-label={document.title || 'Untitled document'}>
+            <FileText size={15} aria-hidden="true" />
+            <span className="docs-file-tab-name">{document.title || 'Untitled document'}</span>
+            <span className="docs-file-tab-format">DOC</span>
+          </div>
+        </div>
+      </div>
       <div className="editor-actions">
         <span className={`autosave-label ${hasUnsavedChanges ? 'autosave-failed' : ''}`} role="status">
           {hasUnsavedChanges ? <X size={13} /> : <span className="status-dot" />}
@@ -1092,6 +1111,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <label className="docs-format-select"><span>Paper</span><select aria-label="Page size" value={pageSetup.size} onChange={(event) => updatePageSetup({ size: event.target.value as DocsPageSetup['size'] })}><option>A4</option><option>Letter</option><option>Legal</option></select></label>
         <label className="docs-format-select"><span>Orientation</span><select aria-label="Page orientation" value={pageSetup.orientation} onChange={(event) => updatePageSetup({ orientation: event.target.value as DocsPageSetup['orientation'] })}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
         <label className="docs-format-select"><span>Margins</span><select aria-label="Page margins" value={pageSetup.margins} onChange={(event) => updatePageSetup({ margins: event.target.value as DocsPageSetup['margins'] })}><option value="normal">Normal</option><option value="narrow">Narrow</option><option value="wide">Wide</option></select></label>
+        <FormattingButton label="Document outline" icon={<ListTree size={16} />} active={outlineOpen} onClick={() => setOutlineOpen((open) => !open)} />
         <FormattingButton label="Print document" icon={<FileText size={16} />} onClick={() => window.print()} />
         <FormattingButton label="Edit HTML source" icon={<Code size={16} />} disabled={!editor} onClick={() => openSourceMode('html')} />
         <FormattingButton label="Edit Markdown source" icon={<FileText size={16} />} disabled={!editor} onClick={() => openSourceMode('markdown')} />
@@ -1099,6 +1119,16 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <span className="docs-format-hint">Local rich text</span>
     </div>
 
+    {outlineOpen && <nav className="docs-outline-panel glass-card" aria-label="Document outline">
+      <div className="docs-outline-heading"><div><strong><ListTree size={15} /> Document outline</strong><span>{documentOutline.length} {documentOutline.length === 1 ? 'heading' : 'headings'} · generated from this document</span></div>
+        <button type="button" className="docs-find-close" aria-label="Close document outline" onClick={() => setOutlineOpen(false)}><X size={16} /></button>
+      </div>
+      {documentOutline.length === 0
+        ? <p className="docs-outline-empty">Add a Heading 1, Heading 2 or Heading 3 style to create a navigable outline.</p>
+        : <ol className="docs-outline-list">{documentOutline.map((heading) => <li key={heading.id} data-level={heading.level}>
+          <button type="button" className="docs-outline-item" onClick={() => navigateToOutlineHeading(heading.position)}><span className="docs-outline-level">H{heading.level}</span><span>{heading.text}</span></button>
+        </li>)}</ol>}
+    </nav>}
     {imageNotice && <p className="docs-image-notice" role="alert">{imageNotice}</p>}
     <div className="docs-table-toolbar glass-card" role="toolbar" aria-label="Table editing">
       <div className="docs-table-insert-controls">
