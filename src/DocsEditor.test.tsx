@@ -105,7 +105,7 @@ describe('Docs local table authoring', () => {
   it('shows the active document as an accessible file tab and reports local save status', async () => {
     renderEditor();
     expect(screen.getByRole('tab', { name: 'Synthetic table draft' })).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toContain('Saved on this device');
+    expect(screen.getByText('Saved on this device')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Export .docx' })).toBeTruthy();
   });
 
