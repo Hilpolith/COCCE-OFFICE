@@ -645,6 +645,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         </div>
       </div>
       {officeCloudFilesEnabled() && cloudOpen && <div id="sheets-cloud-area"><SheetsCloudPanel key={workbook.id} workbook={workbook} hasUnsavedChanges={Boolean(editingAddress) || persistenceError} onRestore={onRestoreCloudCopy} onGoToTeam={onGoToTeam} /></div>}
+      <div className="sheet-command-ribbon" role="toolbar" aria-label="Spreadsheet commands">
       <div className="sheet-toolbar">
         <span className="name-box" aria-label="Selected cell">{selectedAddress}</span>
         <span className="formula-equals">fx</span>
@@ -679,6 +680,7 @@ function SpreadsheetEditor({ workbook, state, onState, onBack, onRestoreCloudCop
         <label className="sheet-chart-type"><span>Chart type</span><select value={chartType} onChange={(event) => setChartType(event.target.value as OfficeSheetChartType)}><option value="bar">Bar</option><option value="line">Line</option></select></label>
         <button type="button" className="button-secondary" onClick={createChartFromSelection} disabled={Boolean(editingAddress)}>{chartType === 'bar' ? <BarChart3 size={15} /> : <LineChart size={15} />} Create chart from selected range</button>
         <span>Shift-select a range with a header row and at least two columns. First column = labels; second = numeric values. Charts stay editable in this workbook and are preserved in versioned cloud copies and supported XLSX exports. External XLSX chart import is not supported yet.</span>
+      </div>
       </div>
       {(worksheet.charts ?? []).map((chart) => {
         const entries = chartEntries(chart, displayedCells);
