@@ -119,7 +119,7 @@ describe('Docs outline navigation', () => {
     renderEditor(documentWithHeadings);
     fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     fireEvent.click(screen.getByRole('button', { name: 'Document outline' }));
-    const headingButton = await screen.findByRole('button', { name: /H2 Scope/ });
+    const headingButton = await screen.findByRole('button', { name: /Scope/ });
     fireEvent.click(headingButton);
     expect(screen.getByRole('navigation', { name: 'Document outline' })).toBeTruthy();
   });
