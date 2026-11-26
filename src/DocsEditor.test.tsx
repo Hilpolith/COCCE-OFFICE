@@ -142,7 +142,8 @@ describe('Docs local table authoring', () => {
     expect(screen.getByText('Before', { exact: true })).toBeTruthy();
     expect(screen.getByText('After', { exact: true })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }));
-    await waitFor(() => expect(screen.getByText('No unaccepted changes')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reset tracking baseline' })).toBeTruthy());
+    expect(screen.queryByText('No unaccepted changes')).toBeNull();
   });
 
   it('inserts an explicit page break that survives safe saving for print layout', async () => {
