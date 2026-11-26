@@ -102,6 +102,13 @@ async function createLocalReviewComment(body: string) {
 }
 
 describe('Docs local table authoring', () => {
+  it('shows the active document as an accessible file tab and reports local save status', async () => {
+    renderEditor();
+    expect(screen.getByRole('tab', { name: 'Synthetic table draft' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('Saved on this device');
+    expect(screen.getByRole('button', { name: 'Export .docx' })).toBeTruthy();
+  });
+
   it('tracks document changes from a local baseline and accepts the current version', async () => {
     renderEditor();
     fireEvent.click(screen.getByRole('button', { name: 'Start tracking from current version' }));

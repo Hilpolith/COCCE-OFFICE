@@ -994,8 +994,17 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
   return <div className={`page editor-page office-editor-page ${sourceMode ? "docs-source-mode" : ""}`.trim()}>
     <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Choose an image to insert" onChange={(event) => void insertImage(event)} />
-    <div className="editor-toolbar">
-      <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
+    <div className="editor-toolbar docs-editor-topbar">
+      <div className="docs-editor-topbar-leading">
+        <button type="button" className="back-button" onClick={onBack}><ChevronLeft size={16} /> All documents</button>
+        <div className="docs-file-tab-strip" role="tablist" aria-label="Open documents">
+          <div className="docs-file-tab" role="tab" aria-selected="true" aria-label={document.title || 'Untitled document'}>
+            <FileText size={15} aria-hidden="true" />
+            <span className="docs-file-tab-name">{document.title || 'Untitled document'}</span>
+            <span className="docs-file-tab-format">DOC</span>
+          </div>
+        </div>
+      </div>
       <div className="editor-actions">
         <span className={`autosave-label ${hasUnsavedChanges ? 'autosave-failed' : ''}`} role="status">
           {hasUnsavedChanges ? <X size={13} /> : <span className="status-dot" />}
