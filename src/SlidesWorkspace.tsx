@@ -639,10 +639,10 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
             <span className="slides-history-live" role="status" aria-live="polite">{historyAnnouncement}</span>
           </div>
           <div className="slides-ribbon-group" role="group" aria-label="Slides">
-            <button type="button" className="slides-ribbon-command" onClick={addNewSlide}><Plus size={17}/><span>New slide</span></button>
-            <button type="button" className="slides-ribbon-command" onClick={duplicateCurrentSlide} disabled={activeDeck.slides.length >= 100}><Copy size={17}/><span>Duplicate</span></button>
-            <button type="button" className="slides-ribbon-command" onClick={() => shiftSlide(-1)} disabled={activeSlideIndex === 0}><ArrowUp size={17}/><span>Move up</span></button>
-            <button type="button" className="slides-ribbon-command" onClick={() => shiftSlide(1)} disabled={activeSlideIndex === activeDeck.slides.length - 1}><ArrowDown size={17}/><span>Move down</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="Add slide" onClick={addNewSlide}><Plus size={17}/><span>New slide</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="Duplicate slide" onClick={duplicateCurrentSlide} disabled={activeDeck.slides.length >= 100}><Copy size={17}/><span>Duplicate</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="Move slide up" onClick={() => shiftSlide(-1)} disabled={activeSlideIndex === 0}><ArrowUp size={17}/><span>Move up</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="Move slide down" onClick={() => shiftSlide(1)} disabled={activeSlideIndex === activeDeck.slides.length - 1}><ArrowDown size={17}/><span>Move down</span></button>
             <button type="button" className="slides-ribbon-command" onClick={deleteCurrentSlide} disabled={activeDeck.slides.length <= 1}><Trash2 size={17}/><span>Delete slide</span></button>
           </div>
           <div className="slides-ribbon-group" role="group" aria-label="Design">
@@ -672,7 +672,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
             <div className="slides-canvas-wrap"><SlideCanvas deck={activeDeck} slide={activeSlide} index={activeSlideIndex} imageUrl={activeSlide.imageAssetId ? imageUrls[activeSlide.imageAssetId] : undefined} imageMissing={Boolean(activeSlide.imageAssetId && missingImageIds.includes(activeSlide.imageAssetId))} /></div>
             <div className="slides-page-controls">
               <span>Slide {activeSlideIndex + 1} of {activeDeck.slides.length}</span>
-              <div><button className="icon-button" aria-label="Move slide up" title="Move slide up" disabled={activeSlideIndex === 0} onClick={() => shiftSlide(-1)}><ArrowUp size={15} /></button><button className="icon-button" aria-label="Move slide down" title="Move slide down" disabled={activeSlideIndex === activeDeck.slides.length - 1} onClick={() => shiftSlide(1)}><ArrowDown size={15} /></button><button className="icon-button" aria-label="Duplicate slide" title="Duplicate slide" disabled={activeDeck.slides.length >= 100} onClick={duplicateCurrentSlide}><Copy size={15} /></button><button className="icon-button danger-icon" aria-label="Delete slide" title="Delete slide" disabled={activeDeck.slides.length <= 1} onClick={deleteCurrentSlide}><Trash2 size={15} /></button></div>
+
             </div>
             <div className="slides-edit-fields glass-card">
               <input ref={imageInputRef} className="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={addLocalImage} aria-label="Choose a local slide image" />
