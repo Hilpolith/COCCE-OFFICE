@@ -1176,7 +1176,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <p className="docs-find-note">Search is local and excludes review-comment notes. Matches do not cross inline-formatting, paragraph, or table-cell boundaries. Limits: {MAX_DOCS_FIND_QUERY_CHARS}-character query, {MAX_DOCS_FIND_REPLACEMENT_CHARS.toLocaleString()}-character replacement, {MAX_DOCS_FIND_MATCHES.toLocaleString()} matches, and 200,000 document text characters.</p>
     </section>}
 
-    <section className="docs-change-tracking-panel glass-card" aria-label="Document change tracking">
+    <section className="docs-change-tracking-panel glass-card" aria-label="Document change tracking" hidden={!changeTrackingOpen}>
       <div className="docs-review-heading">
         <div><span className="eyebrow">CHANGE TRACKING</span><h2>Compare &amp; review edits</h2>
           <small>{changeTrackingBaseline ? (trackedDiff?.changed ? 'Changes detected since the baseline' : 'No unaccepted changes') : 'Not tracking yet'}</small></div>
@@ -1201,7 +1201,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       {(changeTrackingNotice || trackedDiffState.error) && <p className="docs-review-notice" role="status">{changeTrackingNotice || trackedDiffState.error}</p>}
     </section>
 
-    <section className="docs-review-panel glass-card" aria-label="Local document review comments">
+    <section className="docs-review-panel glass-card" aria-label="Local document review comments" hidden={!reviewComments.length && !commentDraft}>
       <div className="docs-review-heading">
         <div><span className="eyebrow">REVIEW</span><h2>Comments</h2><small>{reviewComments.filter((comment) => comment.status === 'open').length} open · {reviewComments.length} total</small></div>
         <span className="local-only-chip"><LockKeyhole size={13} /> This device only</span>
