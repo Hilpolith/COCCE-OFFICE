@@ -631,21 +631,32 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
         }}
       />}>
         <>
-        <div className="slides-editor-toolbar">
-          <label className="slides-deck-name"><span className="eyebrow">PRESENTATION TITLE</span><input aria-label="Presentation title" value={activeDeck.title} maxLength={300} onChange={(event) => patchDeck({ title: event.target.value })} /></label>
-          <div className="slides-toolbar-actions">
-            <label className="slides-theme-picker"><span className="eyebrow">THEME</span><select aria-label="Slide theme" value={activeDeck.theme} onChange={(event) => patchDeck({ theme: event.target.value as SlidesTheme })}>{(Object.keys(themeNames) as SlidesTheme[]).map((theme) => <option key={theme} value={theme}>{themeNames[theme]}</option>)}</select></label>
-            {slidesCloudReady && <button className="button-secondary small-button" aria-expanded={slidesCloudOpen} onClick={() => setSlidesCloudOpen((open) => !open)}>{slidesCloudOpen ? 'Hide cloud copies' : 'Cloud copies'}</button>}
-            <div className="slides-history-actions" role="group" aria-label="Edit history for this presentation, up to 50 changes in this session">
-              <button type="button" className="button-secondary" aria-label="Undo" aria-keyshortcuts="Control+Z Meta+Z" title="Undo last Slides edit (Ctrl/Cmd+Z)" disabled={!canUndo} onClick={undoEdit}><Undo2 size={15} /><span>Undo</span></button>
-              <button type="button" className="button-secondary" aria-label="Redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Redo last Slides edit (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)" disabled={!canRedo} onClick={redoEdit}><Redo2 size={15} /><span>Redo</span></button>
-              <span className="slides-history-live" role="status" aria-live="polite">{historyAnnouncement}</span>
-            </div>
-            <button className="icon-button" title="Download presentation JSON" aria-label="Download presentation JSON" onClick={() => downloadJson(activeDeck)}><Download size={16} /></button>
-            <button className="icon-button" title="Download editable PowerPoint" aria-label="Download PowerPoint PPTX" disabled={pptxExporting} onClick={() => void downloadPptx(activeDeck)}><FileText size={16} /></button>
-            <button className="icon-button" title="Print or save as PDF" aria-label="Print or save as PDF" onClick={() => { void printPresentation(); }}><Printer size={16} /></button>
-            <button className="button-present" disabled={!canPresent} title={canPresent ? 'Present this local deck' : 'Wait for local images to load or replace unavailable images'} onClick={() => setPresenting(true)}><Maximize2 size={15} /> Present</button>
-            <button className="icon-button danger-icon" title="Delete presentation" aria-label="Delete presentation" onClick={deletePresentation}><Trash2 size={16} /></button>
+        <div className="slides-command-ribbon" role="toolbar" aria-label="Presentation commands">
+          <label className="slides-ribbon-title"><span>Presentation</span><input aria-label="Presentation title" value={activeDeck.title} maxLength={300} onChange={(event) => patchDeck({ title: event.target.value })} /></label>
+          <div className="slides-ribbon-group" role="group" aria-label="Edit">
+            <button type="button" className="slides-ribbon-command" aria-label="Undo" aria-keyshortcuts="Control+Z Meta+Z" title="Undo (Ctrl/Cmd+Z)" disabled={!canUndo} onClick={undoEdit}><Undo2 size={17}/><span>Undo</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="Redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y" title="Redo (Ctrl/Cmd+Shift+Z)" disabled={!canRedo} onClick={redoEdit}><Redo2 size={17}/><span>Redo</span></button>
+            <span className="slides-history-live" role="status" aria-live="polite">{historyAnnouncement}</span>
+          </div>
+          <div className="slides-ribbon-group" role="group" aria-label="Slides">
+            <button type="button" className="slides-ribbon-command" aria-label="New slide" onClick={addNewSlide}><Plus size={17}/><span>New slide</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="Duplicate slide" onClick={duplicateCurrentSlide} disabled={activeDeck.slides.length >= 100}><Copy size={17}/><span>Duplicate</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="Move slide up" onClick={() => shiftSlide(-1)} disabled={activeSlideIndex === 0}><ArrowUp size={17}/><span>Move up</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="Move slide down" onClick={() => shiftSlide(1)} disabled={activeSlideIndex === activeDeck.slides.length - 1}><ArrowDown size={17}/><span>Move down</span></button>
+            <button type="button" className="slides-ribbon-command" onClick={deleteCurrentSlide} disabled={activeDeck.slides.length <= 1}><Trash2 size={17}/><span>Delete slide</span></button>
+          </div>
+          <div className="slides-ribbon-group" role="group" aria-label="Design">
+            <label className="slides-ribbon-select"><span>Theme</span><select aria-label="Slide theme" value={activeDeck.theme} onChange={(event) => patchDeck({ theme: event.target.value as SlidesTheme })}>{(Object.keys(themeNames) as SlidesTheme[]).map((theme) => <option key={theme} value={theme}>{themeNames[theme]}</option>)}</select></label>
+            <label className="slides-ribbon-select"><span>Layout</span><select aria-label="Slide layout" value={activeSlide.layout} onChange={(event) => patchSlide({ layout: event.target.value as SlideLayout })}>{SLIDE_LAYOUTS.map((layout) => <option key={layout} value={layout}>{layoutNames[layout]}</option>)}</select></label>
+            <button type="button" className="slides-ribbon-command" onClick={() => imageInputRef.current?.click()}><ImagePlus size={17}/><span>Image</span></button>
+          </div>
+          <div className="slides-ribbon-group" role="group" aria-label="Export and share">
+            {slidesCloudReady && <button type="button" className="slides-ribbon-command" aria-expanded={slidesCloudOpen} onClick={() => setSlidesCloudOpen((open) => !open)}><FileText size={17}/><span>{slidesCloudOpen ? 'Hide cloud' : 'Cloud copies'}</span></button>}
+            <button type="button" className="slides-ribbon-command" title="Download presentation JSON" aria-label="Download presentation JSON" onClick={() => downloadJson(activeDeck)}><Download size={17}/><span>JSON</span></button>
+            <button type="button" className="slides-ribbon-command" title="Download editable PowerPoint" aria-label="Download PowerPoint PPTX" disabled={pptxExporting} onClick={() => void downloadPptx(activeDeck)}><FileText size={17}/><span>PowerPoint</span></button>
+            <button type="button" className="slides-ribbon-command" title="Print or save as PDF" aria-label="Print or save as PDF" onClick={() => { void printPresentation(); }}><Printer size={17}/><span>PDF / Print</span></button>
+            <button type="button" className="slides-ribbon-command slides-ribbon-present" disabled={!canPresent} title={canPresent ? 'Present this local deck' : 'Wait for local images to load or replace unavailable images'} onClick={() => setPresenting(true)}><Maximize2 size={17}/><span>Present</span></button>
+            <button type="button" className="slides-ribbon-command slides-ribbon-danger" title="Delete presentation" aria-label="Delete presentation" onClick={deletePresentation}><Trash2 size={17}/><span>Delete deck</span></button>
           </div>
         </div>
 
@@ -661,7 +672,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
             <div className="slides-canvas-wrap"><SlideCanvas deck={activeDeck} slide={activeSlide} index={activeSlideIndex} imageUrl={activeSlide.imageAssetId ? imageUrls[activeSlide.imageAssetId] : undefined} imageMissing={Boolean(activeSlide.imageAssetId && missingImageIds.includes(activeSlide.imageAssetId))} /></div>
             <div className="slides-page-controls">
               <span>Slide {activeSlideIndex + 1} of {activeDeck.slides.length}</span>
-              <div><button className="icon-button" aria-label="Move slide up" title="Move slide up" disabled={activeSlideIndex === 0} onClick={() => shiftSlide(-1)}><ArrowUp size={15} /></button><button className="icon-button" aria-label="Move slide down" title="Move slide down" disabled={activeSlideIndex === activeDeck.slides.length - 1} onClick={() => shiftSlide(1)}><ArrowDown size={15} /></button><button className="icon-button" aria-label="Duplicate slide" title="Duplicate slide" disabled={activeDeck.slides.length >= 100} onClick={duplicateCurrentSlide}><Copy size={15} /></button><button className="icon-button danger-icon" aria-label="Delete slide" title="Delete slide" disabled={activeDeck.slides.length <= 1} onClick={deleteCurrentSlide}><Trash2 size={15} /></button></div>
+
             </div>
             <div className="slides-edit-fields glass-card">
               <input ref={imageInputRef} className="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={addLocalImage} aria-label="Choose a local slide image" />
