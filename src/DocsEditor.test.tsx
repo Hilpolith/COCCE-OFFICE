@@ -104,7 +104,6 @@ async function createLocalReviewComment(body: string) {
 describe('Docs outline navigation', () => {
   it('opens a document outline and shows its empty state for documents without headings', () => {
     renderEditor();
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     fireEvent.click(screen.getByRole('button', { name: 'Document outline' }));
     expect(screen.getByRole('navigation', { name: 'Document outline' })).toBeTruthy();
     expect(screen.getByText(/Add a Heading 1, Heading 2 or Heading 3/)).toBeTruthy();
@@ -117,7 +116,6 @@ describe('Docs outline navigation', () => {
       richText: '<h1>Overview</h1><h2>Scope</h2>',
     };
     renderEditor(documentWithHeadings);
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     fireEvent.click(screen.getByRole('button', { name: 'Document outline' }));
     const headingButton = await screen.findByRole('button', { name: /Scope/ });
     fireEvent.click(headingButton);
@@ -135,7 +133,7 @@ describe('Docs local table authoring', () => {
 
   it('tracks document changes from a local baseline and accepts the current version', async () => {
     renderEditor();
-    fireEvent.click(screen.getByRole('button', { name: 'Start tracking from current version' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start tracking changes' }));
     const editor = screen.getByRole('textbox', { name: 'Document content' });
     selectEditorText(editor, 'Before');
     pastePlainText(editor, 'After');
@@ -143,12 +141,12 @@ describe('Docs local table authoring', () => {
     expect(screen.getByText('Before', { exact: true })).toBeTruthy();
     expect(screen.getByText('After', { exact: true })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }));
-    await waitFor(() => expect(screen.getByText('No unaccepted changes')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reset tracking baseline' })).toBeTruthy());
+    expect(document.querySelector('.docs-change-tracking-panel')?.hasAttribute('hidden')).toBe(true);
   });
 
   it('inserts an explicit page break that survives safe saving for print layout', async () => {
     const { onPatch } = renderEditor();
-    fireEvent.click(await screen.findByRole('tab', { name: 'Insert' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Insert page break' }));
     const content = screen.getByRole('textbox', { name: 'Document content' });
     await waitFor(() => expect(content.querySelector('hr[data-page-break="true"]')).toBeTruthy());
@@ -309,7 +307,7 @@ describe('Docs local table authoring', () => {
 });
 
 describe('Docs local review comments', () => {
-  it('survives Tiptap editor lifecycle replay without losing its local comment panel', async () => {
+  it('keeps the empty local comment panel out of the default editor surface', async () => {
     const props = {
       hasUnsavedChanges: false,
       onPatch: vi.fn(() => true),
@@ -321,7 +319,7 @@ describe('Docs local review comments', () => {
     };
     render(<StrictMode><DocsEditor document={syntheticDocument} {...props} /></StrictMode>);
     await screen.findByRole('textbox', { name: 'Document content' });
-    expect(screen.getByRole('region', { name: 'Local document review comments' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Local document review comments' })).toBeNull();
   });
 
   it('keeps comments isolated when switching between workspaces that reuse a document ID', async () => {
@@ -663,28 +661,17 @@ describe('Docs portable HTML and text exports', () => {
   });
 });
 
-describe('Docs tabbed ribbon', () => {
-  it('switches functional Home, Insert, Review and View groups and applies document zoom', async () => {
+describe('Docs unified command bar', () => {
+  it('keeps formatting, insert, review and view controls available together', async () => {
     renderEditor();
-    const home = screen.getByRole('tab', { name: 'Home' });
-    const insert = screen.getByRole('tab', { name: 'Insert' });
-    const review = screen.getByRole('tab', { name: 'Review' });
-    const view = screen.getByRole('tab', { name: 'View' });
-    expect(home.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('button', { name: 'Bold' })).toBeTruthy();
-
-    fireEvent.click(insert);
-    expect(insert.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('button', { name: 'Insert link' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull();
-
-    fireEvent.click(review);
-    expect(review.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('button', { name: 'Add comment to selected text' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Insert link' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Document outline' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Document zoom' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Page size' })).toBeTruthy();
+    expect(document.querySelector('.docs-format-toolbar')?.querySelector('.docs-table-toolbar')).toBeTruthy();
 
-    fireEvent.click(view);
-    expect(view.getAttribute('aria-selected')).toBe('true');
     fireEvent.change(screen.getByRole('combobox', { name: 'Document zoom' }), { target: { value: '125%' } });
     expect(document.querySelector('.document-canvas')?.getAttribute('style')).toContain('zoom: 125%');
   });
@@ -704,7 +691,6 @@ describe('Docs tabbed ribbon', () => {
 describe('Docs HTML and Markdown source modes', () => {
   it('edits Markdown locally, previews it, and applies it to the rich-text document only on approval', async () => {
     const { onPatch } = renderEditor();
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     const editMarkdown = await screen.findByRole('button', { name: 'Edit Markdown source' }) as HTMLButtonElement;
     await waitFor(() => expect(editMarkdown.disabled).toBe(false));
     fireEvent.click(editMarkdown);
@@ -721,7 +707,6 @@ describe('Docs HTML and Markdown source modes', () => {
 
   it('sanitizes HTML source before applying it and leaves the source untouched when discarded', async () => {
     const { onPatch } = renderEditor();
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     const editHtml = await screen.findByRole('button', { name: 'Edit HTML source' }) as HTMLButtonElement;
     await waitFor(() => expect(editHtml.disabled).toBe(false));
     fireEvent.click(editHtml);
@@ -745,7 +730,6 @@ describe('Docs HTML and Markdown source modes', () => {
 describe('Docs page setup controls', () => {
   it('updates the page canvas and restores scoped paper settings after reopening', async () => {
     const { switchDocument } = renderEditor();
-    fireEvent.click(screen.getByRole('tab', { name: 'View' }));
     const pageSize = await screen.findByRole('combobox', { name: 'Page size' });
     fireEvent.change(pageSize, { target: { value: 'Letter' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Page orientation' }), { target: { value: 'landscape' } });

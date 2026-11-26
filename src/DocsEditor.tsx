@@ -323,7 +323,6 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
   const [cloudOpen, setCloudOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [imageNotice, setImageNotice] = useState('');
-  const [activeRibbonTab, setActiveRibbonTab] = useState<'home' | 'insert' | 'review' | 'view'>('home');
   const [sourceMode, setSourceMode] = useState<'html' | 'markdown' | null>(null);
   const [sourceText, setSourceText] = useState('');
   const [sourceNotice, setSourceNotice] = useState('');
@@ -1035,38 +1034,32 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
 
     <OfficeWorkbenchLayout className="docs-workbench-layout" rail={sourceMode ? <div className="office-ai-source-paused" role="status"><span className="office-ai-source-paused-icon"><LockKeyhole size={16} /></span><span className="eyebrow">AI PAUSED</span><strong>Apply or discard source edits</strong><p>COCCE AI resumes when this HTML or Markdown draft is applied to the rich-text document. This prevents the assistant from working on stale content.</p></div> : <OfficeAiWriter editor={editor} documentTitle={document.title} onGoToTeam={onGoToTeam} defaultExpanded />}>
       <div className="docs-editor-main">
-    <div className="docs-ribbon-tabs" role="tablist" aria-label="Document ribbon">
-      <button type="button" role="tab" aria-selected={activeRibbonTab === 'home'} className={activeRibbonTab === 'home' ? 'is-active' : ''} onClick={() => setActiveRibbonTab('home')}>Home</button>
-      <button type="button" role="tab" aria-selected={activeRibbonTab === 'insert'} className={activeRibbonTab === 'insert' ? 'is-active' : ''} onClick={() => setActiveRibbonTab('insert')}>Insert</button>
-      <button type="button" role="tab" aria-selected={activeRibbonTab === 'review'} className={activeRibbonTab === 'review' ? 'is-active' : ''} onClick={() => setActiveRibbonTab('review')}>Review</button>
-      <button type="button" role="tab" aria-selected={activeRibbonTab === 'view'} className={activeRibbonTab === 'view' ? 'is-active' : ''} onClick={() => setActiveRibbonTab('view')}>View</button>
-    </div>
     <div className="docs-format-toolbar glass-card" role="toolbar" aria-label="Document formatting">
-      <span className="docs-format-group" aria-label="Paragraph style" hidden={activeRibbonTab !== 'home'}>
+      <span className="docs-format-group" aria-label="Paragraph style">
         <FormattingButton label="Paragraph" icon={<Pilcrow size={16} />} active={editorState.paragraph} onClick={() => editor?.chain().focus().setParagraph().run()} />
         <FormattingButton label="Heading 1" icon={<Heading1 size={16} />} active={editorState.heading1} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()} />
         <FormattingButton label="Heading 2" icon={<Heading2 size={16} />} active={editorState.heading2} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} />
         <FormattingButton label="Heading 3" icon={<Heading3 size={16} />} active={editorState.heading3} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group docs-format-controls" aria-label="Font controls" hidden={activeRibbonTab !== 'home'}>
+      <span className="docs-format-group docs-format-controls" aria-label="Font controls">
         <label className="docs-format-select"><span>Font</span><select aria-label="Font family" value={fontFamily} onChange={(event) => { const value = event.target.value; setFontFamily(value); editor?.chain().focus().setMark('docsTextStyle', { fontFamily: value }).run(); }}><option>Arial</option><option>Aptos</option><option>Calibri</option><option>Cambria</option><option>Georgia</option><option>Times New Roman</option><option>Verdana</option><option>Tahoma</option><option>Trebuchet MS</option><option>Courier New</option><option>Consolas</option><option>Inter</option></select></label>
         <label className="docs-format-select docs-format-size"><span>Size</span><select aria-label="Font size" value={fontSize} onChange={(event) => { const value = event.target.value; setFontSize(value); editor?.chain().focus().setMark('docsTextStyle', { fontSize: value }).run(); }}>{['8pt','9pt','10pt','11pt','12pt','14pt','16pt','18pt','20pt','24pt','28pt','32pt','36pt','48pt','72pt'].map((size) => <option key={size}>{size}</option>)}</select></label>
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group" aria-label="Text style" hidden={activeRibbonTab !== 'home'}>
+      <span className="docs-format-group" aria-label="Text style">
         <FormattingButton label="Bold" icon={<Bold size={16} />} active={editorState.bold} onClick={() => editor?.chain().focus().toggleBold().run()} />
         <FormattingButton label="Italic" icon={<Italic size={16} />} active={editorState.italic} onClick={() => editor?.chain().focus().toggleItalic().run()} />
         <FormattingButton label="Underline" icon={<UnderlineIcon size={16} />} active={editorState.underline} onClick={() => editor?.chain().focus().toggleUnderline().run()} />
         <FormattingButton label="Strikethrough" icon={<Strikethrough size={16} />} active={editorState.strike} onClick={() => editor?.chain().focus().toggleStrike().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group docs-format-color-group" aria-label="Text colour and highlighting" hidden={activeRibbonTab !== 'home'}>
+      <span className="docs-format-group docs-format-color-group" aria-label="Text colour and highlighting">
         <label className="docs-format-color-control" title="Text colour"><Palette size={15}/><input aria-label="Text colour" type="color" value={textColor} onChange={(event) => { setTextColor(event.target.value); editor?.chain().focus().setMark('docsTextStyle', { color: event.target.value }).run(); }} /></label>
         <label className="docs-format-color-control" title="Highlight colour"><Highlighter size={15}/><input aria-label="Highlight colour" type="color" value={highlightColor} onChange={(event) => { setHighlightColor(event.target.value); editor?.chain().focus().setMark('docsHighlight', { color: event.target.value }).run(); }} /></label>
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group" aria-label="Lists and quotes" hidden={activeRibbonTab !== 'home'}>
+      <span className="docs-format-group" aria-label="Lists and quotes">
         <FormattingButton label="Bulleted list" icon={<List size={16} />} active={editorState.bulletList} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleBulletList().run()} />
         <FormattingButton label="Numbered list" icon={<ListOrdered size={16} />} active={editorState.orderedList} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleOrderedList().run()} />
         <FormattingButton label="Quote" icon={<Quote size={16} />} active={editorState.blockquote} disabled={editorState.tableActive} onClick={() => editor?.chain().focus().toggleBlockquote().run()} />
@@ -1075,19 +1068,19 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Clear formatting" icon={<Eraser size={16} />} onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().updateAttributes('paragraph', { textAlign: null }).updateAttributes('heading', { textAlign: null }).run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group" aria-label="Paragraph alignment" hidden={activeRibbonTab !== 'home'}>
+      <span className="docs-format-group" aria-label="Paragraph alignment">
         <FormattingButton label="Align left" icon={<AlignLeft size={16}/>} onClick={() => applyTextAlign('left')} />
         <FormattingButton label="Center" icon={<AlignCenter size={16}/>} onClick={() => applyTextAlign('center')} />
         <FormattingButton label="Align right" icon={<AlignRight size={16}/>} onClick={() => applyTextAlign('right')} />
         <FormattingButton label="Justify" icon={<AlignJustify size={16}/>} onClick={() => applyTextAlign('justify')} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group" aria-label="Edit history" hidden={activeRibbonTab !== 'home'}>
+      <span className="docs-format-group" aria-label="Edit history">
         <FormattingButton label="Undo" icon={<Undo2 size={16} />} disabled={!editorState.canUndo} onClick={() => editor?.chain().focus().undo().run()} />
         <FormattingButton label="Redo" icon={<Redo2 size={16} />} disabled={!editorState.canRedo} onClick={() => editor?.chain().focus().redo().run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group" aria-label="Insert" hidden={activeRibbonTab !== 'insert'}>
+      <span className="docs-format-group" aria-label="Insert">
         <FormattingButton label="Insert link" icon={<Link2 size={16}/>} onClick={insertLink} />
         <FormattingButton label="Insert image" icon={<ImagePlus size={16}/>} disabled={!editor} onClick={() => imageInputRef.current?.click()} />
         {editorState.imageActive && <label className="docs-format-select"><span>Image width</span><select aria-label="Image width" value={String(editorState.imageWidth ?? 'auto')} onChange={(event) => editor?.chain().focus().updateAttributes('docsImage', { width: event.target.value === 'auto' ? null : Number(event.target.value) }).run()}><option value="auto">Auto</option><option value="320">Small</option><option value="640">Medium</option><option value="960">Large</option><option value="1280">Full</option></select></label>}
@@ -1095,7 +1088,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Insert page break" icon={<FileText size={16}/>} onClick={() => editor?.chain().focus().insertContent({ type: 'docsPageBreak' }).run()} />
       </span>
       <span className="docs-format-divider" aria-hidden="true" />
-      <span className="docs-format-group" aria-label="Review comments" hidden={activeRibbonTab !== 'review' && activeRibbonTab !== 'home'}>
+      <span className="docs-format-group" aria-label="Review comments">
         <FormattingButton label="Add comment to selected text" icon={<MessageSquarePlus size={16} />}
           disabled={!editorState.hasTextSelection || reviewComments.length >= MAX_DOCS_REVIEW_COMMENTS_PER_DOCUMENT}
           onClick={beginReviewComment} />
@@ -1106,7 +1099,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
           {changeTrackingOpen ? 'Hide comparison' : 'Compare changes'}
         </button>}
       </span>
-      {activeRibbonTab === 'view' && <span className="docs-format-group docs-view-controls" aria-label="View controls">
+      <span className="docs-format-group docs-view-controls" aria-label="View controls">
         <label className="docs-format-select"><span>Zoom</span><select aria-label="Document zoom" value={pageZoom} onChange={(event) => setPageZoom(event.target.value)}><option>75%</option><option>90%</option><option>100%</option><option>110%</option><option>125%</option></select></label>
         <label className="docs-format-select"><span>Paper</span><select aria-label="Page size" value={pageSetup.size} onChange={(event) => updatePageSetup({ size: event.target.value as DocsPageSetup['size'] })}><option>A4</option><option>Letter</option><option>Legal</option></select></label>
         <label className="docs-format-select"><span>Orientation</span><select aria-label="Page orientation" value={pageSetup.orientation} onChange={(event) => updatePageSetup({ orientation: event.target.value as DocsPageSetup['orientation'] })}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
@@ -1115,21 +1108,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <FormattingButton label="Print document" icon={<FileText size={16} />} onClick={() => window.print()} />
         <FormattingButton label="Edit HTML source" icon={<Code size={16} />} disabled={!editor} onClick={() => openSourceMode('html')} />
         <FormattingButton label="Edit Markdown source" icon={<FileText size={16} />} disabled={!editor} onClick={() => openSourceMode('markdown')} />
-      </span>}
-      <span className="docs-format-hint">Local rich text</span>
-    </div>
-
-    {outlineOpen && <nav className="docs-outline-panel glass-card" aria-label="Document outline">
-      <div className="docs-outline-heading"><div><strong><ListTree size={15} /> Document outline</strong><span>{documentOutline.length} {documentOutline.length === 1 ? 'heading' : 'headings'} · generated from this document</span></div>
-        <button type="button" className="docs-find-close" aria-label="Close document outline" onClick={() => setOutlineOpen(false)}><X size={16} /></button>
-      </div>
-      {documentOutline.length === 0
-        ? <p className="docs-outline-empty">Add a Heading 1, Heading 2 or Heading 3 style to create a navigable outline.</p>
-        : <ol className="docs-outline-list">{documentOutline.map((heading) => <li key={heading.id} data-level={heading.level}>
-          <button type="button" className="docs-outline-item" onClick={() => navigateToOutlineHeading(heading.position)}><span className="docs-outline-level">H{heading.level}</span><span>{heading.text}</span></button>
-        </li>)}</ol>}
-    </nav>}
-    {imageNotice && <p className="docs-image-notice" role="alert">{imageNotice}</p>}
+      </span>
     <div className="docs-table-toolbar glass-card" role="toolbar" aria-label="Table editing">
       <div className="docs-table-insert-controls">
         <span className="docs-table-insert-label"><Table2 size={15} /> Insert table</span>
@@ -1157,6 +1136,20 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
         <TableActionButton label="Delete table" icon={<Trash2 size={15} />} onClick={() => editor?.chain().focus().deleteTable().run()} />
       </> : <span className="docs-table-hint">Select a cell to edit its rows and columns.</span>}
     </div>
+      <span className="docs-format-hint">Local rich text</span>
+    </div>
+
+    {outlineOpen && <nav className="docs-outline-panel glass-card" aria-label="Document outline">
+      <div className="docs-outline-heading"><div><strong><ListTree size={15} /> Document outline</strong><span>{documentOutline.length} {documentOutline.length === 1 ? 'heading' : 'headings'} · generated from this document</span></div>
+        <button type="button" className="docs-find-close" aria-label="Close document outline" onClick={() => setOutlineOpen(false)}><X size={16} /></button>
+      </div>
+      {documentOutline.length === 0
+        ? <p className="docs-outline-empty">Add a Heading 1, Heading 2 or Heading 3 style to create a navigable outline.</p>
+        : <ol className="docs-outline-list">{documentOutline.map((heading) => <li key={heading.id} data-level={heading.level}>
+          <button type="button" className="docs-outline-item" onClick={() => navigateToOutlineHeading(heading.position)}><span className="docs-outline-level">H{heading.level}</span><span>{heading.text}</span></button>
+        </li>)}</ol>}
+    </nav>}
+    {imageNotice && <p className="docs-image-notice" role="alert">{imageNotice}</p>}
     <p className="docs-table-limit-copy">{DOCS_TABLE_LIMITS_COPY} The first row can be marked as a semantic header and is preserved in supported DOCX files. Markdown requires a header row, so headerless tables trigger an export confirmation.</p>
     {tableNotice && <p className="docs-table-warning" role="status">{tableNotice}</p>}
 
@@ -1183,7 +1176,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       <p className="docs-find-note">Search is local and excludes review-comment notes. Matches do not cross inline-formatting, paragraph, or table-cell boundaries. Limits: {MAX_DOCS_FIND_QUERY_CHARS}-character query, {MAX_DOCS_FIND_REPLACEMENT_CHARS.toLocaleString()}-character replacement, {MAX_DOCS_FIND_MATCHES.toLocaleString()} matches, and 200,000 document text characters.</p>
     </section>}
 
-    <section className="docs-change-tracking-panel glass-card" aria-label="Document change tracking">
+    <section className="docs-change-tracking-panel glass-card" aria-label="Document change tracking" hidden={!changeTrackingOpen}>
       <div className="docs-review-heading">
         <div><span className="eyebrow">CHANGE TRACKING</span><h2>Compare &amp; review edits</h2>
           <small>{changeTrackingBaseline ? (trackedDiff?.changed ? 'Changes detected since the baseline' : 'No unaccepted changes') : 'Not tracking yet'}</small></div>
@@ -1208,7 +1201,7 @@ export default function DocsEditor({ document, hasUnsavedChanges, onPatch, onBac
       {(changeTrackingNotice || trackedDiffState.error) && <p className="docs-review-notice" role="status">{changeTrackingNotice || trackedDiffState.error}</p>}
     </section>
 
-    <section className="docs-review-panel glass-card" aria-label="Local document review comments">
+    <section className="docs-review-panel glass-card" aria-label="Local document review comments" hidden={!reviewComments.length && !commentDraft}>
       <div className="docs-review-heading">
         <div><span className="eyebrow">REVIEW</span><h2>Comments</h2><small>{reviewComments.filter((comment) => comment.status === 'open').length} open · {reviewComments.length} total</small></div>
         <span className="local-only-chip"><LockKeyhole size={13} /> This device only</span>
