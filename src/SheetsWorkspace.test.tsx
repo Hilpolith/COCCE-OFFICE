@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SheetsWorkspace from './SheetsWorkspace';
 import type { PreviewState } from './lib/localStore';
 import { createXlsxBlob, importXlsxFile, XLSX_IMPORT_WARNING, XLSX_MIME } from './lib/xlsxInterchange';
@@ -72,6 +72,25 @@ afterEach(() => {
 });
 
 describe('Sheets workspace keyboard navigation', () => {
+  it('keeps spreadsheet editing commands together in one always-visible ribbon', () => {
+    openGrid();
+    const ribbon = screen.getByRole('toolbar', { name: 'Spreadsheet commands' });
+    for (const name of [
+      'Formula or value for A1',
+      'Bold selected cells',
+      'Italic selected cells',
+      'Undo spreadsheet cell edit',
+      'Redo spreadsheet cell edit',
+      'Fill numeric series',
+      'Fill formula',
+      'Create chart from selected range',
+    ]) {
+      expect(ribbon.contains(screen.getByRole(name === 'Formula or value for A1' ? 'textbox' : 'button', { name }))).toBe(true);
+    }
+    expect(within(ribbon).getByText('Quick analysis')).toBeTruthy();
+    expect(ribbon.querySelectorAll('.sheet-range-tools').length).toBeGreaterThan(4);
+  });
+
   it('keeps the cloud-copy control hidden unless the Office cloud flag is enabled', () => {
     vi.stubEnv('VITE_OFFICE_CLOUD_FILES_READY', 'false');
     openGrid();
