@@ -1,4 +1,6 @@
 import { Code, FileSearch, FileSpreadsheet, FileText, LockKeyhole, Presentation } from 'lucide-react';
+import { officeText } from './lib/officeLocalization';
+import type { OfficeLanguage } from './lib/officeLocalization';
 import './officeWorkbench.css';
 
 type EditorModule = 'docs' | 'sheets' | 'slides' | 'html' | 'markdown' | 'pdf' | 'vault';
@@ -16,10 +18,12 @@ const modules = [
 export default function OfficeEditorChrome({
   active,
   storageLabel,
+  language = 'en',
   onNavigate,
 }: {
   active: EditorModule;
   storageLabel: string;
+  language?: OfficeLanguage;
   onNavigate: (module: EditorModule) => void;
 }) {
   return <section className="office-editor-chrome glass-card" aria-label="Office editor navigation">
@@ -31,7 +35,7 @@ export default function OfficeEditorChrome({
         aria-label={`Open ${label}`}
         aria-current={active === id ? 'page' : undefined}
         onClick={() => onNavigate(id)}
-      ><Icon size={15} /><span>{label}</span></button>)}
+      ><Icon size={15} /><span>{officeText(language, id)}</span></button>)}
     </nav>
     <div className="office-storage-pill" role="status" title="Office files are stored in this browser unless a separate cloud-copy action is enabled and explicitly used.">
       <LockKeyhole size={14} /><span>{storageLabel}</span>
