@@ -639,7 +639,7 @@ export default function SlidesWorkspace({ workspaceId, onGoToTeam = () => undefi
             <span className="slides-history-live" role="status" aria-live="polite">{historyAnnouncement}</span>
           </div>
           <div className="slides-ribbon-group" role="group" aria-label="Slides">
-            <button type="button" className="slides-ribbon-command" aria-label="Add slide" onClick={addNewSlide}><Plus size={17}/><span>New slide</span></button>
+            <button type="button" className="slides-ribbon-command" aria-label="New slide" onClick={addNewSlide}><Plus size={17}/><span>New slide</span></button>
             <button type="button" className="slides-ribbon-command" aria-label="Duplicate slide" onClick={duplicateCurrentSlide} disabled={activeDeck.slides.length >= 100}><Copy size={17}/><span>Duplicate</span></button>
             <button type="button" className="slides-ribbon-command" aria-label="Move slide up" onClick={() => shiftSlide(-1)} disabled={activeSlideIndex === 0}><ArrowUp size={17}/><span>Move up</span></button>
             <button type="button" className="slides-ribbon-command" aria-label="Move slide down" onClick={() => shiftSlide(1)} disabled={activeSlideIndex === activeDeck.slides.length - 1}><ArrowDown size={17}/><span>Move down</span></button>
